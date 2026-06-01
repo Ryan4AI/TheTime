@@ -1,0 +1,17 @@
+{
+  "description": "穿越日记 · 穿越人生模拟器",
+  "setting": {
+    "es6": true,
+    "es7": true,
+    "minify": true,
+    "minifyJS": true,
+    "postcss": false,
+    "packNpmManually": false,
+    "urlCheck": true
+  },
+  "compileType": "miniGame",
+  "appid": "wx2fc3ba2c105c9ba2",
+  "projectname": "穿越日记",
+  "libVersion": "3.5.4",
+  "condition": {}
+}

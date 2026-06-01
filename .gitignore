@@ -1,0 +1,12 @@
+node_modules/
+credentials/
+package-lock.json
+*.key
+*.pem
+*.log
+.DS_Store
+Thumbs.db
+22b5dd1d96486341e9c8f2f9b8e73e6b/
+39c5de2796a26edbbd346035fa1a64a1/
+46ad0b71a08e73196ccaea0c296b260e/
+5552740664078201e5c49c3f4491868b/

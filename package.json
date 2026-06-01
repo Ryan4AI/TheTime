@@ -1,0 +1,17 @@
+{
+  "name": "thetime",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "miniprogram-ci": "^2.1.31",
+    "wx-server-sdk": "^3.0.4"
+  }
+}

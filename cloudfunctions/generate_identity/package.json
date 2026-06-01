@@ -1,0 +1,9 @@
+{
+  "name": "generate_identity",
+  "version": "1.0.0",
+  "description": "穿越身份生成器 - 人·年·城加权随机",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

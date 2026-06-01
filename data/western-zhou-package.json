@@ -1,0 +1,870 @@
+{
+  "era_meta": [
+    {
+      "year": -1045,
+      "dynasty": "西周",
+      "eraLabel": "武王伐纣·建国",
+      "emperor": "周武王·成王",
+      "maleRatio": 0.52,
+      "maleLiteracy": 0.03,
+      "femaleLiteracy": 0.5,
+      "surnames": [
+        "姬",
+        "姜",
+        "姒",
+        "嬴",
+        "妘",
+        "姚",
+        "子",
+        "任",
+        "芈",
+        "曹",
+        "祁",
+        "己"
+      ],
+      "maleNames": [
+        "发",
+        "旦",
+        "奭",
+        "尚",
+        "诵",
+        "康",
+        "虞",
+        "度",
+        "高",
+        "封",
+        "振铎",
+        "武",
+        "处父"
+      ],
+      "femaleNames": [
+        "邑姜",
+        "太姒",
+        "太任",
+        "王姒",
+        "成姜",
+        "邓曼"
+      ],
+      "source": "据《史记·周本纪》《尚书·牧誓》; 西周金文"
+    },
+    {
+      "year": -1000,
+      "dynasty": "西周",
+      "eraLabel": "成康之治",
+      "emperor": "周康王",
+      "maleRatio": 0.53,
+      "maleLiteracy": 0.05,
+      "femaleLiteracy": 1,
+      "surnames": [
+        "姬",
+        "姜",
+        "姒",
+        "嬴",
+        "妘",
+        "姚",
+        "子",
+        "任",
+        "芈",
+        "曹",
+        "祁",
+        "己",
+        "隗",
+        "风"
+      ],
+      "maleNames": [
+        "钊",
+        "瑕",
+        "满",
+        "贤",
+        "伯",
+        "仲",
+        "叔",
+        "季",
+        "子",
+        "父",
+        "休",
+        "虎",
+        "扬",
+        "宫",
+        "颂",
+        "寿"
+      ],
+      "femaleNames": [
+        "王姜",
+        "王姒",
+        "仲姬",
+        "孟姬",
+        "叔姬",
+        "季姬",
+        "蔡姬",
+        "卫姬",
+        "齐姜",
+        "鲁姬"
+      ],
+      "source": "据《史记·周本纪》《尚书·顾命》; 西周金文"
+    },
+    {
+      "year": -841,
+      "dynasty": "西周",
+      "eraLabel": "国人暴动·共和",
+      "emperor": "周厉王·共和",
+      "maleRatio": 0.51,
+      "maleLiteracy": 0.04,
+      "femaleLiteracy": 0.8,
+      "surnames": [
+        "姬",
+        "姜",
+        "姒",
+        "嬴",
+        "妘",
+        "子",
+        "任",
+        "芈",
+        "曹",
+        "祁"
+      ],
+      "maleNames": [
+        "胡",
+        "和",
+        "静",
+        "宫",
+        "伯",
+        "仲",
+        "叔",
+        "季",
+        "父",
+        "吉",
+        "喜",
+        "友"
+      ],
+      "femaleNames": [
+        "申姜",
+        "纪姜",
+        "苏姬",
+        "芮姜",
+        "王姬",
+        "秦嬴"
+      ],
+      "source": "据《史记·周本纪》; 西周金文《禹鼎》《多友鼎》"
+    },
+    {
+      "year": -771,
+      "dynasty": "西周",
+      "eraLabel": "幽王失国",
+      "emperor": "周幽王",
+      "maleRatio": 0.5,
+      "maleLiteracy": 0.04,
+      "femaleLiteracy": 0.8,
+      "surnames": [
+        "姬",
+        "姜",
+        "姒",
+        "嬴",
+        "子",
+        "芈",
+        "任",
+        "曹",
+        "祁",
+        "己"
+      ],
+      "maleNames": [
+        "宫涅",
+        "宜臼",
+        "友",
+        "伯",
+        "仲",
+        "叔",
+        "季",
+        "父",
+        "带",
+        "林",
+        "多",
+        "父"
+      ],
+      "femaleNames": [
+        "褒姒",
+        "申后",
+        "虢姒",
+        "陈妫",
+        "蔡姬",
+        "郑姬"
+      ],
+      "source": "据《史记·周本纪》; 《诗经·小雅·十月之交》"
+    }
+  ],
+  "era_cities": [
+    {
+      "year": -1045,
+      "city": "丰京",
+      "popMillion": 0.058,
+      "cityDesc": "文王所建, 位于沣河西岸, 面积约8.62km², 与镐京合称丰镐",
+      "source": "据百度百科丰京遗址(8.62km²); 以殷墟人口密度(0.67万人/km²)推算"
+    },
+    {
+      "year": -1045,
+      "city": "镐京",
+      "popMillion": 0.062,
+      "cityDesc": "武王所建, 位于沣河东岸, 面积约9.2km², 西周政治中心近300年",
+      "source": "据百度百科镐京遗址(9.2km²); 以殷墟人口密度推算"
+    },
+    {
+      "year": -1045,
+      "city": "岐邑",
+      "popMillion": 0.13,
+      "cityDesc": "周原遗址, 面积逾33km², 周人发祥地, 西周最大的都邑聚落, 发现大型宫殿基址、手工业区",
+      "source": "据2024全国十大考古新发现-周原遗址面积逾30km²; 以殷墟人口密度降档推算"
+    },
+    {
+      "year": -1000,
+      "city": "成周",
+      "popMillion": 0.04,
+      "cityDesc": "周公营建洛邑, 面积约6km², 西周东都, 早中期繁荣晚期衰落, 发现祭祀遗址",
+      "source": "据百家号'洛邑考古'面积约6km²; 以殷墟人口密度推算"
+    }
+  ],
+  "era_age_dist": [
+    {
+      "year": -1000,
+      "age": 0,
+      "weight": 3.05,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 1,
+      "weight": 3.05,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 2,
+      "weight": 3.05,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 3,
+      "weight": 3.05,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 4,
+      "weight": 3.05,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 5,
+      "weight": 2.72,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 6,
+      "weight": 2.72,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 7,
+      "weight": 2.72,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 8,
+      "weight": 2.72,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 9,
+      "weight": 2.72,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 10,
+      "weight": 2.45,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 11,
+      "weight": 2.45,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 12,
+      "weight": 2.45,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 13,
+      "weight": 2.45,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 14,
+      "weight": 2.45,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 15,
+      "weight": 2.16,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 16,
+      "weight": 2.16,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 17,
+      "weight": 2.16,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 18,
+      "weight": 2.16,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 19,
+      "weight": 2.16,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 20,
+      "weight": 1.9,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 21,
+      "weight": 1.9,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 22,
+      "weight": 1.9,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 23,
+      "weight": 1.9,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 24,
+      "weight": 1.9,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 25,
+      "weight": 1.63,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 26,
+      "weight": 1.63,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 27,
+      "weight": 1.63,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 28,
+      "weight": 1.63,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 29,
+      "weight": 1.63,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 30,
+      "weight": 1.38,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 31,
+      "weight": 1.38,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 32,
+      "weight": 1.38,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 33,
+      "weight": 1.38,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 34,
+      "weight": 1.38,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 35,
+      "weight": 1.15,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 36,
+      "weight": 1.15,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 37,
+      "weight": 1.15,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 38,
+      "weight": 1.15,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 39,
+      "weight": 1.15,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 40,
+      "weight": 0.95,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 41,
+      "weight": 0.95,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 42,
+      "weight": 0.95,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 43,
+      "weight": 0.95,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 44,
+      "weight": 0.95,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 45,
+      "weight": 0.78,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 46,
+      "weight": 0.78,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 47,
+      "weight": 0.78,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 48,
+      "weight": 0.78,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 49,
+      "weight": 0.78,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 50,
+      "weight": 0.62,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 51,
+      "weight": 0.62,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 52,
+      "weight": 0.62,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 53,
+      "weight": 0.62,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 54,
+      "weight": 0.62,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 55,
+      "weight": 0.45,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 56,
+      "weight": 0.45,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 57,
+      "weight": 0.45,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 58,
+      "weight": 0.45,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 59,
+      "weight": 0.45,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 60,
+      "weight": 0.33,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 61,
+      "weight": 0.33,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 62,
+      "weight": 0.33,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 63,
+      "weight": 0.33,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 64,
+      "weight": 0.33,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 65,
+      "weight": 0.21,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 66,
+      "weight": 0.21,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 67,
+      "weight": 0.21,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 68,
+      "weight": 0.21,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 69,
+      "weight": 0.21,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 70,
+      "weight": 0.12,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 71,
+      "weight": 0.12,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 72,
+      "weight": 0.12,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 73,
+      "weight": 0.12,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 74,
+      "weight": 0.12,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 75,
+      "weight": 0.06,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 76,
+      "weight": 0.06,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 77,
+      "weight": 0.06,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 78,
+      "weight": 0.06,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 79,
+      "weight": 0.06,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    },
+    {
+      "year": -1000,
+      "age": 80,
+      "weight": 0.2,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈27): 西周综合e0据学者估算约25-28岁"
+    }
+  ],
+  "social_structure": [
+    {
+      "year": -1045,
+      "class": "天子",
+      "weight": 0.05,
+      "jobs": [
+        "周王"
+      ],
+      "source": "据《周礼》封建等级制; 杨宽《西周史》"
+    },
+    {
+      "year": -1045,
+      "class": "诸侯",
+      "weight": 2,
+      "jobs": [
+        "国君",
+        "公",
+        "侯",
+        "伯",
+        "子",
+        "男"
+      ],
+      "source": "据《史记·周本纪》封建诸侯; 分封五等爵"
+    },
+    {
+      "year": -1045,
+      "class": "卿大夫",
+      "weight": 3,
+      "jobs": [
+        "卿士",
+        "大夫",
+        "司马",
+        "司空",
+        "司徒",
+        "司寇",
+        "太史",
+        "内史"
+      ],
+      "source": "据《周礼·天官》西周官制; 金文册命铭文"
+    },
+    {
+      "year": -1045,
+      "class": "士",
+      "weight": 8,
+      "jobs": [
+        "武士",
+        "邑宰",
+        "膳夫",
+        "缀衣",
+        "虎贲",
+        "小臣"
+      ],
+      "source": "据《周礼·夏官》西周六官制; 金文记载"
+    },
+    {
+      "year": -1045,
+      "class": "庶人",
+      "weight": 68,
+      "jobs": [
+        "农夫",
+        "陶工",
+        "铜匠",
+        "车工",
+        "织工",
+        "石匠",
+        "骨工",
+        "商人"
+      ],
+      "source": "据《诗经·七月》《周礼·考工记》; 西周手工业分类"
+    },
+    {
+      "year": -1045,
+      "class": "奴隶",
+      "weight": 18.95,
+      "jobs": [
+        "仆",
+        "牧",
+        "臣",
+        "妾",
+        "奚",
+        "人牲"
+      ],
+      "source": "据西周金文記載; 郭沫若《奴隶制时代》"
+    }
+  ],
+  "event": [
+    {
+      "year": -1046,
+      "month": 2,
+      "city": "牧野",
+      "title": "牧野之战",
+      "desc": "周武王率西土诸侯伐商, 商军阵前倒戈, 帝辛自焚, 商朝灭亡",
+      "type": "战争",
+      "scope": "全国",
+      "source": "据《史记·周本纪》《尚书·牧誓》"
+    },
+    {
+      "year": -1042,
+      "month": 6,
+      "city": "镐京",
+      "title": "周公东征",
+      "desc": "三监(管叔/蔡叔/霍叔)联合武庚叛乱, 周公率师东征, 平定叛乱, 诛武庚杀管叔放蔡叔",
+      "type": "战争",
+      "scope": "全国",
+      "source": "据《史记·周本纪》《尚书·大诰》《逸周书》"
+    },
+    {
+      "year": -1020,
+      "month": 1,
+      "city": "镐京",
+      "title": "成康之治",
+      "desc": "成王至康王时期, 天下安宁, 刑错四十余年不用, 封建诸侯巩固周室",
+      "type": "政治",
+      "scope": "全国",
+      "source": "据《史记·周本纪》"
+    },
+    {
+      "year": -977,
+      "month": 9,
+      "city": "汉水",
+      "title": "昭王南征",
+      "desc": "周昭王南伐荆楚, 渡汉水时船沉, 昭王与祭公溺死, 全军覆没",
+      "type": "战争",
+      "scope": "全国",
+      "source": "据《史记·周本纪》《竹书纪年》；西周金文《墙盘》《史墙盘》"
+    },
+    {
+      "year": -841,
+      "month": 8,
+      "city": "镐京",
+      "title": "国人暴动",
+      "desc": "国人对周厉王专利政策不满, 围攻王宫, 厉王出奔彘, 由周/召二公共和行政 (中国历史确切纪年之始)",
+      "type": "政治",
+      "scope": "全国",
+      "source": "据《史记·周本纪》《国语·周语》"
+    },
+    {
+      "year": -827,
+      "month": 1,
+      "city": "镐京",
+      "title": "宣王中兴",
+      "desc": "周宣王即位, 整顿内政, 征伐戎狄, 恢复周室权威, 史称宣王中兴",
+      "type": "政治",
+      "scope": "全国",
+      "source": "据《史记·周本纪》；《诗经·小雅·采薇》《小雅·六月》"
+    },
+    {
+      "year": -771,
+      "month": 11,
+      "city": "镐京",
+      "title": "犬戎灭西周",
+      "desc": "申侯联合缯国与犬戎攻入镐京, 幽王被杀于骊山下, 西周灭亡, 平王东迁洛邑",
+      "type": "战争",
+      "scope": "全国",
+      "source": "据《史记·周本纪》；《诗经·小雅·正月》"
+    }
+  ]
+}

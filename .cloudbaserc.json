@@ -1,0 +1,48 @@
+{
+  "envId": "cloud1-d5gkbowyvbd1c85e1",
+  "functions": [
+    {
+      "name": "generate_identity",
+      "timeout": 15,
+      "memorySize": 256,
+      "envVariables": {
+        "DS_API_KEY": "sk-26d0e090ed7b4d90803aae706d9b7247"
+      }
+    },
+    {
+      "name": "init_db",
+      "timeout": 15,
+      "memorySize": 256
+    },
+    {
+      "name": "get_era_meta",
+      "timeout": 15,
+      "memorySize": 256
+    },
+    {
+      "name": "get_era_cities",
+      "timeout": 15,
+      "memorySize": 256
+    },
+    {
+      "name": "get_era_age_dist",
+      "timeout": 15,
+      "memorySize": 256
+    },
+    {
+      "name": "get_social_structure",
+      "timeout": 15,
+      "memorySize": 256
+    },
+    {
+      "name": "get_events",
+      "timeout": 15,
+      "memorySize": 256
+    },
+    {
+      "name": "get_fate_pool",
+      "timeout": 10,
+      "memorySize": 128
+    }
+  ]
+}

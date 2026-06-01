@@ -1,0 +1,884 @@
+{
+  "era_meta": [
+    {
+      "year": -1600,
+      "dynasty": "商",
+      "emperor": "汤",
+      "eraLabel": "商朝·汤",
+      "maleRatio": null,
+      "maleLiteracy": 0.01,
+      "femaleLiteracy": 0.001,
+      "surnames": [
+        "子",
+        "殷",
+        "微子",
+        "宋",
+        "萧",
+        "钟离"
+      ],
+      "maleNames": [
+        "汤",
+        "太甲",
+        "沃丁",
+        "太庚",
+        "小甲",
+        "雍己",
+        "太戊",
+        "仲丁",
+        "外壬",
+        "河亶甲",
+        "祖乙",
+        "祖辛",
+        "沃甲",
+        "祖丁",
+        "南庚",
+        "阳甲",
+        "盘庚",
+        "小辛",
+        "小乙",
+        "武丁",
+        "祖庚",
+        "祖甲",
+        "廪辛",
+        "康丁",
+        "武乙",
+        "文丁",
+        "帝乙",
+        "帝辛"
+      ],
+      "femaleNames": [
+        "妇好",
+        "妇妌",
+        "妇邢",
+        "妇周",
+        "妇楚",
+        "妲己"
+      ],
+      "source": "据《夏商周断代工程1996-2000年阶段成果报告·简本》(世界图书出版公司,2000); 甲骨文卜辞证实商王世系与《史记·殷本纪》吻合; 识字率据甲骨文~4000字推断仅贞人/史官掌握"
+    },
+    {
+      "year": -1300,
+      "dynasty": "商",
+      "emperor": "盘庚",
+      "eraLabel": "商朝·盘庚迁殷",
+      "maleRatio": null,
+      "maleLiteracy": 0.01,
+      "femaleLiteracy": 0.001,
+      "surnames": [
+        "子",
+        "殷",
+        "微子",
+        "宋",
+        "萧",
+        "钟离"
+      ],
+      "maleNames": [
+        "汤",
+        "太甲",
+        "沃丁",
+        "太庚",
+        "小甲",
+        "雍己",
+        "太戊",
+        "仲丁",
+        "外壬",
+        "河亶甲",
+        "祖乙",
+        "祖辛",
+        "沃甲",
+        "祖丁",
+        "南庚",
+        "阳甲",
+        "盘庚",
+        "小辛",
+        "小乙",
+        "武丁",
+        "祖庚",
+        "祖甲",
+        "廪辛",
+        "康丁",
+        "武乙",
+        "文丁",
+        "帝乙",
+        "帝辛"
+      ],
+      "femaleNames": [
+        "妇好",
+        "妇妌",
+        "妇邢",
+        "妇周",
+        "妇楚",
+        "妲己"
+      ],
+      "source": "据《尚书·盘庚》; 殷墟考古证实盘庚迁殷至纣亡国273年"
+    },
+    {
+      "year": -1250,
+      "dynasty": "商",
+      "emperor": "武丁",
+      "eraLabel": "商朝·武丁盛世",
+      "maleRatio": null,
+      "maleLiteracy": 0.015,
+      "femaleLiteracy": 0.002,
+      "surnames": [
+        "子",
+        "殷",
+        "微子",
+        "宋",
+        "萧",
+        "钟离"
+      ],
+      "maleNames": [
+        "汤",
+        "太甲",
+        "沃丁",
+        "太庚",
+        "小甲",
+        "雍己",
+        "太戊",
+        "仲丁",
+        "外壬",
+        "河亶甲",
+        "祖乙",
+        "祖辛",
+        "沃甲",
+        "祖丁",
+        "南庚",
+        "阳甲",
+        "盘庚",
+        "小辛",
+        "小乙",
+        "武丁",
+        "祖庚",
+        "祖甲",
+        "廪辛",
+        "康丁",
+        "武乙",
+        "文丁",
+        "帝乙",
+        "帝辛"
+      ],
+      "femaleNames": [
+        "妇好",
+        "妇妌",
+        "妇邢",
+        "妇周",
+        "妇楚",
+        "妲己"
+      ],
+      "source": "据甲骨卜辞; 殷墟妇好墓发掘报告(中国社科院考古所)"
+    },
+    {
+      "year": -1075,
+      "dynasty": "商",
+      "emperor": "帝辛(纣)",
+      "eraLabel": "商朝·纣",
+      "maleRatio": null,
+      "maleLiteracy": 0.015,
+      "femaleLiteracy": 0.002,
+      "surnames": [
+        "子",
+        "殷",
+        "微子",
+        "宋",
+        "萧",
+        "钟离"
+      ],
+      "maleNames": [
+        "汤",
+        "太甲",
+        "沃丁",
+        "太庚",
+        "小甲",
+        "雍己",
+        "太戊",
+        "仲丁",
+        "外壬",
+        "河亶甲",
+        "祖乙",
+        "祖辛",
+        "沃甲",
+        "祖丁",
+        "南庚",
+        "阳甲",
+        "盘庚",
+        "小辛",
+        "小乙",
+        "武丁",
+        "祖庚",
+        "祖甲",
+        "廪辛",
+        "康丁",
+        "武乙",
+        "文丁",
+        "帝乙",
+        "帝辛"
+      ],
+      "femaleNames": [
+        "妇好",
+        "妇妌",
+        "妇邢",
+        "妇周",
+        "妇楚",
+        "妲己"
+      ],
+      "source": "据《史记·殷本纪》; 甲骨卜辞"
+    }
+  ],
+  "era_cities": [
+    {
+      "year": -1300,
+      "city": "殷",
+      "popMillion": 0.2,
+      "cityDesc": "商代后期都城，位于今河南安阳殷墟，总面积约30km²(3000万㎡)，宫殿宗庙建筑80余座，王陵13座，墓葬9000余座，人口近20万，十几个家族聚居",
+      "source": "据殷墟发掘报告(中国社科院考古所); 据考古确认殷墟人口近20万人(十几个家族)"
+    },
+    {
+      "year": -1600,
+      "city": "亳",
+      "popMillion": 0.12,
+      "cityDesc": "商汤都城，位于今郑州商城遗址，总面积约2500万㎡(含内城外郭)，宏大的夯土城垣周长约7公里",
+      "source": "据殷墟人口密度(0.67万人/km2) x 郑州商城面积25km2推算; 商汤都亳"
+    },
+    {
+      "year": -1600,
+      "city": "偃师商城",
+      "popMillion": 0.015,
+      "cityDesc": "商灭夏后在夏都二里头附近建立的早商城址，宫城面积约4.5万㎡，小城大城双重城垣",
+      "source": "据殷墟人口密度 x 偃师商城大城约2km2推算; 商初军事卫城"
+    },
+    {
+      "year": -1075,
+      "city": "朝歌",
+      "popMillion": 0.006,
+      "cityDesc": "商末别都，位于今河南淇县，纣王时期的政治军事中心，牧野之战前为商都",
+      "source": "据《淇县志》朝歌城垣周回九里推面积约1km2, 殷墟密度降档; 商末别都"
+    }
+  ],
+  "era_age_dist": [
+    {
+      "year": -1250,
+      "age": 0,
+      "weight": 2.97,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 1,
+      "weight": 2.97,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 2,
+      "weight": 2.97,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 3,
+      "weight": 2.97,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 4,
+      "weight": 2.97,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 5,
+      "weight": 2.67,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 6,
+      "weight": 2.67,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 7,
+      "weight": 2.67,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 8,
+      "weight": 2.67,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 9,
+      "weight": 2.67,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 10,
+      "weight": 2.42,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 11,
+      "weight": 2.42,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 12,
+      "weight": 2.42,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 13,
+      "weight": 2.42,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 14,
+      "weight": 2.42,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 15,
+      "weight": 2.15,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 16,
+      "weight": 2.15,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 17,
+      "weight": 2.15,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 18,
+      "weight": 2.15,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 19,
+      "weight": 2.15,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 20,
+      "weight": 1.89,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 21,
+      "weight": 1.89,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 22,
+      "weight": 1.89,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 23,
+      "weight": 1.89,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 24,
+      "weight": 1.89,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 25,
+      "weight": 1.64,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 26,
+      "weight": 1.64,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 27,
+      "weight": 1.64,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 28,
+      "weight": 1.64,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 29,
+      "weight": 1.64,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 30,
+      "weight": 1.39,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 31,
+      "weight": 1.39,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 32,
+      "weight": 1.39,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 33,
+      "weight": 1.39,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 34,
+      "weight": 1.39,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 35,
+      "weight": 1.18,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 36,
+      "weight": 1.18,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 37,
+      "weight": 1.18,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 38,
+      "weight": 1.18,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 39,
+      "weight": 1.18,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 40,
+      "weight": 0.99,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 41,
+      "weight": 0.99,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 42,
+      "weight": 0.99,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 43,
+      "weight": 0.99,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 44,
+      "weight": 0.99,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 45,
+      "weight": 0.8,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 46,
+      "weight": 0.8,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 47,
+      "weight": 0.8,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 48,
+      "weight": 0.8,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 49,
+      "weight": 0.8,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 50,
+      "weight": 0.63,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 51,
+      "weight": 0.63,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 52,
+      "weight": 0.63,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 53,
+      "weight": 0.63,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 54,
+      "weight": 0.63,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 55,
+      "weight": 0.47,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 56,
+      "weight": 0.47,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 57,
+      "weight": 0.47,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 58,
+      "weight": 0.47,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 59,
+      "weight": 0.47,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 60,
+      "weight": 0.34,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 61,
+      "weight": 0.34,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 62,
+      "weight": 0.34,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 63,
+      "weight": 0.34,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 64,
+      "weight": 0.34,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 65,
+      "weight": 0.22,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 66,
+      "weight": 0.22,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 67,
+      "weight": 0.22,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 68,
+      "weight": 0.22,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 69,
+      "weight": 0.22,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 70,
+      "weight": 0.13,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 71,
+      "weight": 0.13,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 72,
+      "weight": 0.13,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 73,
+      "weight": 0.13,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 74,
+      "weight": 0.13,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 75,
+      "weight": 0.07,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 76,
+      "weight": 0.07,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 77,
+      "weight": 0.07,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 78,
+      "weight": 0.07,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 79,
+      "weight": 0.07,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    },
+    {
+      "year": -1250,
+      "age": 80,
+      "weight": 0.2,
+      "source": "据Coale-Demeny Model West稳定人口年龄分布(e0≈31): 172具骨骼, 死亡均龄≈31, 稳定人口假设"
+    }
+  ],
+  "social_structure": [
+    {
+      "year": -1250,
+      "class": "商王",
+      "weight": 0.1,
+      "jobs": [
+        "商王",
+        "大祭司",
+        "三军统帅"
+      ],
+      "source": "据甲骨卜辞; 殷墟考古; 商代社会等级研究"
+    },
+    {
+      "year": -1250,
+      "class": "王室贵族",
+      "weight": 2,
+      "jobs": [
+        "王子",
+        "诸子",
+        "王后",
+        "诸妇",
+        "贞人(卜官)",
+        "史官",
+        "祭司",
+        "军事将领"
+      ],
+      "source": "据甲骨卜辞(合集5111,969,2944等); 妇好墓发掘报告(中国社科院考古所)"
+    },
+    {
+      "year": -1250,
+      "class": "方国贵族",
+      "weight": 5,
+      "jobs": [
+        "方伯",
+        "诸侯",
+        "族长",
+        "军事首领"
+      ],
+      "source": "据甲骨卜辞(合集1027等)"
+    },
+    {
+      "year": -1250,
+      "class": "多士",
+      "weight": 8,
+      "jobs": [
+        "下级军官",
+        "基层官僚",
+        "武士",
+        "战车御手"
+      ],
+      "source": "据商代社会等级研究; 甲骨文'多士'记载"
+    },
+    {
+      "year": -1250,
+      "class": "平民",
+      "weight": 75,
+      "jobs": [
+        "农夫(众)",
+        "陶工",
+        "青铜匠",
+        "玉匠",
+        "骨器匠",
+        "织工",
+        "猎户",
+        "渔夫",
+        "商人",
+        "车夫",
+        "建筑工"
+      ],
+      "source": "据甲骨文记'众''众人''小人'; 殷墟手工业作坊遗址考古(铸铜/制骨/制陶)"
+    },
+    {
+      "year": -1250,
+      "class": "奴隶",
+      "weight": 10,
+      "jobs": [
+        "仆(男奴)",
+        "妾(女奴)",
+        "羌奴",
+        "奚奴",
+        "战俘",
+        "祭祀牺牲"
+      ],
+      "source": "据甲骨文'仆''妾'字形; 殷墟祭祀坑人骨考古; 人殉/人祭考古发现"
+    }
+  ],
+  "event": [
+    {
+      "year": -1600,
+      "month": null,
+      "city": "亳",
+      "title": "成汤灭夏，建立商朝",
+      "desc": "商汤以'有夏多罪，天命殛之'为号，率诸侯伐桀，战于鸣条，夏桀败走南巢而死，商朝建立",
+      "type": "战争",
+      "scope": "全国",
+      "source": "据《史记·殷本纪》《尚书·汤誓》"
+    },
+    {
+      "year": -1300,
+      "month": null,
+      "city": "殷",
+      "title": "盘庚迁殷",
+      "desc": "商王盘庚将都城从奄(今山东曲阜)迁至殷(今安阳)，此后273年不再迁都，商朝进入稳定发展期",
+      "type": "政治",
+      "scope": "全国",
+      "source": "据《尚书·盘庚》《史记·殷本纪》"
+    },
+    {
+      "year": -1250,
+      "month": null,
+      "city": "殷",
+      "title": "武丁举傅说，商朝中兴",
+      "desc": "武丁用三年默以思道，后举奴隶傅说为相，修政行德，商朝大治，国力达到顶峰",
+      "type": "政治",
+      "scope": "全国",
+      "source": "据《史记·殷本纪》《尚书·说命》"
+    },
+    {
+      "year": -1200,
+      "month": null,
+      "city": "殷",
+      "title": "妇好率军出征",
+      "desc": "商王武丁之妻妇好率军征伐羌方、土方、巴方等，是甲骨文记载中最早的女性军事统帅，出土妇好墓有大量兵器随葬",
+      "type": "战争",
+      "scope": "城市",
+      "source": "据甲骨卜辞; 妇好墓发掘报告(中国社科院考古所,1976)"
+    },
+    {
+      "year": -1046,
+      "month": null,
+      "city": "朝歌",
+      "title": "牧野之战，武王伐纣，商亡",
+      "desc": "周武王率诸侯联军伐商，战于商郊牧野，商军阵前倒戈，纣王登鹿台自焚而死，商朝灭亡",
+      "type": "战争",
+      "scope": "全国",
+      "source": "据《史记·殷本纪》《诗经·大雅·大明》; 利簋铭文证实公元前1046年甲子日"
+    }
+  ]
+}

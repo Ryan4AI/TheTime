@@ -1,863 +1,1623 @@
 // Game scene — 穿越后的主游戏场景
-// 每页一个抉择点 + 自由输入 + 古风氛围场景
-// 视觉：不同地点有专属氛围背景（城门口、茶摊、街道、客栈、河边...）
-// 交互：点击选项 | 底部物品栏常驻
+// AI 驱动叙事：调用 ai_narrate 云函数 → 显示叙事 + 选项 → 玩家选择 → 循环
+// 模式：init() / render(ctx) / onTouch(x,y,type) — 与项目其他场景保持一致
 
 const ui = require('../engine/ui')
-const { COLORS, getSystemInfo, drawBackground, drawText, hitTest, roundRect } = ui
-const { FadeAnim, SlideFadeAnim } = require('../engine/anim')
+const { COLORS, getSystemInfo, drawBackground, drawText, drawCenteredText, drawTextInRect, hitTest, roundRect } = ui
 
-var gameState = null
-var layout = {}
-var anims = {}
+// ─────── 状态 ───────
+var state = null
+var layout = null
 var currentItems = []
+var narrative = ''           // 当前显示的叙事文本
+var displayedChars = 0        // 打字机效果：已显示字符数
+var displayStartTime = 0     // 打字开始时间
+var options = []             // 当前选项
+var optionsAppearTime = 0    // 选项出现时间
+var freeInputActive = false  // 自由输入模式
+var freeInputText = ''       // 自由输入文本
+var loading = false          // AI 调用中
+var loadingStart = 0
+var errorMsg = ''
+var narrativeHistory = []    // {role, content}
+var alive = true             // 死亡标记
+var fadeOut = null           // 淡出动画
+var monthChanged = false     // 月份变化（用于显示特殊提示）
+var newEvent = null          // 新事件
+var itemDetail = null        // 物品详情浮窗（点击物品后弹出）
+var bgImage = null           // 当前背景图（云函数返回 URL）
+var bgImageLoading = false   // 是否在加载
 
-// 故事数据：每个场景 key -> { text, atmosphere, options }
-var D = {}
-var ERA = { year: '崇宁元年', location: '汴京', age: 25, money: '3贯' }
+// ─────── AI 调试浮窗（v0.1.61）────
+var debugLog = []            // 最近 N 轮完整 input/result
+var debugOpen = false        // 浮窗展开/折叠
+var debugScroll = 0          // 浮窗内滚动偏移
+const DEBUG_MAX_ROUNDS = 3   // 保留最近 3 轮
+// v0.1.63: 小游戏没有 move 事件，改用 ▲▼ 箭头按钮滚动
+var bgImgEl = null           // <image> 元素缓存
 
-// 定义对话节点
-// 使用函数包裹避免单引号冲突
-function buildDialogue() {
-  var d = {}
-
-  // D0 - 初始场景
-  d.start = {
-    text: '你站在汴京城门前，仰头望去。城门上「朱雀门」三个大字映入眼帘——你认得出，宋代用的就是繁体字。',
-    atmosphere: 'city_gate',
-    options: [
-      { label: '打量城门四周的人', key: 'look_around' },
-      { label: '径直向城门走去', key: 'approach' },
-    ],
-  }
-
-  d.look_around = {
-    text: '进城的队伍排了二三十人，有挑着担子的农夫，有赶着驴车的商贩，还有几个书生模样的年轻人。守城的士兵正挨个盘问，态度倒还算客气。',
-    atmosphere: 'city_gate',
-    options: [
-      { label: '排队进城', key: 'queue_up' },
-      { label: '去路边茶摊歇歇脚', key: 'teahouse' },
-    ],
-  }
-
-  d.approach = {
-    text: '你走到城门前，守卫伸手拦住你：「什么人？打哪儿来的？」他上下打量你的衣着，眼神里满是狐疑。',
-    atmosphere: 'city_gate',
-    options: [
-      { label: '说自己是远方来的商人', key: 'merchant' },
-      { label: '说自己是游学的书生', key: 'scholar' },
-      { label: '塞几个铜板过去', key: 'bribe' },
-    ],
-  }
-
-  d.queue_up = {
-    text: '你排在队伍末尾。前面一个老汉挑着两筐梨，扁担压得弯弯的。他回头冲你笑了笑：「头一回来汴京吧？看你面生。」',
-    atmosphere: 'city_gate',
-    options: [
-      { label: '跟老汉打听汴京', key: 'chat_oldman' },
-      { label: '微笑着点点头', key: 'nod_smile' },
-    ],
-  }
-
-  d.teahouse = {
-    text: '路边茶摊支着青布棚子，茶博士正在吆喝。你坐下来要了一碗茶。茶汤清亮，入口微苦回甘——跟后世的茶不太一样。',
-    atmosphere: 'teahouse',
-    options: [
-      { label: '向茶博士打听消息', key: 'ask_teaman' },
-      { label: '喝完茶再去排队', key: 'queue_up' },
-    ],
-  }
-
-  d.merchant = {
-    text: '「商人？」守卫又打量了你一遍，「从哪来的？卖什么货？」他伸手要你拿出凭证来。',
-    atmosphere: 'city_gate',
-    options: [
-      { label: '说货在路上，先来探路', key: 'bluff_in' },
-      { label: '掏点碎银子打点', key: 'bribe' },
-    ],
-  }
-
-  d.scholar = {
-    text: '「读书人？」守卫的语气缓和了些，「衣裳倒是穿得古怪。可有路引？」你愣了一下——宋代进城门还要路引的。',
-    atmosphere: 'city_gate',
-    options: [
-      { label: '说路引被偷了', key: 'lost_pass' },
-      { label: '报个有名头的书院', key: 'name_academy' },
-    ],
-  }
-
-  d.bribe = {
-    text: '守卫不动声色地收了铜板，不耐烦地挥挥手：「行了行了，进去吧，别挡着道。」你就这么进了城。',
-    atmosphere: 'street',
-    options: [
-      { label: '看看汴京街景', key: 'street_walk' },
-      { label: '找个客栈落脚', key: 'inn' },
-    ],
-  }
-
-  d.chat_oldman = {
-    text: '老汉乐呵呵地跟你聊了起来。他说自己每旬进城卖一次梨，家里种了十几棵梨树，日子还过得去。正说着，前面轮到他了。',
-    atmosphere: 'city_gate',
-    options: [
-      { label: '跟着老汉一起进城', key: 'follow_old' },
-      { label: '自己单独应对守卫', key: 'approach' },
-    ],
-  }
-
-  d.nod_smile = {
-    text: '你笑了笑没说话。老汉也不在意，转回身去。队伍缓缓向前移动，不一会就到了城门口。守卫正盯着你呢。',
-    atmosphere: 'city_gate',
-    options: [
-      { label: '应对守卫盘问', key: 'approach' },
-      { label: '装傻混过去', key: 'bluff_in' },
-    ],
-  }
-
-  d.ask_teaman = {
-    text: '茶博士是个话篓子，一边擦碗一边给你讲：「听说蔡京大人最近又要变法了……街东头王家米铺的米价又涨了两文……城南勾栏来了个新班子，唱得可真不赖。」',
-    atmosphere: 'teahouse',
-    options: [
-      { label: '问蔡京变法的事', key: 'reform_talk' },
-      { label: '问勾栏在哪', key: 'theater_ask' },
-    ],
-  }
-
-  d.bluff_in = {
-    text: '守卫将信将疑，又盘问了几句，最后还是让你进去了。你松了口气，走进了这座千年古都。眼前是一条宽阔的大街，两旁店铺林立，人来人往。',
-    atmosphere: 'street',
-    options: [
-      { label: '沿街逛逛', key: 'street_walk' },
-      { label: '找地方住下', key: 'inn' },
-    ],
-  }
-
-  d.lost_pass = {
-    text: '「路引被偷了？」守卫皱着眉头，「那得去县衙补办。你先进来吧，别在城门口堵着。」他侧身让开了一条路。',
-    atmosphere: 'street',
-    options: [
-      { label: '先找客栈，再去县衙', key: 'inn' },
-      { label: '逛逛再说', key: 'street_walk' },
-    ],
-  }
-
-  d.name_academy = {
-    text: '你随口报了个白鹿洞书院的名号。守卫肃然起敬：「原来是白鹿洞的学子，失敬失敬。」恭恭敬敬地请你进去了。',
-    atmosphere: 'street',
-    options: [
-      { label: '逛逛汴京街市', key: 'street_walk' },
-      { label: '找个书院交流交流', key: 'academy_visit' },
-    ],
-  }
-
-  d.follow_old = {
-    text: '老汉替你说了几句好话，守卫没多问就放你们进城了。汴京城里比城外热闹百倍——酒楼茶肆，绸缎庄，书铺，琳琅满目。',
-    atmosphere: 'street',
-    options: [
-      { label: '沿街闲逛', key: 'street_walk' },
-      { label: '找地方住下', key: 'inn' },
-    ],
-  }
-
-  d.street_walk = {
-    text: '汴京的街市热闹非凡。路边有卖糖人的、耍把式的、算命的。远处飘来酒肉的香气，勾得人肚子里咕咕叫。你身上还有几贯铜钱，够花几天的。',
-    atmosphere: 'street',
-    options: [
-      { label: '去酒肆吃一顿', key: 'tavern_eat' },
-      { label: '找个客栈住下', key: 'inn' },
-      { label: '四处转转', key: 'wander' },
-    ],
-  }
-
-  d.inn = {
-    text: '你在城东找到一家客栈，门楣上写着「悦来客栈」。掌柜的是个和气的胖大叔，要了一间普通房，一晚五十文。房间不大，但干净。你放下东西，歇了口气。',
-    atmosphere: 'room',
-    options: [
-      { label: '出去逛逛汴京的夜晚', key: 'night_stroll' },
-      { label: '跟掌柜打听消息', key: 'ask_innkeep' },
-      { label: '早点歇息', key: 'sleep' },
-    ],
-  }
-
-  d.reform_talk = {
-    text: '茶博士压低声音说：「蔡大人要整顿盐铁，听说还要增税……老百姓叫苦不迭啊。」你心里一惊——崇宁元年，蔡京变法正是北宋由盛转衰的开端。',
-    atmosphere: 'teahouse',
-    options: [
-      { label: '继续打听朝堂的事', key: 'court_news' },
-      { label: '喝完茶去城里转转', key: 'street_walk' },
-    ],
-  }
-
-  d.theater_ask = {
-    text: '「城南勾栏——瓦舍里头，老远就能看见彩旗的就是。」茶博士比划着，「晚上去最热闹，有杂剧、傀儡戏，还有说书先生讲三国呢。」',
-    atmosphere: 'teahouse',
-    options: [
-      { label: '去勾栏看看', key: 'theater_go' },
-      { label: '先办正事', key: 'street_walk' },
-    ],
-  }
-
-  d.academy_visit = {
-    text: '你问了路，找到汴京最有名的书院。几个年轻学子正在门前谈论诗经，见你衣着奇特，好奇地围了上来。',
-    atmosphere: 'academy',
-    options: [
-      { label: '跟他们谈诗论文', key: 'poetry_talk' },
-      { label: '打听朝廷的事', key: 'court_news' },
-    ],
-  }
-
-  d.tavern_eat = {
-    text: '你进了一家酒肆，要了一壶酒两碟小菜。酒是黄酒，温热了端上来，入口醇厚。隔壁桌几个商人在谈生意，说南方来的丝绸又涨了价。',
-    atmosphere: 'tavern',
-    options: [
-      { label: '听听他们在聊什么', key: 'eavesdrop' },
-      { label: '吃完去找住处', key: 'inn' },
-    ],
-  }
-
-  d.wander = {
-    text: '你穿过几条街巷，来到了汴河边。河上有座石拱桥，桥上行人来来往往。桥下有船夫撑着乌篷船经过，船头挂着红灯笼。好一幅清明上河图的景致。',
-    atmosphere: 'river',
-    options: [
-      { label: '站在桥上看风景', key: 'bridge_view' },
-      { label: '找船夫聊聊天', key: 'boatman_talk' },
-    ],
-  }
-
-  d.night_stroll = {
-    text: '入夜后的汴京别有一番风情。街上灯笼亮了起来，酒楼里传出丝竹声。远处夜市的吆喝声此起彼伏——卖馄饨的、卖糖炒栗子的、卖蜜饯的……',
-    atmosphere: 'night_street',
-    options: [
-      { label: '去夜市逛逛', key: 'night_market' },
-      { label: '回客栈休息', key: 'sleep' },
-    ],
-  }
-
-  d.ask_innkeep = {
-    text: '掌柜是个健谈的人，一边拨算盘一边跟你说：「客官是外地来的吧？最近汴京可不太平——蔡京大人新官上任，到处都在变。您晚上别往城西跑，那边正抓人呢。」',
-    atmosphere: 'room',
-    options: [
-      { label: '问抓人的事', key: 'arrest_news' },
-      { label: '上楼歇息', key: 'sleep' },
-    ],
-  }
-
-  d.sleep = {
-    text: '你躺在床上，回想这一天发生的事。窗外传来更夫敲梆子的声音——「天干物燥，小心火烛。」你翻了个身，沉沉睡去。',
-    atmosphere: 'room',
-    options: [
-      { label: '第二天继续探索', key: 'dawn' },
-    ],
-  }
-
-  d.dawn = {
-    text: '清晨的阳光透过窗纸照进来。楼下传来店小二的吆喝声。你洗漱下楼，新的一天开始了。汴京城又热闹了起来。',
-    atmosphere: 'street_day',
-    options: [
-      { label: '出门逛逛', key: 'street_walk' },
-      { label: '去茶馆吃早点', key: 'teahouse' },
-    ],
-  }
-
-  d.court_news = {
-    text: '你越听越觉得有意思。崇宁元年正是北宋党争最烈的时候——旧党被打压，新党当权。你这个穿越者知道接下来会发生什么，但眼下什么都做不了。',
-    atmosphere: 'teahouse',
-    options: [
-      { label: '继续逛汴京', key: 'street_walk' },
-      { label: '回客栈写日记', key: 'diary' },
-    ],
-  }
-
-  d.theater_go = {
-    text: '勾栏里人声鼎沸。台上正在演一出杂剧，讲的是包拯办案的故事——当然，包大人这会儿还在山东当知县呢。台下的叫好声震耳欲聋。',
-    atmosphere: 'night_street',
-    options: [
-      { label: '看完戏回去', key: 'inn' },
-      { label: '跟旁边的人聊聊', key: 'stranger_chat' },
-    ],
-  }
-
-  d.poetry_talk = {
-    text: '几个年轻学子听说你「从远方来」，兴致勃勃地跟你聊起诗赋。你说出一句苏轼的词，他们惊喜不已——虽然苏轼这时候已经贬到海南了。',
-    atmosphere: 'academy',
-    options: [
-      { label: '跟他们讨论苏轼', key: 'sushi_talk' },
-      { label: '告辞去逛城', key: 'street_walk' },
-    ],
-  }
-
-  d.eavesdrop = {
-    text: '你竖起耳朵听了一会儿。原来他们是在商量合伙贩运茶叶的事，利润可观但风险也不小。其中一人叹气说：「要不是蔡京的新税法……」',
-    atmosphere: 'tavern',
-    options: [
-      { label: '要不要插一嘴？', key: 'join_business' },
-      { label: '吃完走人', key: 'street_walk' },
-    ],
-  }
-
-  d.bridge_view = {
-    text: '站在拱桥上，汴河两岸的景致尽收眼底。远处有粮船缓缓驶来，近处有妇人在河边浣衣。几个光屁股的小孩在浅水处摸鱼，笑声清脆。',
-    atmosphere: 'river',
-    options: [
-      { label: '继续往前走', key: 'street_walk' },
-      { label: '在河边坐一会儿', key: 'river_sit' },
-    ],
-  }
-
-  d.boatman_talk = {
-    text: '老船夫叼着烟袋，慢悠悠地说：「这汴河啊，养活了多少人。从江南运粮上来，从北方运皮货下去……河就是命根子。」他指了指远处：「瞧见那座宅子没？那是蔡京家的别院。」',
-    atmosphere: 'river',
-    options: [
-      { label: '打听蔡京的事', key: 'court_news' },
-      { label: '谢过船夫，上岸逛逛', key: 'street_walk' },
-    ],
-  }
-
-  d.night_market = {
-    text: '夜市灯火通明。你买了一串糖葫芦，酸酸甜甜的，跟后世的没什么两样。一个算命先生拉住你：「这位公子，我看你面相不凡——要不要算一卦？」',
-    atmosphere: 'night_street',
-    options: [
-      { label: '算一卦', key: 'fortune' },
-      { label: '婉拒，继续逛', key: 'sleep' },
-    ],
-  }
-
-  d.arrest_news = {
-    text: '掌柜压低声音：「听说抓的是元祐党人。上面发了文书，连苏轼的诗词都不让印了……」这就是历史上著名的「崇宁党禁」。',
-    atmosphere: 'room',
-    options: [
-      { label: '上楼歇息', key: 'sleep' },
-      { label: '写点东西记录下来', key: 'diary' },
-    ],
-  }
-
-  d.diary = {
-    text: '你拿出随身带的笔记本，把今天的见闻记了下来。用简体字写在这里，倒也不怕被人看见——反正这个时代没人看得懂。',
-    atmosphere: 'room',
-    options: [
-      { label: '收好笔记本，睡了', key: 'sleep' },
-      { label: '再出去转转', key: 'night_stroll' },
-    ],
-  }
-
-  d.stranger_chat = {
-    text: '旁边是个书生打扮的年轻人，看得兴起跟你搭话：「兄台觉得这出戏如何？」你们聊了几句，得知他叫周子安，是太学的学生。',
-    atmosphere: 'night_street',
-    options: [
-      { label: '跟周子安结交', key: 'make_friend' },
-      { label: '看完告辞', key: 'inn' },
-    ],
-  }
-
-  d.sushi_talk = {
-    text: '说到苏轼，几个学子既崇敬又惋惜。「苏学士这会儿在儋州——就是海南岛，听说日子过得清苦。」你心想：再过几年，苏轼就要北归了，可惜那时候他也没几年了。',
-    atmosphere: 'academy',
-    options: [
-      { label: '继续聊', key: 'chat_more_academy' },
-      { label: '告辞离去', key: 'street_walk' },
-    ],
-  }
-
-  d.join_business = {
-    text: '你凑过去搭话。几个商人见你面生，警惕地打量你。你随口说了几句后世对茶叶市场的见解，把他们听得一愣一愣的——「这位兄台高见！不知在哪发财？」',
-    atmosphere: 'tavern',
-    options: [
-      { label: '编个身份糊弄过去', key: 'bluff_merchant' },
-      { label: '坦言自己是穿越来的', key: 'truth_bomb' },
-    ],
-  }
-
-  d.river_sit = {
-    text: '你在河边找了个干净石头坐下。夕阳西下，汴河被染成金色。远处传来钟声——是相国寺的晚钟。这一刻，你真的感觉回到了九百年前。',
-    atmosphere: 'river',
-    options: [
-      { label: '回城', key: 'street_walk' },
-      { label: '找地方过夜', key: 'inn' },
-    ],
-  }
-
-  d.fortune = {
-    text: '算命先生煞有介事地看了看你的手相，又看了看你的脸，忽然脸色一变——「公子的命相……老朽从未见过。你的命线好像是从别处接过来的。」你心里咯噔一下。',
-    atmosphere: 'night_street',
-    options: [
-      { label: '让他继续说', key: 'fortune_2' },
-      { label: '给钱走人', key: 'sleep' },
-    ],
-  }
-
-  d.fortune_2 = {
-    text: '「公子面相带着不属于这个时空的气息。」算命先生压低声音，「我师父在世时说过，每隔百年会有这样的人出现——叫作「渡世之人」。」',
-    atmosphere: 'night_street',
-    options: [
-      { label: '追问更多', key: 'mystery' },
-      { label: '心中不安，离开', key: 'sleep' },
-    ],
-  }
-
-  d.mystery = {
-    text: '算命先生摇摇头：「天机不可尽泄。公子只需记住——你来到这里自有因果。该你知道的时候，自然会知道。」你心里五味杂陈。',
-    atmosphere: 'night_street',
-    options: [
-      { label: '回客栈琢磨', key: 'diary' },
-      { label: '暂且放下，到处走走', key: 'night_stroll' },
-    ],
-  }
-
-  d.make_friend = {
-    text: '你和周子安相谈甚欢，约好明日在太学见面。他拍了拍你的肩膀：「能在勾栏遇到兄台这样的妙人，实在是缘分。」',
-    atmosphere: 'night_street',
-    options: [
-      { label: '去太学找他', key: 'academy_visit' },
-      { label: '先顾好自己的事', key: 'inn' },
-    ],
-  }
-
-  d.chat_more_academy = {
-    text: '聊到尽兴处，一个学子忽然说：「听说朝廷要立「元祐党人碑」，把旧党的人名刻在石碑上，让他们遗臭万年。」众人唏嘘不已。',
-    atmosphere: 'academy',
-    options: [
-      { label: '记住这件事', key: 'diary' },
-      { label: '告辞', key: 'street_walk' },
-    ],
-  }
-
-  d.bluff_merchant = {
-    text: '你说自己是从海上丝绸之路来的商人，专做瓷器茶叶生意。几个商人听得眼睛发亮——这可是打通海外市场的机会。',
-    atmosphere: 'tavern',
-    options: [
-      { label: '跟他们谈合作', key: 'deal' },
-      { label: '含糊过去，走人', key: 'street_walk' },
-    ],
-  }
-
-  d.truth_bomb = {
-    text: '你说你是从九百年后的未来穿越来的，他们先是愣住，然后哈哈大笑——「兄台真是个妙人，这酒我请了！」他们显然当你在说醉话。没人会相信真相的。',
-    atmosphere: 'tavern',
-    options: [
-      { label: '笑笑不再解释', key: 'street_walk' },
-      { label: '继续喝', key: 'sleep' },
-    ],
-  }
-
-  d.deal = {
-    text: '你跟几个商人约好了明日再谈。这或许是你在这个时代的第一个机会——用现代人的商业头脑在宋代做生意。',
-    atmosphere: 'tavern',
-    options: [
-      { label: '赴约谈生意', key: 'deal_done' },
-      { label: '睡过头了，算了', key: 'street_walk' },
-    ],
-  }
-
-  d.deal_done = {
-    text: '第二天你如约来到酒楼。商人老李拿出一份契书，请你过目。你看了一眼——繁体竖排，从右往左读，花了半天才看懂。这生意要是做成了，够你在这里立足的。',
-    atmosphere: 'tavern',
-    options: [
-      { label: '签了', key: 'street_walk' },
-      { label: '再考虑考虑', key: 'street_walk' },
-    ],
-  }
-
-  d.default = {
-    text: '你在汴京城里漫无目的地走着，脚下的青石板路延伸到远方。这座千年古都处处都是故事——而你的故事才刚刚开始。',
-    atmosphere: 'street',
-    options: [
-      { label: '继续探索', key: 'street_walk' },
-      { label: '找个地方歇脚', key: 'inn' },
-    ],
-  }
-
-  return d
+// ─── 朝代风格表（先生拍板：每朝代不同风格）───
+const STYLE_BY_DYNASTY = {
+  '夏':  { style: '商周青铜器纹样',   palette: '青铜绿朱砂',  elements: '祭祀甲骨' },
+  '商':  { style: '商周青铜器纹样',   palette: '青铜绿朱砂',  elements: '祭祀甲骨' },
+  '周':  { style: '春秋战国帛画',     palette: '墨黑朱砂',    elements: '车马礼器' },
+  '春秋':{ style: '春秋战国帛画',     palette: '墨黑朱砂',    elements: '战车礼器' },
+  '战国':{ style: '春秋战国帛画',     palette: '墨黑朱砂',    elements: '战车礼器' },
+  '秦':  { style: '秦汉画像石',       palette: '黑朱砂',      elements: '兵马俑长城' },
+  '汉':  { style: '汉代画像石',       palette: '黑朱砂',      elements: '车马宴乐' },
+  '三国':{ style: '工笔重彩',         palette: '绛红金',      elements: '战旗兵器' },
+  '晋':  { style: '魏晋山水',         palette: '青绿',        elements: '竹林隐士' },
+  '南北朝':{ style: '敦煌壁画',       palette: '石青赭石',    elements: '飞天佛像' },
+  '隋':  { style: '初唐工笔',         palette: '金朱砂青绿',  elements: '宫阙仕女' },
+  '唐':  { style: '唐代工笔重彩',     palette: '金朱砂青绿',  elements: '仕女宫阙' },
+  '五代':{ style: '五代山水',         palette: '水墨青绿',    elements: '山林隐士' },
+  '宋':  { style: '宋代山水',         palette: '水墨青绿',    elements: '市井勾栏' },
+  '元':  { style: '元代水墨',         palette: '水墨留白',    elements: '草原马' },
+  '明':  { style: '明代写意',         palette: '水墨',        elements: '市井园林' },
+  '清':  { style: '清代工笔',         palette: '淡彩',        elements: '宫廷市井' },
+  '民国':{ style: '老上海水彩',       palette: '灰暖黄',      elements: '洋楼旗袍' },
 }
 
-D = buildDialogue()
-
-function getScene(key) {
-  if (!key || !D[key]) return D.start
-  return D[key]
+function getStyleForDynasty(dynasty) {
+  if (!dynasty) return STYLE_BY_DYNASTY['宋']  // 兜底
+  for (const [k, v] of Object.entries(STYLE_BY_DYNASTY)) {
+    if (dynasty.includes(k)) return v
+  }
+  return STYLE_BY_DYNASTY['宋']
 }
 
-function calcLayout() {
-  var sys = getSystemInfo()
+const TYPEWRITE_SPEED = 25   // 每字符毫秒
+const MAX_NARRATIVE_CHARS = 600  // 单次叙事最大字符数
+
+// ─────── 入口 ───────
+module.exports = {
+  init(items, identity) {
+    const id = identity || {}
+    items = items || []
+
+    state = {
+      life_number: id.life_number || 1,
+      name: id.name || '无名',
+      gender: id.gender || '男',
+      age: id.age || 20,
+      occupation: id.occupation || '庶民',
+      // P1.4 字段名对齐 generate_identity 实际返回（camelCase）
+      socialClass: id.socialClass || id.social_class || '庶人',
+      dynasty: id.dynasty || '',
+      eraDisplay: id.eraDisplay || id.eraLabel || '',
+      city: id.city || id.city_name || '某地',
+      year: id.year || 0,
+      month: 1,
+      round: 0,
+      health: 100,
+      coin: 1000,
+      items: items.map(i => ({ ...i })),
+      legacy: '',
+      alive: true,
+    }
+
+    currentItems = items
+    narrative = ''
+    displayedChars = 0
+    displayStartTime = 0
+    options = []
+    optionsAppearTime = 0
+    freeInputActive = false
+    freeInputText = ''
+    loading = false
+    errorMsg = ''
+    narrativeHistory = []
+    alive = true
+    fadeOut = null
+    monthChanged = false
+    newEvent = null
+    itemDetail = null
+
+    initLayout()
+
+    // 首次调用 AI
+    callAI('初始回合')
+
+    module.exports.autoNext = null
+  },
+
+  render,
+
+  onTouch(x, y, type) {
+    return handleTouch(x, y, type)
+  },
+
+  autoNext: null,
+}
+
+// ─────── 初始化布局 ───────
+function initLayout() {
+  const sys = getSystemInfo()
+  const windowWidth = sys.windowWidth
+  const windowHeight = sys.windowHeight
+
+  // iOS 灵动岛/刘海安全区
+  const safeTop = (sys.safeArea && sys.safeArea.top) || 0
+  const topOffset = Math.max(safeTop, 0)
+
+  // v0.1.70 重做：把"画/文字/选项"按比例严格放在 safeTop+topBarH 和 itemBarY 之间
+  // 顶栏(52) → 画区(3:2，180) → 文字面板(可滚动，不封顶 130) → 选项(3×36+gap 4+输入 32 = 152) → 物品栏(64)
+  const topBarH = 52
+  const itemBarH = 64
+  const optH = 36
+  const optGap = 4
+  const freeInputH = 32
+  const optBlockH = 3 * optH + 2 * optGap + freeInputH + 12  // = 160
+
+  const availableH = windowHeight - safeTop - topBarH - itemBarH
+  // v0.1.70：画区按宽 3:2 比例算 + 夹到 [120, 180]
+  const sceneW = windowWidth - 14 * 2
+  const sceneH = Math.min(180, Math.max(120, Math.floor(sceneW * 2 / 3)))
+  // 文字区 = 剩余 - 选项块 - 12 缓冲（C2 滚动版：不封顶）
+  const textH = availableH - sceneH - optBlockH - 12
+  const finalTextH = Math.max(80, textH)
+
   layout = {
-    w: sys.width,
-    h: sys.height,
-    cx: Math.floor(sys.width / 2),
+    windowW: windowWidth,
+    windowH: windowHeight,
+    safeTop: topOffset,
+    padding: 14,
+    topBarH: topBarH,
+    itemBarH: itemBarH,
+    sceneY: topOffset + topBarH + 4,
+    sceneH: sceneH,
+    textY: topOffset + topBarH + 4 + sceneH + 12,
+    textH: finalTextH,
+    optionY: topOffset + topBarH + 4 + sceneH + 12 + finalTextH + 6,
+    optionH: optH,
+    optionGap: optGap,
+    freeInputH: freeInputH,
+    itemBarY: windowHeight - itemBarH,
   }
 }
 
-function init(items, identity) {
-  currentItems = items || []
-  // 存储身份数据供叙事使用
-  gameState = {
-    currentKey: null,
-    showAll: false,
-    charIndex: 0,
-    lastCharTime: 0,
-    charSpeed: 25,
+// ─────── 调用 ai_narrate 云函数 ───────
+// v0.1.66: 不再传 action（init/continue 区分由云函数看 history 长度判断）
+function callAI(userInput) {
+  loading = true
+  loadingStart = Date.now()
+  errorMsg = ''
+
+  const stateData = {
+    life_number: state.life_number,
+    name: state.name,
+    gender: state.gender,
+    age: state.age,
+    occupation: state.occupation,
+    // P1.4 字段名对齐
+    socialClass: state.socialClass,
+    dynasty: state.dynasty,
+    eraDisplay: state.eraDisplay,
+    city: state.city,
+    year: state.year,
+    month: state.month,
+    round: state.round,
+    health: state.health,
+    coin: state.coin,
+    items: state.items.map(i => ({ id: i.id, name: i.name, desc: i.desc })),
+    legacy: state.legacy,
+    alive: state.alive,
   }
-  calcLayout()
-  var now = Date.now()
-  anims = {
-    fadeIn: new FadeAnim(50, 400),
-    pageFade: new SlideFadeAnim(3, 150, 450),
+
+  const data = {
+    state: stateData,
+    input: userInput,
+    history: narrativeHistory.slice(-12),
   }
-  anims.fadeIn.start(now)
-  anims.pageFade.start(now)
-}
 
-function onTouch(x, y, type) {
-  if (type !== 'end') return null
-  var gs = gameState
-  var l = layout
-  var scene = getScene(gs.currentKey)
+  // ── 调试：记录完整 input ──
+  debugLog.push({
+    round: state.round,
+    action: action,
+    input: userInput,
+    data: JSON.parse(JSON.stringify(data)),  // 深拷贝
+    result: null,
+    resultError: null,
+    ts: Date.now(),
+  })
+  if (debugLog.length > DEBUG_MAX_ROUNDS) debugLog.shift()
 
-  if (scene && gs.showAll && scene.options) {
-    var optW = Math.floor(l.w * 0.82)
-    var optX = Math.floor((l.w - optW) / 2)
-    var optStartY = Math.floor(l.h * 0.64)
-    var optH = 34
-    var optSep = 8
-
-    for (var i = 0; i < scene.options.length; i++) {
-      var by = optStartY + i * (optH + optSep)
-      if (hitTest(x, y, optX, by, optW, optH)) {
-        var optKey = scene.options[i].key
-        var next = D[optKey]
-        if (next) {
-          gs.currentKey = optKey
-          gs.showAll = false
-          gs.charIndex = 0
-          gs.lastCharTime = 0
-          anims.pageFade.start(Date.now())
+  if (typeof wx !== 'undefined' && wx.cloud && wx.cloud.callFunction) {
+    wx.cloud.callFunction({
+      name: 'ai_narrate',
+      data,
+      success: (res) => {
+        const result = (res && res.result) || {}
+        // ── 调试：记录完整 result + AI 接口完整入参（v0.1.62）──
+        if (debugLog.length > 0) {
+          const last = debugLog[debugLog.length - 1]
+          last.result = result
+          if (result.debug) {
+            last.system_prompt = result.debug.system_prompt
+            last.user_prompt = result.debug.user_prompt
+            last.messages_to_ai = result.debug.messages || null  // v0.1.64: 完整 messages 数组
+            last.raw_response = result.debug.raw_response
+            last.all_branches = result.branches || null
+          }
         }
+        handleAIResponse(result, action, userInput)
+      },
+      fail: (err) => {
+        // ── 调试：记录失败信息 ──
+        if (debugLog.length > 0) {
+          debugLog[debugLog.length - 1].resultError = (err && (err.errMsg || err.message)) || String(err)
+        }
+        loading = false
+        errorMsg = '史官落笔卡壳了——网络断了，点此重试。'
+        options = [{ label: '重试', key: '__retry__' }]
+        optionsAppearTime = Date.now() + 300
+      },
+    })
+  } else {
+    // ❌ 不再提供 mock fallback — 之前这里会硬塞"打量四周/起身查看/躺一会儿"
+    // 造成真机小游戏云开发不可用时，玩家看到永远不变的伪选项。
+    // 改为明确报错，让玩家知道是环境问题而不是游戏内容。
+    loading = false
+    errorMsg = '史官落笔卡壳了——云开发不可用，点此重试。'
+    options = [{ label: '重试', key: '__retry__' }]
+    optionsAppearTime = Date.now() + 300
+  }
+}
+
+// ─────── 处理 AI 返回 ───────
+function handleAIResponse(result, action, userInput) {
+  loading = false
+
+  if (!result || result.error) {
+    // 显式错误：玩家看得懂的史官风格
+    errorMsg = `史官落笔卡壳了——${(result && result.error) || 'AI服务暂不可用'}。点此重试。`
+    options = [{ label: '重试', key: '__retry__' }]
+    optionsAppearTime = Date.now() + 300
+    return
+  }
+
+  const { branch, state: newState, month_changed, event } = result
+  if (!branch || !branch.content) {
+    errorMsg = '史官落笔卡壳了——这一页是空白。点此重试。'
+    options = [{ label: '重试', key: '__retry__' }]
+    optionsAppearTime = Date.now() + 300
+    return
+  }
+
+  // 分支 options 缺失或为空：明确报错，不补默认
+  if (!Array.isArray(branch.options) || branch.options.length === 0) {
+    errorMsg = '史官落笔卡壳了——这一段选项没写出来。点此重试。'
+    options = [{ label: '重试', key: '__retry__' }]
+    optionsAppearTime = Date.now() + 300
+    return
+  }
+
+  // 1. 应用 AI 返回的 state 更新
+  if (newState) {
+    if (newState.age) state.age = newState.age
+    if (newState.health !== undefined) state.health = newState.health
+    if (newState.coin !== undefined) state.coin = newState.coin
+    if (newState.month) state.month = newState.month
+    if (newState.year) state.year = newState.year
+    if (newState.round !== undefined) state.round = newState.round
+  }
+
+  // 2. 应用 patch — 用 !== undefined 不用真值判断（修 0 falsy bug）
+  const patch = branch.patch || {}
+  if (patch.coin !== undefined) state.coin = Math.max(0, state.coin + (patch.coin || 0))
+  if (patch.health !== undefined) state.health = Math.max(0, Math.min(100, state.health + (patch.health || 0)))
+
+  // 物品状态变化 — 同时同步 currentItems（修 P0.3）
+  if (patch.items) {
+    for (const [itemId, change] of Object.entries(patch.items)) {
+      const it = state.items.find(i => i.id === itemId)
+      if (it) {
+        if (change === 'lost') {
+          // 物品真的丢失：从两个数组都移除
+          state.items = state.items.filter(x => x.id !== itemId)
+          currentItems = currentItems.filter(x => x.id !== itemId)
+        } else {
+          it.desc = it.name + '（' + change + '）'
+          // 同步 currentItems
+          const ci = currentItems.find(x => x.id === itemId)
+          if (ci) ci.desc = it.desc
+        }
+      }
+    }
+  }
+
+  // 3. 死亡判定
+  if (state.health <= 0 || newState && newState.alive === false) {
+    state.alive = false
+    alive = false
+  }
+
+  // 4. 记录历史
+  narrativeHistory.push({ role: 'ai', content: branch.content })
+  if (action === 'continue' && userInput) {
+    narrativeHistory.push({ role: 'user', content: userInput })
+  }
+
+  // 5. round 计数 +1（P1.6: AI 响应后递增）
+  state.round = (state.round || 0) + 1
+
+  // 5.5 异步加载背景图（不阻塞叙事显示）
+  fetchBgImage(branch.content || '')
+
+  // 6. 准备显示
+  narrative = (branch.content || '').slice(0, MAX_NARRATIVE_CHARS)
+  displayedChars = 0
+  displayStartTime = Date.now()
+  options = (branch.options || []).slice(0, 3).map(label => ({ label, key: label }))
+  optionsAppearTime = displayStartTime + narrative.length * TYPEWRITE_SPEED + 300
+  monthChanged = month_changed
+  newEvent = event || null
+}
+
+// ─────── 渲染 ───────
+function render(ctx) {
+  if (!ctx || !layout) return
+
+  // v0.1.66 流式布局：根据当前 narrative 长度动态算画区 + 文字面板高度
+  adjustFluidLayout()
+
+  // 淡出处理（死亡时）
+  if (fadeOut) {
+    const elapsed = Date.now() - fadeOut.start
+    const p = Math.min(1, elapsed / fadeOut.duration)
+    ctx.fillStyle = 'rgba(0,0,0,' + p + ')'
+    ctx.fillRect(0, 0, layout.windowW, layout.windowH)
+    if (p >= 1) {
+      module.exports.autoNext = { scene: 'death', state: state }
+      return
+    }
+  }
+
+  // 1. 暗色古风背景
+  drawBackground(ctx, layout.windowW, layout.windowH)
+
+  // 1.5 生图背景（v0.1.63 拼贴·题跋版：画占 55% 上半屏，1.0 透明度 + 卷轴边框）
+  drawBgImage(ctx)
+
+  // 2. 顶部朱砂印（古卷风顶栏）
+  drawSealTopBar(ctx)
+
+  // 3. 月份变化提示（如有）
+  if (monthChanged) {
+    drawMonthNotice(ctx)
+  }
+
+  // 4. 叙事文字（题跋·下半屏，v0.1.63 改版）
+  drawNarrative(ctx)
+
+  // 5. 叙事滚动指示器
+  if (narrative && Date.now() >= displayStartTime + 500) {
+    drawScrollIndicator(ctx)
+  }
+
+  // 6. 选项按钮（竹简风格）
+  if (Date.now() >= optionsAppearTime && options.length > 0) {
+    drawOptions(ctx)
+  }
+
+  // 7. 自由输入按钮
+  if (Date.now() >= optionsAppearTime && options.length > 0) {
+    drawFreeInputButton(ctx)
+  }
+
+  // 8. 底部物品栏（极简）
+  drawItemBar(ctx)
+
+  // 9. 加载中
+  if (loading) {
+    drawLoading(ctx)
+  }
+
+  // 10. 错误提示
+  if (errorMsg) {
+    drawError(ctx)
+  }
+
+  // 11. 长按状态：玉牒浮窗
+  if (!statusHidden || isLongPressing) {
+    drawJadeTablet(ctx)
+  }
+
+  // 12. 物品详情浮窗（点击物品后弹出，点任何位置关闭）
+  if (itemDetail) {
+    drawItemDetail(ctx)
+  }
+
+  // 13. AI 调试浮窗（v0.1.61）—— 最高层级，最右上的小图标或全屏覆盖
+  drawDebugPanel(ctx)
+}
+
+// ─────── 流式布局 v0.1.68 ───────
+// 先生拍板的 3 层语义：
+// 1. 文字面板按 displayedChars 实时延伸（打字中跟着字走）
+// 2. 选项 + 自由输入打字完成后才淡入出现（不打扰阅读）
+// 3. 物品栏钉在底部 64px（不参与流式布局）
+function adjustFluidLayout() {
+  if (!layout) return
+
+  const topBarH = layout.topBarH
+  const itemBarH = layout.itemBarH       // 钉死底部 64px
+  const optBlockH = 160                    // v0.1.70: 3×36 + 2×4 + 32 + 12
+  const safeTop = layout.safeTop || 0
+  const availableH = layout.windowH - safeTop - topBarH - itemBarH
+
+  // ── 1. 文字面板高度 = 按已显示字符数实时算（C2 滚动版：自然撑开，不封顶 280）──
+  let finalTextH = 80
+  if (narrative) {
+    const charPerLine = Math.max(8, Math.floor((layout.windowW - layout.padding * 2 - 24) / 16))
+    const lineCount = Math.max(2, Math.ceil(displayedChars / charPerLine))
+    const lineHeight = 24
+    const textPadding = 16
+    finalTextH = lineCount * lineHeight + textPadding
+  }
+  // 文字面板最大占可用区 60%（超出滚动）；最少 80
+  const maxTextH = Math.max(80, availableH * 0.6)
+  finalTextH = Math.min(maxTextH, Math.max(80, finalTextH))
+
+  // ── 2. 选项/自由输入：打字中不占空间（隐藏），打字完成后才占 ──
+  const typingDone = narrative && displayedChars >= narrative.length
+  const optReserveH = typingDone ? optBlockH : 0
+  const optionGap = 6
+
+  // ── 3. 画区 = 全部可用 - 文字面板 - 选项块(条件) - 缓冲（v0.1.69：下限 120 不被压扁）──
+  let finalSceneH = availableH - finalTextH - optReserveH - optionGap - 12
+  finalSceneH = Math.min(280, Math.max(120, finalSceneH))
+
+  // 兜底：若仍然超出（极端长叙事），压到 60% 上限即可，文字面板自带滚动兜底
+  const usedH = finalSceneH + finalTextH + optReserveH + optionGap + 12
+  if (usedH > availableH) {
+    finalTextH = Math.min(finalTextH, maxTextH)
+  }
+
+  // ── 4. 写回 layout ──
+  layout.sceneH = finalSceneH
+  layout.textY = safeTop + topBarH + 4 + finalSceneH + 12
+  layout.textH = finalTextH
+  layout.optionY = safeTop + topBarH + 4 + finalSceneH + 12 + finalTextH + optionGap
+  layout.optionFadeIn = typingDone ? 1 : 0
+  layout.optionH = 36                       // v0.1.70: 38 → 36（与 initLayout 一致）
+  layout.optionGap = optionGap
+  layout.itemBarY = layout.windowH - itemBarH   // 钉死屏底
+}
+
+// ─────── 生图背景（v0.1.69：前端直连 Pollinations.ai，跳过云函数） ───────
+// 朝代风格表（v0.1.62 起，p1: 简洁英文 prompt；p2: 水墨质感参数）
+const PROMPT_BY_DYNASTY = {
+  '宋':   { style: 'Song dynasty Chinese ink wash painting',      elements: 'markets, scholars, teahouses, riverside' },
+  '元':   { style: 'Yuan dynasty Chinese ink landscape',          elements: 'grassland, horsemen, vast sky' },
+  '明':   { style: 'Ming dynasty Chinese literati ink painting',  elements: 'gardens, scholars, calligraphy' },
+  '清':   { style: 'Qing dynasty Chinese court painting',         elements: 'palace, scholars, calligraphy' },
+  '唐':   { style: 'Tang dynasty Chinese gongbi heavy color',     elements: 'palace ladies, court, horses' },
+  '汉':   { style: 'Han dynasty Chinese stone relief painting',   elements: 'carriage, banquet, warriors' },
+  '秦':   { style: 'Qin dynasty Chinese painting',                elements: 'terracotta warriors, Great Wall' },
+  '晋':   { style: 'Wei-Jin Chinese landscape',                   elements: 'bamboo forest, hermits' },
+  '南北朝':{ style: 'Dunhuang mural painting',                    elements: 'flying apsaras, Buddha' },
+  '隋':   { style: 'Early Tang gongbi',                           elements: 'palace, court ladies' },
+  '五代': { style: 'Five dynasties Chinese landscape',            elements: 'mountains, hermits' },
+  '商':   { style: 'Bronze age Chinese oracle bone art',         elements: 'ritual, sacrifice' },
+  '周':   { style: 'Spring Autumn period Chinese painting',       elements: 'warriors, ritual vessels' },
+  '春秋': { style: 'Spring Autumn period Chinese painting',       elements: 'warriors, ritual vessels' },
+  '战国': { style: 'Warring States Chinese silk painting',       elements: 'warriors, ritual vessels' },
+  '三国': { style: 'Three Kingdoms Chinese gongbi',               elements: 'battle flags, weapons' },
+  'default':{ style: 'Ancient Chinese ink wash painting',          elements: 'historical scene' },
+}
+
+function buildPollinationsPrompt(narrativeText) {
+  const era = state.dynasty || '宋'
+  const cfg = PROMPT_BY_DYNASTY[era] || PROMPT_BY_DYNASTY['default']
+  // 抓叙事前 80 字作为场景描述
+  const hint = (narrativeText || '').slice(0, 80).replace(/\s+/g, ' ')
+  // p1 风格词 + p2 元素词 + p3 场景
+  const p1 = cfg.style
+  const p2 = cfg.elements
+  const p3 = hint
+  // 固定水墨质感参数
+  const suffix = 'ink wash, monochrome, rice paper texture, no text, no watermark, masterpiece, --ar 3:2'
+  return [p1, p2, p3, suffix].filter(Boolean).join(', ')
+}
+
+function fetchBgImage(narrativeText) {
+  if (typeof wx === 'undefined') return
+  if (bgImageLoading) return  // 防重入
+
+  // 从叙事/城市/事件抽 1-2 个关键词作为 scene 描述
+  const era = state.dynasty || '宋'
+  const city = state.city || ''
+  let sceneHint = ''
+  if (city) sceneHint += city
+  // 抓叙事前 60 字
+  const hint = (narrativeText || '').slice(0, 60)
+
+  const prompt = buildPollinationsPrompt(narrativeText)
+  // Pollinations.ai 公开 API，URL 拼装即图
+  const seed = Math.floor(Math.random() * 1000000)
+  const encoded = encodeURIComponent(prompt)
+  const url = `https://image.pollinations.ai/prompt/${encoded}?width=768&height=512&seed=${seed}&nologo=true&model=flux`
+
+  bgImageLoading = true
+  if (bgImgEl) { try { bgImgEl.src = '' } catch(e) {} }
+  bgImgEl = typeof wx.createImage === 'function' ? wx.createImage() : new Image()
+  bgImgEl.onload = () => {
+    bgImageLoading = false
+    bgImage = url
+  }
+  bgImgEl.onerror = () => {
+    bgImageLoading = false
+    console.warn('Pollinations 加载失败:', url.slice(0, 80))
+  }
+  bgImgEl.src = url
+}
+
+function drawBgImage(ctx) {
+  const sx = layout.padding
+  const sy = layout.sceneY
+  const sw = layout.windowW - layout.padding * 2
+  const sh = layout.sceneH
+
+  // 1. 卷轴底框（深木色，模拟画轴卷起感）
+  ctx.save()
+  ctx.fillStyle = 'rgba(20,16,10,0.85)'
+  ctx.fillRect(sx - 4, sy - 4, sw + 8, sh + 8)
+  ctx.restore()
+
+  if (!bgImgEl || !bgImgEl.complete || bgImgEl.width === 0) {
+    // 占位：纯暗色 + 中心"画在生成中..."小字
+    ctx.save()
+    ctx.fillStyle = 'rgba(15,12,8,0.9)'
+    ctx.fillRect(sx, sy, sw, sh)
+    ctx.fillStyle = 'rgba(200,168,124,0.4)'
+    ctx.font = '11px ' + ui.fontFamily
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('画在生成中...', sx + sw / 2, sy + sh / 2)
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'alphabetic'
+    ctx.restore()
+  } else {
+    // 2. 画主体（cover 模式，1.0 透明度 = 主体）
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(sx, sy, sw, sh)
+    ctx.clip()  // 限制在卷轴框内
+    const imgW = bgImgEl.width
+    const imgH = bgImgEl.height
+    const scale = Math.max(sw / imgW, sh / imgH)
+    const drawW = imgW * scale
+    const drawH = imgH * scale
+    const drawX = sx + (sw - drawW) / 2
+    const drawY = sy + (sh - drawH) / 2
+    ctx.drawImage(bgImgEl, drawX, drawY, drawW, drawH)
+    ctx.restore()
+  }
+
+  // 3. 卷轴边框（暗金）
+  ctx.save()
+  ctx.strokeStyle = 'rgba(200,168,124,0.45)'
+  ctx.lineWidth = 1.5
+  ctx.strokeRect(sx, sy, sw, sh)
+  ctx.restore()
+
+  // 4. 卷轴上下暗金细线（强调"画"）
+  ctx.save()
+  ctx.strokeStyle = 'rgba(200,168,124,0.6)'
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(sx + 6, sy + 6)
+  ctx.lineTo(sx + sw - 6, sy + 6)
+  ctx.moveTo(sx + 6, sy + sh - 6)
+  ctx.lineTo(sx + sw - 6, sy + sh - 6)
+  ctx.stroke()
+  ctx.restore()
+
+  // 5. 左上"画"字朱砂小印（强调"这是画"）
+  ctx.save()
+  ctx.fillStyle = 'rgba(200,58,46,0.5)'
+  ctx.font = '10px ' + ui.fontFamily
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'top'
+  ctx.fillText('画 · ' + (state.dynasty || ''), sx + 10, sy + 10)
+  ctx.restore()
+}
+
+// ─────── 顶部朱砂印 + 纪代（古卷风 v0.1.61） ───────
+function drawSealTopBar(ctx) {
+  const padding = layout.padding
+  const topH = layout.topBarH
+  const safeTop = layout.safeTop || 0
+
+  // 1. 朱砂印（用 ui.drawSealStamp：宣纸色字 + 朱砂红底，size=20 字号 11px）
+  const sealChar = state.dynasty ? state.dynasty.charAt(0) : '時'
+  const sealCenterX = padding + 14
+  const sealCenterY = safeTop + topH / 2
+  ui.drawSealStamp(ctx, sealCenterX, sealCenterY, 20, sealChar)
+
+  // 2. 纪年 + 姓名（朱砂印右侧，单行排版）
+  const eraStr = state.eraDisplay || (state.dynasty + ' ' + state.year + '年')
+  const infoStr = eraStr + '  ·  ' + state.name + state.age + '岁'
+  ctx.save()
+  // 暗金点装饰（纪年名前）
+  ctx.fillStyle = 'rgba(200,168,124,0.6)'
+  ctx.beginPath()
+  ctx.arc(sealCenterX + 26, sealCenterY, 2, 0, Math.PI * 2)
+  ctx.fill()
+  // 文字
+  ctx.fillStyle = 'rgba(232,221,208,0.85)'
+  ctx.font = '14px ' + ui.fontFamily
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(infoStr, sealCenterX + 36, sealCenterY)
+  ctx.restore()
+
+  // 3. 暗金细线分隔（顶栏底部）
+  ui.drawClassicalDivider(ctx, padding, safeTop + topH - 1, layout.windowW - padding * 2, 0.6)
+
+  // 4. 触摸区域（整个顶栏 = 长按呼出玉牒）
+  layout._sealArea = { x: 0, y: 0, w: layout.windowW, h: safeTop + topH }
+}
+
+// ─────── 月份变化提示 ───────
+function drawMonthNotice(ctx) {
+  if (Date.now() - displayStartTime > 3000) return // 只显示3秒
+
+  const notice = '· 时光流转 ·'
+  const y = layout.topBarH + 8
+  const alpha = Math.min(1, (Date.now() - optionsAppearTime + 200) / 600) * 0.7
+  ctx.fillStyle = 'rgba(212,168,83,' + alpha + ')'
+  ctx.font = '11px ' + ui.fontFamily
+  ctx.textAlign = 'center'
+  ctx.fillText(notice, layout.windowW / 2, y)
+  ctx.textAlign = 'left'
+
+  if (newEvent && newEvent.title) {
+    ctx.fillStyle = 'rgba(255,200,100,' + alpha + ')'
+    ctx.font = '10px ' + ui.fontFamily
+    ctx.fillText('📜 ' + newEvent.title, layout.windowW / 2, y + 14)
+  }
+}
+
+// ─────── 叙事文字（打字机效果 + 滚动） ───────
+var scrollOffset = 0
+var scrollTouchStartY = 0
+
+// ─── 古卷风状态 ───
+var statusHidden = true          // 状态栏默认隐藏
+var longPressStart = 0           // 长按计时
+var isLongPressing = false       // 是否在长按中
+var sealAnimProgress = 0         // 印章动画进度（0-1）
+const SEAL_SIZE = 30             // 朱砂印尺寸
+
+function drawNarrative(ctx) {
+  if (!narrative) return
+
+  const elapsed = Date.now() - displayStartTime
+  const totalChars = narrative.length
+  const targetChars = Math.min(totalChars, Math.floor(elapsed / TYPEWRITE_SPEED))
+  displayedChars = targetChars
+
+  const text = narrative.slice(0, displayedChars)
+
+  // v0.1.63 拼贴·题跋版：文字在下半屏独立面板（绝对不透明）
+  const tx = layout.padding
+  const ty = layout.textY
+  const tw = layout.windowW - layout.padding * 2
+  const th = layout.textH
+  const lineHeight = 24
+  const fontSize = 15
+  const maxW = tw - 24  // 文字面板内边距
+
+  // 1. 文字面板底（深墨色不透明 + 顶部暗金细线，强调"这是题字"）
+  ctx.save()
+  ctx.fillStyle = 'rgba(15,12,8,0.92)'
+  roundRect(ctx, tx, ty, tw, th, 6)
+  ctx.fill()
+  // 顶部暗金细线
+  ctx.strokeStyle = 'rgba(200,168,124,0.5)'
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(tx + 8, ty + 0.5)
+  ctx.lineTo(tx + tw - 8, ty + 0.5)
+  ctx.stroke()
+  // 左侧朱砂红指示条（强调题跋位置）
+  ctx.fillStyle = 'rgba(200,58,46,0.6)'
+  ctx.fillRect(tx + 1, ty + 6, 2, th - 12)
+  ctx.restore()
+
+  // 2. 文字内容
+  const contentEndY = drawTextInRect(ctx, text, tx + 14, ty + 8 + scrollOffset, maxW, lineHeight, fontSize)
+
+  // 3. 限制滚动
+  const contentH = contentEndY ? (contentEndY - ty - 8) : (text.split('\n').length * lineHeight)
+  const maxScroll = Math.max(0, contentH - (th - 16))
+  if (scrollOffset > 0) scrollOffset = 0
+  if (scrollOffset < -maxScroll) scrollOffset = -maxScroll
+
+  // 4. 打字光标
+  if (displayedChars < totalChars) {
+    const blink = (Date.now() % 800) < 400
+    if (blink) {
+      const lines = text.split('\n')
+      const lastLine = lines[lines.length - 1] || ''
+      const cursorX = tx + 14 + ctx.measureText(lastLine).width + 2
+      const cursorY = ty + 8 + (lines.length - 1) * lineHeight + scrollOffset
+      layout._cursorBounds = { x: cursorX, y: cursorY, w: 2, h: fontSize }
+      ctx.fillStyle = 'rgba(200,168,124,0.7)'
+      ctx.fillRect(cursorX, cursorY + 4, 2, fontSize)
+    }
+  }
+
+  // 5. 滚动区域（文字面板内）
+  layout._scrollArea = { x: tx, y: ty, w: tw, h: th }
+}
+
+// ─────── 滚动指示器 ───────
+function drawScrollIndicator(ctx) {
+  const yes = layout._scrollArea || {}
+  const contentH = narrative ? narrative.split('\n').length * 26 : 0
+  const viewH = yes.h || 200
+  if (contentH <= viewH + 20) return
+
+  const barX = layout.windowW - 6
+  const barY = layout.topBarH + 8
+  const barH = viewH - 16
+  const thumbH = Math.max(14, barH * (viewH / contentH))
+  const maxOff = Math.max(1, contentH - viewH)
+  const thumbY = barY + (barH - thumbH) * (Math.abs(scrollOffset) / maxOff)
+
+  ctx.save()
+  ctx.fillStyle = 'rgba(200,168,124,0.12)'
+  roundRect(ctx, barX - 1, barY, 2, barH, 1)
+  ctx.fill()
+  ctx.fillStyle = 'rgba(200,168,124,0.3)'
+  roundRect(ctx, barX - 1, thumbY, 2, thumbH, 1)
+  ctx.fill()
+  ctx.restore()
+}
+
+// ─────── 选项按钮（竹简风格 v0.1.61：左侧朱砂红指示条） ───────
+function drawOptions(ctx) {
+  if (!options || options.length === 0) return
+
+  // v0.1.68: 打字中不画选项（optionFadeIn=0），打字完成后淡入（1）
+  const fadeIn = layout.optionFadeIn || 0
+  if (fadeIn <= 0) return
+
+  const optX = layout.padding + 4
+  const optW = layout.windowW - (layout.padding + 4) * 2
+  const optH = layout.optionH
+  const optGap = layout.optionGap
+  const baseY = layout.optionY
+
+  options.forEach((opt, i) => {
+    const oy = baseY + i * (optH + optGap)
+    const appearElapsed = Date.now() - optionsAppearTime - i * 100
+    if (appearElapsed < 0) return
+    const alpha = Math.min(1, appearElapsed / 300)
+
+    // 1. 竹简底（深木色 + 暗金描边，alpha 0.9 → 0.92 增强存在感）
+    ctx.save()
+    ctx.fillStyle = 'rgba(30,26,20,' + (alpha * fadeIn * 0.92) + ')'
+    roundRect(ctx, optX, oy, optW, optH, 6)
+    ctx.fill()
+    ctx.strokeStyle = 'rgba(200,168,124,' + (alpha * fadeIn * 0.55) + ')'
+    ctx.lineWidth = 1
+    roundRect(ctx, optX, oy, optW, optH, 6)
+    ctx.stroke()
+    ctx.restore()
+
+    // 2. 左侧朱砂红指示条（4px 宽，48px 高，v0.1.61 新增）
+    ctx.save()
+    ctx.fillStyle = 'rgba(200,58,46,' + (alpha * fadeIn * 0.85) + ')'
+    ctx.fillRect(optX + 1, oy + 4, 3, optH - 8)
+    ctx.restore()
+
+    // 3. 竹简纹理竖线（5 条装饰）
+    ctx.save()
+    ctx.strokeStyle = 'rgba(160,130,90,' + (alpha * fadeIn * 0.06) + ')'
+    ctx.lineWidth = 1
+    const lineSpacing = optW / 6
+    for (let li = 1; li < 6; li++) {
+      ctx.beginPath()
+      ctx.moveTo(optX + li * lineSpacing, oy + 4)
+      ctx.lineTo(optX + li * lineSpacing, oy + optH - 4)
+      ctx.stroke()
+    }
+    ctx.restore()
+
+    // 4. 序号小点
+    ctx.fillStyle = 'rgba(200,168,124,' + (alpha * fadeIn * 0.6) + ')'
+    ctx.font = '10px ' + ui.fontFamily
+    ctx.textAlign = 'right'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('·' + (i + 1) + '·', optX + 20, oy + optH / 2)
+
+    // 选项文字
+    ctx.fillStyle = 'rgba(245,239,224,' + alpha + ')'
+    ctx.font = '14px ' + ui.fontFamily
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(opt.label, optX + 30, oy + optH / 2)
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'alphabetic'
+
+    // 竹简右侧装饰小点
+    ctx.fillStyle = 'rgba(200,168,124,' + (alpha * fadeIn * 0.3) + ')'
+    ctx.beginPath()
+    ctx.arc(optX + optW - 10, oy + optH / 2, 3, 0, Math.PI * 2)
+    ctx.fill()
+
+    // 记录热区（扩大命中范围）
+    opt.bounds = { x: optX - 4, y: oy - 4, w: optW + 8, h: optH + 8 }
+  })
+}
+
+// ─────── 自由输入按钮 ───────
+function drawFreeInputButton(ctx) {
+  // v0.1.68: 打字中不画（fadeIn 拦截）
+  const fadeIn = layout.optionFadeIn || 0
+  if (fadeIn <= 0) return
+  const freeY = layout.optionY + options.length * (layout.optionH + layout.optionGap) + 8
+  const freeH = 36
+  const freeX = layout.padding + 4
+  const freeW = layout.windowW - (layout.padding + 4) * 2
+
+  const appearElapsed = Date.now() - optionsAppearTime - options.length * 100
+  if (appearElapsed < 0) return
+  const alpha = Math.min(1, appearElapsed / 300)
+
+  // 竹简虚线框
+  ctx.save()
+  ctx.fillStyle = 'rgba(40,36,30,' + (alpha * 0.6) + ')'
+  roundRect(ctx, freeX, freeY, freeW, freeH, 6)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(160,130,90,' + (alpha * 0.2) + ')'
+  ctx.lineWidth = 1
+  ctx.setLineDash([4, 3])
+  roundRect(ctx, freeX, freeY, freeW, freeH, 6)
+  ctx.stroke()
+  ctx.setLineDash([])
+  ctx.restore()
+
+  ctx.fillStyle = 'rgba(200,168,124,' + (alpha * 0.4) + ')'
+  ctx.font = '11px ' + ui.fontFamily
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('✎ 键入自己所想...', freeX + freeW / 2, freeY + freeH / 2)
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+
+  layout.freeInputBounds = { x: freeX, y: freeY, w: freeW, h: freeH }
+}
+
+// ─────── 底部物品栏（v0.1.62：行李标签 + 可点击物品） ───────
+function drawItemBar(ctx) {
+  const barY = layout.itemBarY
+  const items = currentItems || []
+  const barH = layout.itemBarH
+
+  // 1. 底板（深墨色半透明 + 顶部暗金边）
+  ctx.save()
+  ctx.fillStyle = 'rgba(15,12,8,0.65)'
+  ctx.fillRect(0, barY, layout.windowW, barH)
+  ctx.strokeStyle = 'rgba(200,168,124,0.22)'
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(layout.padding, barY)
+  ctx.lineTo(layout.windowW - layout.padding, barY)
+  ctx.stroke()
+  // 左下/右下 朱砂红小点（古卷风收尾装饰）
+  ctx.fillStyle = 'rgba(200,58,46,0.6)'
+  ctx.beginPath()
+  ctx.arc(layout.padding + 4, barY + barH - 4, 2, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.beginPath()
+  ctx.arc(layout.windowW - layout.padding - 4, barY + barH - 4, 2, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+
+  // 2. 行李标签（左侧小字 + 箭头，提示可点击）
+  ctx.save()
+  ctx.fillStyle = 'rgba(200,168,124,0.5)'
+  ctx.font = '10px ' + ui.fontFamily
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('⇧ 行李', layout.padding, barY + 8)
+  ctx.restore()
+
+  if (items.length === 0) {
+    // 空状态提示
+    ctx.save()
+    ctx.fillStyle = 'rgba(232,221,208,0.35)'
+    ctx.font = '11px ' + ui.fontFamily
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('空囊而来', layout.windowW / 2, barY + barH / 2)
+    ctx.restore()
+    return
+  }
+
+  // 3. 物品图标 + 文字标签
+  const iconSize = 28
+  const totalW = items.length * (iconSize + 18) - 18
+  const startX = (layout.windowW - totalW) / 2
+
+  items.forEach((item, i) => {
+    const ix = startX + i * (iconSize + 18)
+    const iy = barY + 18  // 下移让位 "⇧ 行李" 标签
+
+    // 小圆底
+    ctx.fillStyle = 'rgba(255,255,255,0.06)'
+    ctx.beginPath()
+    ctx.arc(ix + iconSize / 2, iy + iconSize / 2, iconSize / 2, 0, Math.PI * 2)
+    ctx.fill()
+    // 暗金描边（0.3 → 0.45 增强可点击感）
+    ctx.strokeStyle = 'rgba(200,168,124,0.45)'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.arc(ix + iconSize / 2, iy + iconSize / 2, iconSize / 2, 0, Math.PI * 2)
+    ctx.stroke()
+
+    // emoji 图标
+    ctx.fillStyle = COLORS.gold
+    ctx.font = '15px ' + ui.fontFamily
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(item.icon || '📦', ix + iconSize / 2, iy + iconSize / 2)
+
+    // 文字标签（物品名）
+    ctx.fillStyle = 'rgba(232,221,208,0.7)'
+    ctx.font = '10px ' + ui.fontFamily
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'top'
+    ctx.fillText(item.name || '', ix + iconSize / 2, iy + iconSize + 2)
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'alphabetic'
+
+    // 记录触摸热区
+    item._bounds = { x: ix, y: iy, w: iconSize, h: iconSize + 14 }
+  })
+}
+
+// ─────── 玉牒浮窗（长按状态） ───────
+function drawJadeTablet(ctx) {
+  const w = layout.windowW
+  const h = layout.windowH
+
+  // 半透明遮罩
+  ctx.fillStyle = 'rgba(0,0,0,0.65)'
+  ctx.fillRect(0, 0, w, h)
+
+  // 玉牒面板（居中矩形，仿玉色）
+  const pw = Math.min(280, w - 40)
+  const ph = 260
+  const px = (w - pw) / 2
+  const py = (h - ph) / 2
+
+  ctx.save()
+  ctx.fillStyle = 'rgba(26,36,30,0.95)'
+  roundRect(ctx, px, py, pw, ph, 12)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(90,138,112,0.5)'
+  ctx.lineWidth = 1
+  roundRect(ctx, px, py, pw, ph, 12)
+  ctx.stroke()
+  ctx.restore()
+
+  // 玉牒标题
+  ctx.fillStyle = COLORS.jade
+  ctx.font = '16px ' + ui.fontFamily
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('玉  牒', px + pw / 2, py + 30)
+
+  // 分隔线
+  ctx.strokeStyle = 'rgba(90,138,112,0.2)'
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(px + 24, py + 52)
+  ctx.lineTo(px + pw - 24, py + 52)
+  ctx.stroke()
+
+  // 内容行
+  const fields = [
+    { label: '姓  名', value: state.name },
+    { label: '年  岁', value: state.age + '岁' },
+    { label: '身  份', value: state.occupation || '庶民' },
+    { label: '金银', value: state.coin + '文' },
+  ]
+
+  ctx.textAlign = 'left'
+  fields.forEach((f, i) => {
+    const fy = py + 72 + i * 30
+    ctx.fillStyle = 'rgba(200,200,200,0.5)'
+    ctx.font = '13px ' + ui.fontFamily
+    ctx.fillText(f.label, px + 28, fy)
+    ctx.fillStyle = 'rgba(245,239,224,0.85)'
+    ctx.fillText(f.value, px + 86, fy)
+  })
+
+  // 健康条（题：气血）
+  const healthY = py + 72 + fields.length * 30 + 8
+  ctx.fillStyle = 'rgba(200,200,200,0.5)'
+  ctx.font = '13px ' + ui.fontFamily
+  ctx.fillText('气  血', px + 28, healthY)
+
+  const hpBarX = px + 86
+  const hpBarY = healthY - 6
+  const hpBarW = pw - 86 - 28
+  const hpBarH = 12
+  ctx.fillStyle = 'rgba(255,255,255,0.08)'
+  roundRect(ctx, hpBarX, hpBarY, hpBarW, hpBarH, 6)
+  ctx.fill()
+  const hpRatio = Math.max(0, Math.min(1, state.health / 100))
+  const hpColor = hpRatio > 0.6 ? '#5a8a70' : (hpRatio > 0.3 ? '#c8a87c' : '#c83a2e')
+  ctx.fillStyle = hpColor
+  roundRect(ctx, hpBarX, hpBarY, hpBarW * hpRatio, hpBarH, 6)
+  ctx.fill()
+  ctx.fillStyle = 'rgba(255,255,255,0.6)'
+  ctx.font = '10px ' + ui.fontFamily
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(state.health, hpBarX + hpBarW * hpRatio - 4, hpBarY + hpBarH / 2)
+
+  // 物品列表
+  if (state.items && state.items.length > 0) {
+    const itemY = healthY + 28
+    ctx.fillStyle = 'rgba(200,200,200,0.5)'
+    ctx.font = '13px ' + ui.fontFamily
+    ctx.textAlign = 'left'
+    ctx.fillText('行  李', px + 28, itemY)
+    ctx.fillStyle = 'rgba(245,239,224,0.7)'
+    ctx.font = '11px ' + ui.fontFamily
+    const itemStr = state.items.map(i => i.icon + i.name).join('  ')
+    ctx.fillText(itemStr, px + 86, itemY, pw - 86 - 28)
+  }
+
+  // 底部提示
+  ctx.fillStyle = 'rgba(200,200,200,0.3)'
+  ctx.font = '10px ' + ui.fontFamily
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'bottom'
+  ctx.fillText('轻点关闭', px + pw / 2, py + ph - 12)
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+}
+
+// ─────── 加载中 ───────
+function drawLoading(ctx) {
+  // P2.10 不覆盖叙事，只显示半透明顶部提示
+  const barH = 44
+  const barY = layout.windowH - layout.itemBarH - barH - 10
+  ctx.save()
+  ctx.fillStyle = 'rgba(0,0,0,0.7)'
+  roundRect(ctx, layout.padding, barY, layout.windowW - layout.padding * 2, barH, 8)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(212,168,83,0.3)'
+  ctx.lineWidth = 1
+  roundRect(ctx, layout.padding, barY, layout.windowW - layout.padding * 2, barH, 8)
+  ctx.stroke()
+  ctx.restore()
+
+  ctx.fillStyle = COLORS.gold
+  ctx.font = '14px ' + ui.fontFamily
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  const dots = '.'.repeat(((Date.now() - loadingStart) / 500 % 4) | 0)
+  ctx.fillText('AI 穿越中' + dots, layout.windowW / 2, barY + barH / 2)
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+}
+
+// ─────── 错误提示 ───────
+function drawError(ctx) {
+  // P2.9 不画全屏黑底，只画一个小提示条
+  const barH = 44
+  const barY = layout.windowH - layout.itemBarH - barH - 10
+  ctx.save()
+  ctx.fillStyle = 'rgba(100,60,60,0.85)'
+  roundRect(ctx, layout.padding, barY, layout.windowW - layout.padding * 2, barH, 8)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(200,80,80,0.4)'
+  ctx.lineWidth = 1
+  roundRect(ctx, layout.padding, barY, layout.windowW - layout.padding * 2, barH, 8)
+  ctx.stroke()
+  ctx.restore()
+
+  ctx.fillStyle = '#e06060'
+  ctx.font = '13px ' + ui.fontFamily
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(errorMsg, layout.windowW / 2, barY + barH / 2)
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+}
+
+// ─────── AI 调试浮窗（v0.1.61）────
+// 折叠：右上角小图标"🐛"（用 ☰ 简化）
+// 展开：全屏覆盖，显示最近 3 轮完整 input/result
+function drawDebugPanel(ctx) {
+  if (debugLog.length === 0) return
+
+  if (!debugOpen) {
+    // 折叠态：右上角小图标
+    const iconSize = 36
+    const iconX = layout.windowW - iconSize - 8
+    const iconY = 8
+    // 半透明背景
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'
+    roundRect(ctx, iconX, iconY, iconSize, iconSize, 6)
+    ctx.fill()
+    // 文字
+    ctx.fillStyle = '#f0c878'
+    ctx.font = 'bold 14px sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('🐛', iconX + iconSize / 2, iconY + iconSize / 2 + 1)
+    // 调试轮数小角标
+    if (debugLog.length > 0) {
+      ctx.fillStyle = '#e04040'
+      ctx.beginPath()
+      ctx.arc(iconX + iconSize - 6, iconY + 6, 8, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillStyle = '#fff'
+      ctx.font = 'bold 10px sans-serif'
+      ctx.fillText(String(debugLog.length), iconX + iconSize - 6, iconY + 7)
+    }
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'alphabetic'
+    return
+  }
+
+  // 展开态：全屏覆盖
+  const w = layout.windowW
+  const h = layout.windowH
+  const closeBarH = 40
+
+  // 背景
+  ctx.fillStyle = 'rgba(0,0,0,0.92)'
+  ctx.fillRect(0, 0, w, h)
+
+  // 顶部关闭条（v0.1.66 修高一点，避免和正文文字重叠）
+  ctx.fillStyle = '#1a1a1a'
+  ctx.fillRect(0, 0, w, closeBarH)
+  ctx.fillStyle = '#f0c878'
+  ctx.font = 'bold 14px sans-serif'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('🐛 AI 调试 · 关闭 ↑', 12, closeBarH / 2)
+  ctx.textAlign = 'right'
+  // 向上箭头（顶部右）
+  const arrowSize = 28
+  ctx.fillStyle = 'rgba(240,200,120,0.2)'
+  ctx.fillRect(w - arrowSize - 8, 2, arrowSize, closeBarH - 4)
+  ctx.fillStyle = '#f0c878'
+  ctx.font = 'bold 18px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText('▲', w - arrowSize / 2 - 8, closeBarH / 2 + 1)
+  // 向下箭头（底部）
+  const downY = h - arrowSize - 8
+  ctx.fillStyle = 'rgba(240,200,120,0.2)'
+  ctx.fillRect(w - arrowSize - 8, downY, arrowSize, arrowSize)
+  ctx.fillStyle = '#f0c878'
+  ctx.fillText('▼', w - arrowSize / 2 - 8, downY + arrowSize / 2 + 1)
+  ctx.textAlign = 'right'
+  ctx.fillStyle = '#888'
+  ctx.font = '11px sans-serif'
+  ctx.fillText('最近 ' + debugLog.length + ' 轮', w - arrowSize - 24, closeBarH / 2)
+
+  // 内容区
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(0, closeBarH, w, h - closeBarH)
+  ctx.clip()
+
+  ctx.font = '10px monospace'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'top'
+  ctx.fillStyle = '#c0c0c0'
+
+  // 拼接所有轮次的完整文本
+  let allText = ''
+  for (let i = 0; i < debugLog.length; i++) {
+    const d = debugLog[i]
+    allText += `━━━ 第 ${i + 1}/${debugLog.length} 轮 · action=${d.action} · round=${d.round} ━━━\n`
+    allText += `[INPUT 玩家]: ${JSON.stringify(d.input)}\n`
+    allText += `[REQUEST data → 云函数]: ${JSON.stringify(d.data)}\n`
+    if (d.resultError) {
+      allText += `[ERROR]: ${d.resultError}\n`
+    } else if (d.result) {
+      allText += `[RESPONSE 完整]: ${JSON.stringify(d.result, null, 2)}\n`
+    } else {
+      allText += `[WAITING...]\n`
+    }
+    if (d.system_prompt) {
+      allText += `\n──── AI 接口完整入参 (system) ────\n`
+      allText += d.system_prompt + '\n'
+    }
+    if (d.user_prompt) {
+      allText += `──── AI 接口完整入参 (user) ────\n`
+      allText += d.user_prompt + '\n'
+    }
+    if (d.messages_to_ai && d.messages_to_ai.length > 0) {
+      allText += `──── 完整 messages 数组（发给 DeepSeek 的 chat/completions）────\n`
+      d.messages_to_ai.forEach((m, j) => {
+        allText += `[messages[${j}]].role = "${m.role}"\n`
+        allText += `[messages[${j}]].content =\n${m.content}\n`
+      })
+    }
+    if (d.raw_response) {
+      allText += `──── DeepSeek 原始返回 (未清洗) ────\n`
+      allText += d.raw_response + '\n'
+    }
+    if (d.all_branches && d.all_branches.length > 0) {
+      allText += `──── AI 真实生成的 ${d.all_branches.length} 个分支（p 加权随机选了第 X 个）────\n`
+      d.all_branches.forEach((b, j) => {
+        allText += `[分支${j}] p=${b.p} options=${JSON.stringify(b.options)}\n`
+      })
+    }
+    allText += '\n'
+  }
+
+  // 简单自动换行
+  const charW = 6   // 10px monospace 一字约 6px
+  const lineH = 13
+  const maxCharsPerLine = Math.floor((w - 16) / charW)
+  const lines = []
+  for (const rawLine of allText.split('\n')) {
+    if (rawLine.length <= maxCharsPerLine) {
+      lines.push(rawLine)
+    } else {
+      for (let i = 0; i < rawLine.length; i += maxCharsPerLine) {
+        lines.push(rawLine.substring(i, i + maxCharsPerLine))
+      }
+    }
+  }
+
+  // 限制 debugScroll 不超过内容总长
+  const totalH = lines.length * lineH
+  const viewH = h - closeBarH
+  const maxScroll = Math.max(0, totalH - viewH)
+  if (debugScroll > maxScroll) debugScroll = maxScroll
+  if (debugScroll < 0) debugScroll = 0
+
+  const startY = closeBarH + 8 - debugScroll
+  for (let i = 0; i < lines.length; i++) {
+    const y = startY + i * lineH
+    if (y < closeBarH || y > h) continue
+    // 颜色：标题/请求/响应不同
+    const line = lines[i]
+    if (line.startsWith('━━━')) ctx.fillStyle = '#f0c878'
+    else if (line.startsWith('────')) ctx.fillStyle = '#d08770'
+    else if (line.startsWith('[INPUT')) ctx.fillStyle = '#88c0d0'
+    else if (line.startsWith('[REQUEST')) ctx.fillStyle = '#a3be8c'
+    else if (line.startsWith('[RESPONSE')) ctx.fillStyle = '#ebcb8b'
+    else if (line.startsWith('[ERROR')) ctx.fillStyle = '#bf616a'
+    else if (line.startsWith('[分支')) ctx.fillStyle = '#b48ead'
+    else ctx.fillStyle = '#c0c0c0'
+    ctx.fillText(line, 8, y)
+  }
+  ctx.restore()
+
+  // 滚动条（右侧）
+  if (totalH > viewH) {
+    const barH = Math.max(40, viewH * viewH / totalH)
+    const barY = closeBarH + (debugScroll / maxScroll) * (viewH - barH)
+    ctx.fillStyle = 'rgba(240,200,120,0.4)'
+    ctx.fillRect(w - 4, barY, 4, barH)
+  }
+}
+
+// ─────── 触摸处理（支持长按呼出玉牒） ───────
+// ─────── 物品详情浮窗（点击物品后弹出） ───────
+function drawItemDetail(ctx) {
+  if (!itemDetail || !itemDetail.item) return
+  const item = itemDetail.item
+
+  const w = layout.windowW
+  const h = layout.windowH
+
+  // 半透明遮罩
+  ctx.fillStyle = 'rgba(0,0,0,0.7)'
+  ctx.fillRect(0, 0, w, h)
+
+  // 详情面板（居中）
+  const pw = Math.min(280, w - 40)
+  const ph = 220
+  const px = (w - pw) / 2
+  const py = (h - ph) / 2
+
+  ctx.save()
+  // 玉色面板
+  ctx.fillStyle = 'rgba(26,36,30,0.95)'
+  roundRect(ctx, px, py, pw, ph, 12)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(90,138,112,0.5)'
+  ctx.lineWidth = 1
+  roundRect(ctx, px, py, pw, ph, 12)
+  ctx.stroke()
+  ctx.restore()
+
+  // 大图标
+  ctx.fillStyle = COLORS.gold
+  ctx.font = '40px ' + ui.fontFamily
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(item.icon || '📦', px + pw / 2, py + 50)
+
+  // 物品名
+  ctx.fillStyle = COLORS.jade
+  ctx.font = 'bold 18px ' + ui.fontFamily
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(item.name || '物品', px + pw / 2, py + 100)
+
+  // 物品描述
+  ctx.fillStyle = 'rgba(232,221,208,0.75)'
+  ctx.font = '13px ' + ui.fontFamily
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'top'
+  const desc = item.desc || '一件普通的物品。'
+  // 简单按 \n 拆行
+  const descLines = desc.split('\n')
+  descLines.forEach((line, i) => {
+    ctx.fillText(line, px + pw / 2, py + 130 + i * 20, pw - 32)
+  })
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+
+  // 底部提示
+  ctx.fillStyle = 'rgba(200,168,124,0.5)'
+  ctx.font = '10px ' + ui.fontFamily
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'bottom'
+  ctx.fillText('轻点关闭', px + pw / 2, py + ph - 12)
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+}
+
+var scrollStartOffset = 0
+var isScrolling = false
+var touchStartTime = 0
+var touchStartPos = { x: 0, y: 0 }
+var longPressTriggered = false
+
+function handleTouch(x, y, type) {
+  // ── AI 调试浮窗触摸拦截（v0.1.61）──
+  // 浮窗区域：右上角图标（折叠态）/ 全屏覆盖（展开态）
+  if (debugLog.length > 0) {
+    if (!debugOpen) {
+      // 折叠态：右上角小图标
+      const iconSize = 36
+      const iconX = layout.windowW - iconSize - 8
+      const iconY = 8
+      if (hitTest(x, y, iconX, iconY, iconSize, iconSize)) {
+        if (type === 'end') {
+          debugOpen = true
+          debugScroll = 0
+        }
+        return null  // 拦截，不传给游戏主流程
+      }
+    } else {
+      // 展开态：点顶部条 = 折叠；点箭头 = 滚动
+      const closeBarH = 40
+      const arrowSize = 28
+      const _w = layout.windowW
+      const _h = layout.windowH
+      if (type === 'end' && y <= closeBarH) {
+        debugOpen = false
+        return null
+      }
+      // 向上箭头（顶部条右）
+      const upX = _w - arrowSize - 8
+      if (type === 'end' && y <= closeBarH && x >= upX) {
+        debugScroll = Math.max(0, debugScroll - 80)
+        return null
+      }
+      // 向下箭头（底部）
+      const downY = _h - arrowSize - 8
+      if (type === 'end' && y >= downY) {
+        debugScroll = debugScroll + 80
+        return null
+      }
+      // 点击文本区任意位置 = 向下滚 1 屏
+      if (type === 'end' && y > closeBarH && y < downY) {
+        debugScroll = debugScroll + 100
+        return null
+      }
+      // 展开时整个浮窗区域拦截
+      return null
+    }
+  }
+
+  if (type === 'start') {
+    touchStartTime = Date.now()
+    touchStartPos = { x, y }
+    longPressTriggered = false
+
+    // 检测是否在叙事滚动区域
+    if (layout._scrollArea && x >= layout._scrollArea.x && x <= layout._scrollArea.x + layout._scrollArea.w &&
+        y >= layout._scrollArea.y && y <= layout._scrollArea.y + layout._scrollArea.h) {
+      isScrolling = true
+      scrollTouchStartY = y
+      scrollStartOffset = scrollOffset
+    }
+    return null
+  }
+
+  if (type === 'move') {
+    // 长按检测：手指按住不动 → 显示玉牒
+    if (!longPressTriggered && !isLongPressing && Date.now() - touchStartTime > 400) {
+      const dx = x - touchStartPos.x
+      const dy = y - touchStartPos.y
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
+        longPressTriggered = true
+        isLongPressing = true
         return null
       }
     }
+
+    if (isScrolling) {
+      const dy = y - scrollTouchStartY
+      scrollOffset = scrollStartOffset + dy
+    }
+    return null
   }
 
-  // 没点到选项：文字没显示完就显示完
-  if (!gs.showAll) {
-    gs.showAll = true
-    gs.charIndex = 9999
+  if (type === 'end') {
+    // 如果正在显示玉牒 → 点击关闭
+    if (isLongPressing) {
+      isLongPressing = false
+      return null
+    }
+
+    isScrolling = false
+
+    // 滑动超过阈值 → 不触发按钮点击
+    if (scrollTouchStartY !== 0 && Math.abs(y - scrollTouchStartY) > 10) {
+      scrollTouchStartY = 0
+      return null
+    }
+    scrollTouchStartY = 0
   }
 
-  return null
+  if (type !== 'end') return null
+
+  // 死亡触发淡出
+  if (!alive) {
+    if (!fadeOut) {
+      fadeOut = { start: Date.now(), duration: 1500 }
+    }
+    return null
+  }
+
+  // 加载中不接受输入
+  if (loading) return null
+
+  // 错误状态下点重试
+  if (errorMsg && options.length > 0) {
+    if (isInOptionBounds(x, y, 0)) {
+      errorMsg = ''
+      options = []
+      callAI('重试')
+      return null
+    }
+  }
+
+  // 检查选项按钮
+  for (let i = 0; i < options.length; i++) {
+    if (isInOptionBounds(x, y, i)) {
+      const opt = options[i]
+      handleOptionSelected(opt)
+      return null
+    }
+  }
+
+  // 检查自由输入
+  if (layout.freeInputBounds && hitTest(x, y, layout.freeInputBounds.x, layout.freeInputBounds.y, layout.freeInputBounds.w, layout.freeInputBounds.h)) {
+    handleFreeInput()
+    return null
+  }
+
+  // 检查物品（点击物品 → 弹物品详情浮窗）
+  if (itemDetail) {
+    // 详情浮窗打开时，点任何位置关闭
+    itemDetail = null
+    return null
+  }
+  for (const item of (currentItems || [])) {
+    if (item._bounds && hitTest(x, y, item._bounds.x, item._bounds.y, item._bounds.w, item._bounds.h)) {
+      itemDetail = { item: item, time: Date.now() }
+      return null
+    }
+  }
 }
 
-function wrapText(ctx, text, maxWidth) {
-  if (!text || text.length === 0) return ['']
-  var cw = ctx.measureText('字').width
-  if (cw <= 0) cw = maxWidth / text.length
-  var cpl = Math.floor(maxWidth / cw)
-  if (cpl < 1) cpl = 1
-  var lines = []
-  for (var i = 0; i < text.length; i += cpl) {
-    lines.push(text.slice(i, i + cpl))
-  }
-  return lines
+function isInOptionBounds(x, y, idx) {
+  const opt = options[idx]
+  if (!opt || !opt.bounds) return false
+  return hitTest(x, y, opt.bounds.x, opt.bounds.y, opt.bounds.w, opt.bounds.h)
 }
 
-// ─── 氛围背景绘制 ───
-// 每个函数接收 (ctx, w, h, time) 绘制不同场景
+// ─────── 处理选项点击 ───────
+function handleOptionSelected(opt) {
+  // 重试特殊处理
+  if (opt.key === '__retry__') {
+    errorMsg = ''
+    options = []
+    callAI('重试')
+    return
+  }
 
-var A = {}
+  // 标记玩家选择，立即反馈
+  opt.selected = true
+  options = []  // 清除选项防止重复点击
 
-A.city_gate = function(ctx, w, h, t) {
-  var g = ctx.createLinearGradient(0, 0, 0, h * 0.5)
-  g.addColorStop(0, '#0a0e1a')
-  g.addColorStop(0.6, '#1a1424')
-  g.addColorStop(1, '#2a1a14')
-  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h)
-  g = ctx.createLinearGradient(0, h * 0.65, 0, h)
-  g.addColorStop(0, '#1a1410'); g.addColorStop(1, '#0d0a08')
-  ctx.fillStyle = g; ctx.fillRect(0, h * 0.65, w, h * 0.35)
-  ctx.fillStyle = 'rgba(30,20,15,0.6)'
-  ctx.fillRect(w * 0.08, h * 0.35, w * 0.84, h * 0.32)
-  ctx.fillStyle = 'rgba(5,3,2,0.8)'
-  var gw = w * 0.15, gh = h * 0.2
-  ctx.beginPath(); ctx.ellipse(w * 0.5, h * 0.55, gw / 2, gh / 2 + 5, 0, 0, Math.PI * 2); ctx.fill()
-  ;[0.3, 0.7].forEach(function(p) {
-    var tg = ctx.createRadialGradient(w * p, h * 0.55, 0, w * p, h * 0.55, w * 0.15)
-    tg.addColorStop(0, 'rgba(255,180,80,0.08)'); tg.addColorStop(1, 'rgba(255,180,80,0)')
-    ctx.fillStyle = tg; ctx.fillRect(0, 0, w, h)
+  // 调用 AI
+  callAI(opt.label)
+}
+
+// ─────── 处理自由输入 ───────
+function handleFreeInput() {
+  if (typeof wx === 'undefined' || !wx.showKeyboard) {
+    // 桌面调试 fallback
+    const text = prompt('输入你想做的事：')
+    if (text && text.trim()) {
+      options = []
+      callAI(text.trim())
+    }
+    return
+  }
+
+  // 微信小游戏：使用 showKeyboard + onKeyboardInput + onKeyboardConfirm
+  freeInputActive = true
+  freeInputText = ''
+
+  wx.showKeyboard({
+    defaultValue: '',
+    maxLength: 100,
+    confirmType: 'send',
+    success: () => {
+      // 键盘已弹出，监听用户输入
+      if (wx.onKeyboardInput) {
+        wx.offKeyboardInput && wx.offKeyboardInput()
+        wx.onKeyboardInput && wx.onKeyboardInput((res) => {
+          freeInputText = res.value || ''
+        })
+      }
+      if (wx.onKeyboardConfirm) {
+        wx.offKeyboardConfirm && wx.offKeyboardConfirm()
+        wx.onKeyboardConfirm && wx.onKeyboardConfirm((res) => {
+          const text = (res.value || freeInputText || '').trim()
+          if (text) {
+            options = []
+            callAI(text)
+          }
+          freeInputActive = false
+          if (wx.hideKeyboard) wx.hideKeyboard({})
+          if (wx.offKeyboardInput) wx.offKeyboardInput()
+          if (wx.offKeyboardConfirm) wx.offKeyboardConfirm()
+        })
+      }
+    },
+    fail: (err) => {
+      // 备用方案：使用 modal 输入
+      if (wx.showModal) {
+        wx.showModal({
+          title: '你想做什么？',
+          editable: true,
+          placeholderText: '例如：去茶摊打听消息',
+          success: (res) => {
+            if (res.confirm && res.content && res.content.trim()) {
+              options = []
+              callAI(res.content.trim())
+            }
+          },
+        })
+      }
+    },
   })
 }
-
-A.teahouse = function(ctx, w, h, t) {
-  var g = ctx.createLinearGradient(0, 0, 0, h * 0.5)
-  g.addColorStop(0, '#0e1218'); g.addColorStop(0.5, '#1a1820'); g.addColorStop(1, '#202018')
-  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h)
-  g = ctx.createLinearGradient(0, h * 0.6, 0, h)
-  g.addColorStop(0, '#181410'); g.addColorStop(1, '#0d0a08')
-  ctx.fillStyle = g; ctx.fillRect(0, h * 0.6, w, h * 0.4)
-  ctx.fillStyle = 'rgba(60,50,40,0.5)'
-  ctx.beginPath(); ctx.moveTo(w * 0.05, h * 0.08); ctx.lineTo(w * 0.5, h * 0.02)
-  ctx.lineTo(w * 0.95, h * 0.08); ctx.lineTo(w * 0.85, h * 0.35)
-  ctx.lineTo(w * 0.15, h * 0.35); ctx.closePath(); ctx.fill()
-  var lg = ctx.createRadialGradient(w * 0.3, h * 0.4, 0, w * 0.3, h * 0.4, w * 0.2)
-  lg.addColorStop(0, 'rgba(255,180,60,0.06)'); lg.addColorStop(1, 'rgba(255,180,60,0)')
-  ctx.fillStyle = lg; ctx.fillRect(0, 0, w, h)
-}
-
-A.street = function(ctx, w, h, t) {
-  var g = ctx.createLinearGradient(0, 0, 0, h)
-  g.addColorStop(0, '#0a0d12'); g.addColorStop(0.3, '#141218')
-  g.addColorStop(0.6, '#1a1614'); g.addColorStop(1, '#0d0a08')
-  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h)
-  for (var i = 0; i < 12; i++) {
-    var bx = w * (0.02 + i * 0.08 + Math.sin(i * 3) * 0.02)
-    var bh = h * 0.22 + Math.sin(i * 5) * h * 0.06
-    ctx.fillStyle = 'rgba(25,18,14,' + (0.3 + Math.sin(i * 2) * 0.1) + ')'
-    ctx.fillRect(bx, h * 0.35 - bh, w * 0.06, bh)
-  }
-  ;[0.38, 0.65].forEach(function(p) {
-    var lg = ctx.createRadialGradient(w * p, h * 0.55, 0, w * p, h * 0.55, w * 0.18)
-    lg.addColorStop(0, 'rgba(255,160,50,0.04)'); lg.addColorStop(1, 'rgba(255,160,50,0)')
-    ctx.fillStyle = lg; ctx.fillRect(0, 0, w, h)
-  })
-}
-
-A.room = function(ctx, w, h, t) {
-  var g = ctx.createRadialGradient(w * 0.35, h * 0.15, 0, w * 0.35, h * 0.15, w * 0.8)
-  g.addColorStop(0, '#2a1e18'); g.addColorStop(0.5, '#181210'); g.addColorStop(1, '#0a0808')
-  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h)
-  ctx.fillStyle = 'rgba(40,30,25,0.3)'; ctx.fillRect(w * 0.05, 0, w * 0.18, h * 0.4)
-  var cg = ctx.createRadialGradient(w * 0.25, h * 0.3, 0, w * 0.25, h * 0.3, w * 0.35)
-  cg.addColorStop(0, 'rgba(255,180,80,0.05)'); cg.addColorStop(1, 'rgba(255,180,80,0)')
-  ctx.fillStyle = cg; ctx.fillRect(0, 0, w, h)
-}
-
-A.academy = function(ctx, w, h, t) {
-  var g = ctx.createLinearGradient(0, 0, 0, h)
-  g.addColorStop(0, '#0e1418'); g.addColorStop(0.5, '#14181a'); g.addColorStop(1, '#0e0e10')
-  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h)
-  ctx.strokeStyle = 'rgba(30,50,35,0.2)'; ctx.lineWidth = 1
-  for (var i = 0; i < 5; i++) {
-    var bx = w * (0.05 + i * 0.02)
-    ctx.beginPath(); ctx.moveTo(bx, h)
-    ctx.quadraticCurveTo(bx + 5, h * 0.6, bx + 3, h * 0.3); ctx.stroke()
-  }
-}
-
-A.river = function(ctx, w, h, t) {
-  var g = ctx.createLinearGradient(0, 0, 0, h * 0.5)
-  g.addColorStop(0, '#0a0e18'); g.addColorStop(0.4, '#141828'); g.addColorStop(1, '#1a1c22')
-  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h)
-  g = ctx.createLinearGradient(0, h * 0.5, 0, h)
-  g.addColorStop(0, '#181a1e'); g.addColorStop(0.3, '#121618'); g.addColorStop(1, '#0a0c0e')
-  ctx.fillStyle = g; ctx.fillRect(0, h * 0.5, w, h * 0.5)
-  ctx.fillStyle = 'rgba(50,70,90,0.1)'
-  var ry = h * 0.55
-  for (var i = 0; i < 20; i++) {
-    var rw = 4 + Math.sin(i * 1.5 + t * 0.001) * 2
-    ctx.fillRect(w * (0.1 + i * 0.04), ry + Math.sin(i * 0.7 + t * 0.0005) * 3, rw, 1)
-  }
-  var mg = ctx.createRadialGradient(w * 0.5, ry + 10, 0, w * 0.5, ry + 10, 15)
-  mg.addColorStop(0, 'rgba(200,200,180,0.04)'); mg.addColorStop(1, 'rgba(200,200,180,0)')
-  ctx.fillStyle = mg; ctx.fillRect(0, 0, w, h)
-}
-
-A.night_street = function(ctx, w, h, t) {
-  var g = ctx.createLinearGradient(0, 0, 0, h)
-  g.addColorStop(0, '#060810'); g.addColorStop(0.3, '#0e0c16')
-  g.addColorStop(0.6, '#161210'); g.addColorStop(1, '#0a0808')
-  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h)
-  ctx.fillStyle = 'rgba(200,200,220,0.3)'
-  for (var i = 0; i < 20; i++) {
-    var sx = w * (0.05 + i * 0.05), sy = h * (0.05 + Math.sin(i * 7) * 0.08)
-    ctx.fillRect(sx, sy, 1, 1)
-  }
-  for (var i = 0; i < 6; i++) {
-    var lx = w * (0.08 + i * 0.15)
-    var lg = ctx.createRadialGradient(lx, h * 0.25, 0, lx, h * 0.25, w * 0.08)
-    lg.addColorStop(0, 'rgba(255,160,60,0.05)'); lg.addColorStop(1, 'rgba(255,160,60,0)')
-    ctx.fillStyle = lg; ctx.fillRect(0, 0, w, h)
-  }
-}
-
-A.tavern = function(ctx, w, h, t) {
-  var g = ctx.createRadialGradient(w * 0.5, h * 0.15, 0, w * 0.5, h * 0.15, w * 0.7)
-  g.addColorStop(0, '#2a1e12'); g.addColorStop(0.4, '#1a1410'); g.addColorStop(1, '#0a0806')
-  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h)
-  var lg = ctx.createRadialGradient(w * 0.65, h * 0.25, 0, w * 0.65, h * 0.25, w * 0.2)
-  lg.addColorStop(0, 'rgba(255,200,100,0.04)'); lg.addColorStop(1, 'rgba(255,200,100,0)')
-  ctx.fillStyle = lg; ctx.fillRect(0, 0, w, h)
-}
-
-A.street_day = function(ctx, w, h, t) {
-  var g = ctx.createLinearGradient(0, 0, 0, h)
-  g.addColorStop(0, '#2a2e30'); g.addColorStop(0.3, '#1e2024'); g.addColorStop(1, '#121416')
-  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h)
-  for (var i = 0; i < 10; i++) {
-    ctx.fillStyle = 'rgba(50,45,40,' + (0.1 + Math.sin(i * 3) * 0.05) + ')'
-    ctx.fillRect(w * (0.02 + i * 0.1), h * 0.35 - Math.sin(i * 5) * h * 0.04, w * 0.08, h * 0.08 + Math.sin(i * 4) * h * 0.03)
-  }
-}
-
-A.default = function(ctx, w, h, t) {
-  var g = ctx.createLinearGradient(0, 0, 0, h)
-  g.addColorStop(0, '#0a0e14'); g.addColorStop(0.5, '#141218'); g.addColorStop(1, '#0a0808')
-  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h)
-}
-
-function render(ctx) {
-  var l = layout
-  var gs = gameState
-  var now = Date.now()
-  var scene = getScene(gs.currentKey)
-  var w = l.w, h = l.h
-
-  // 1. 氛围背景
-  var atmo = A[scene.atmosphere] || A.default
-  atmo(ctx, w, h, now)
-
-  // 渐入
-  var fade = anims.fadeIn.update(now)
-  var pf = anims.pageFade.update(now)
-  ctx.save()
-  ctx.globalAlpha = fade
-
-  // ─── 宣纸书页（主视觉区域）───
-  var px = Math.floor(w * 0.06)
-  var pw = Math.floor(w * 0.88)
-  var py = Math.floor(h * 0.10)
-  var ph = Math.floor(h * 0.62)
-
-  ctx.save()
-  ctx.globalAlpha = pf.opacity * 0.85
-  ctx.fillStyle = 'rgba(60,50,40,0.88)'
-  roundRect(ctx, px, py, pw, ph, 6); ctx.fill()
-  ctx.strokeStyle = 'rgba(200,168,124,0.12)'
-  ctx.lineWidth = 0.8
-  roundRect(ctx, px, py, pw, ph, 6); ctx.stroke()
-  var ig = ctx.createRadialGradient(w * 0.5, py + ph * 0.3, 0, w * 0.5, py + ph * 0.3, pw * 0.6)
-  ig.addColorStop(0, 'rgba(80,68,55,0.15)'); ig.addColorStop(0.5, 'rgba(60,50,40,0)')
-  ig.addColorStop(1, 'rgba(40,35,30,0.1)')
-  ctx.fillStyle = ig; ctx.fillRect(px, py, pw, ph)
-  ctx.restore()
-
-  // ─── 左上纪年（朱砂印）───
-  ctx.save()
-  ctx.globalAlpha = pf.opacity * 0.6
-  ctx.fillStyle = '#c04040'
-  ctx.font = '9px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'
-  ctx.fillText('✦ ' + ERA.year + ' · ' + ERA.location, px + 10, py + 8)
-  ctx.restore()
-
-  // ─── 右上属性 ───
-  ctx.save()
-  ctx.globalAlpha = pf.opacity * 0.4
-  ctx.font = '9px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'top'
-  ctx.fillStyle = '#888'
-  ctx.fillText('⌛' + ERA.age + '岁  🪙' + ERA.money, px + pw - 10, py + 8)
-  ctx.restore()
-
-  // ─── 叙事文字（宣纸内，18px大字）───
-  ctx.save()
-  ctx.beginPath()
-  var tx = px + 16
-  var ty = py + 32
-  var tw = pw - 32
-  var th = ph - 50
-  ctx.rect(tx, ty, tw, th); ctx.clip()
-
-  if (scene) {
-    if (!gs.showAll) {
-      var elapsed = now - gs.lastCharTime
-      if (elapsed >= gs.charSpeed) {
-        gs.charIndex = Math.min(gs.charIndex + Math.floor(elapsed / gs.charSpeed), scene.text.length)
-        gs.lastCharTime = now
-      }
-    }
-    var dt = scene.text.slice(0, gs.showAll ? scene.text.length : gs.charIndex)
-    ctx.font = '18px ' + ui.getFontStack()
-    var lines = wrapText(ctx, dt, tw)
-    var lh = 26
-
-    for (var i = 0; i < lines.length; i++) {
-      var ly = ty + i * lh
-      if (ly + lh < ty || ly > ty + th) continue
-      if (i === 0) {
-        ctx.save()
-        ctx.fillStyle = 'rgba(200,168,124,0.2)'
-        ctx.fillRect(tx, ly + 4, 3, 16)
-        ctx.restore()
-      }
-      drawText(ctx, lines[i], tx + 10, ly + 14, {
-        fontSize: 18, color: 'rgba(235,218,190,' + (0.88 * pf.opacity) + ')',
-        align: 'left', baseline: 'middle',
-      })
-    }
-  }
-  ctx.restore()
-
-  // ─── 选项区域 ───
-  if (scene && scene.options && scene.options.length > 0 && gs.showAll) {
-    var oy = Math.floor(h * 0.645)
-    var ow = pw - 24
-    var ox = px + 12
-    var oh = 34
-    var os = 8
-
-    // 分隔线
-    ctx.save()
-    ctx.globalAlpha = pf.opacity * 0.15
-    ctx.strokeStyle = 'rgba(200,168,124,0.2)'; ctx.lineWidth = 0.5
-    ctx.beginPath(); ctx.moveTo(ox + 10, oy); ctx.lineTo(ox + ow - 10, oy); ctx.stroke()
-    ctx.fillStyle = 'rgba(200,168,124,0.3)'
-    ctx.fillRect(ox + ow / 2 - 2, oy - 2, 4, 4)
-    ctx.restore()
-
-    for (var i = 0; i < scene.options.length; i++) {
-      var by = oy + 10 + i * (oh + os)
-      ctx.save()
-      ctx.globalAlpha = pf.opacity * 0.9
-      ctx.fillStyle = 'rgba(200,168,124,0.05)'
-      roundRect(ctx, ox, by, ow, oh, 3); ctx.fill()
-      ctx.fillStyle = '#c05050'
-      ctx.beginPath(); ctx.arc(ox + 14, by + oh / 2, 3, 0, Math.PI * 2); ctx.fill()
-      ctx.fillStyle = 'rgba(215,198,168,0.85)'
-      ctx.font = '15px ' + ui.getFontStack()
-      ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
-      ctx.fillText(scene.options[i].label, ox + 24, by + oh / 2)
-      ctx.restore()
-    }
-  }
-
-  // ─── 底部物品栏 ───
-  if (currentItems.length > 0) {
-    var iy = h - Math.floor(h * 0.045)
-    ctx.save()
-    ctx.globalAlpha = pf.opacity * 0.6
-    for (var i = 0; i < currentItems.length; i++) {
-      var it = currentItems[i]
-      var ix = Math.floor(w * (0.15 + i * 0.35))
-      if (i > 0) {
-        ctx.fillStyle = 'rgba(200,168,124,0.08)'
-        ctx.fillRect(ix - w * 0.17, iy - 10, 0.5, 20)
-      }
-      drawText(ctx, it.icon, ix - 14, iy, {
-        fontSize: Math.min(14, w * 0.036),
-        align: 'center', baseline: 'middle',
-      })
-      drawText(ctx, it.name, ix, iy, {
-        fontSize: Math.min(11, w * 0.028), color: COLORS.goldDark,
-        align: 'left', baseline: 'middle', opacity: 0.5,
-      })
-    }
-    ctx.restore()
-  }
-
-  // ─── 轻触展开提示 ───
-  if (!gs.showAll) {
-    ctx.save()
-    ctx.globalAlpha = (0.12 + Math.sin(now * 0.003) * 0.06) * pf.opacity
-    ctx.fillStyle = '#b09070'; ctx.font = '10px sans-serif'
-    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'
-    ctx.fillText('⌄  轻触展开  ⌄', w * 0.5, py + ph - 8)
-    ctx.restore()
-  }
-
-  ctx.restore()
-}
-
-module.exports = { init, render, onTouch }

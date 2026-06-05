@@ -554,7 +554,15 @@ function buildStoryPrompt(identity, items) {
   return `你是穿越日记的游戏主持人。玩家穿越到了${identity.dynasty}的${identity.city}，身份是${identity.name}，${identity.age}岁${identity.gender}子，${identity.occupation || '无业'}。玩家从现代带来了三件物品：${itemDesc}。请根据当前场景生成一段叙事（60-120字），并在末尾给出3个选项。用 JSON 格式回复：{"narrative":"叙事文字","options":[{"label":"选项A","desc":"简短说明"},{"label":"选项B","desc":"简短说明"},{"label":"选项C","desc":"简短说明"}]}`
 }
 
-exports.main = async (event, context) => {
+exports.main = async (rawEvent, context) => {
+  // 防御性：有时 event 是字符串（云函数从网关转发）
+  let event = rawEvent
+  if (typeof event === 'string') {
+    try { event = JSON.parse(event) } catch (e) { return { success: false, error: 'event 解析失败: ' + e.message } }
+  }
+  event = event || {}
+  console.log('[main] event keys:', Object.keys(event), 'mode:', event.mode)
+
   // 叙事模式
   if (event.mode === 'story') {
     const { identity, items, history } = event
@@ -587,3 +595,4 @@ exports.main = async (event, context) => {
 
   // ─────── 身份生成模式（原有逻辑） ───────
   return _generateIdentity(event, {})
+}

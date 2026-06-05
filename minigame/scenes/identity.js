@@ -67,7 +67,7 @@ function init(items, identity) {
   if (identity && identity.city) {
     // 云函数格式 → 身份卡格式
     IDENTITY = {
-      name: identity.name || '无名氏',
+      name: identity.name || '???',
       age: identity.age != null ? identity.age : '?',
       gender: identity.gender || '?',
       occupation: identity.occupation || '',
@@ -85,7 +85,7 @@ function init(items, identity) {
   } else {
     // 本地引擎格式（直接用）
     IDENTITY = identity || {
-      name: '无名氏',
+      name: '???',
       age: '?',
       gender: '?',
       origin: '',
@@ -276,7 +276,6 @@ function render(ctx) {
   var iOp = anims.info.update(now)
   if (iOp > 0) {
     var infoLines = [
-      { label: '纪 年', value: IDENTITY.eraDisplay || IDENTITY.eraLabel || '—' },
       { label: '年 龄', value: (typeof IDENTITY.age === 'number' ? IDENTITY.age : '?') + '岁' },
       { label: '性 别', value: IDENTITY.gender + (IDENTITY.marital ? '·' + IDENTITY.marital : '') },
       { label: '身 份', value: IDENTITY.age < 12 ? '孩童' : (IDENTITY.occupation || '—') },
@@ -314,19 +313,16 @@ function render(ctx) {
     }
   }
 
-  // 8. 朝代脚注（简化，只有信息行未显示的完整信息）
+  // 8. 纪年脚注（卡片底部，朝代 + 纪年；eraLabel 自带朝代前缀时去重）
   var yOp = anims.year.update(now)
-  if (yOp > 0) {
-    var dynastyYear = IDENTITY.dynasty || ''
-    // 仅当 infoLines 里没有完整信息时才显示完整格式
-    if (!IDENTITY.eraDisplay) {
-      var eraDisp = IDENTITY.eraLabel
-      if (IDENTITY.dynasty && eraDisp && eraDisp.indexOf(IDENTITY.dynasty) === 0) {
-        eraDisp = eraDisp.replace(new RegExp('^' + IDENTITY.dynasty.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[·\\s]*'), '')
-      }
-      dynastyYear = eraDisp ? IDENTITY.dynasty + ' · ' + eraDisp : IDENTITY.dynasty
+  if (yOp > 0 && IDENTITY.dynasty) {
+    var era = IDENTITY.eraDisplay || IDENTITY.eraLabel || ''
+    // 去重：era 自带 dynasty 前缀则剥掉
+    if (era && era.indexOf(IDENTITY.dynasty) === 0) {
+      era = era.replace(new RegExp('^' + IDENTITY.dynasty.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[·\\s]*'), '')
     }
-    drawText(ctx, dynastyYear, l.cardX + 40, l.yearY, {
+    var footnote = era ? IDENTITY.dynasty + ' · ' + era : IDENTITY.dynasty
+    drawText(ctx, footnote, l.cardX + 40, l.yearY, {
       fontSize: l.yearS,
       color: COLORS.paperDarker,
       align: 'left', baseline: 'middle',

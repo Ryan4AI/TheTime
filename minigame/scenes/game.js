@@ -183,6 +183,11 @@ function callAI(userInput) {
   loadingStart = Date.now()
   errorMsg = ''
 
+  // v0.1.62: 动作类型（init 初始 / continue 继续 / retry 重试）
+  // 之前 216 行直接用 `action` 变量导致 ReferenceError，callAI 整段崩
+  // 改成从 narrativeHistory 长度推断
+  const action = (narrativeHistory && narrativeHistory.length > 0) ? 'continue' : 'init'
+
   const stateData = {
     life_number: state.life_number,
     name: state.name,
@@ -659,7 +664,7 @@ function drawSealTopBar(ctx) {
   ctx.font = '9px monospace'
   ctx.textAlign = 'right'
   ctx.textBaseline = 'middle'
-  ctx.fillText('v0.1.61', layout.windowW - padding - 4, sealCenterY)
+  ctx.fillText('v0.1.62', layout.windowW - padding - 4, sealCenterY)
   ctx.restore()
 
   // 3. 暗金细线分隔（顶栏底部）

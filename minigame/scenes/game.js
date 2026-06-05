@@ -1137,7 +1137,7 @@ function drawError(ctx) {
 }
 
 // ─────── AI 调试浮窗（v0.1.61）────
-// 折叠：右上角小图标"🐛"（用 ☰ 简化）
+// 折叠：右上角小图标"DBG"（v0.1.60 改 — Emoji 在 Canvas 2D 不显示）
 // 展开：全屏覆盖，显示最近 3 轮完整 input/result
 function drawDebugPanel(ctx) {
   if (debugLog.length === 0) return
@@ -1147,16 +1147,20 @@ function drawDebugPanel(ctx) {
     const iconSize = 36
     const iconX = layout.windowW - iconSize - 8
     const iconY = 8
-    // 半透明背景
-    ctx.fillStyle = 'rgba(0,0,0,0.6)'
+    // 半透明背景（深色）
+    ctx.fillStyle = 'rgba(40,20,60,0.85)'
     roundRect(ctx, iconX, iconY, iconSize, iconSize, 6)
     ctx.fill()
+    // 边框（金色）
+    ctx.strokeStyle = '#f0c878'
+    ctx.lineWidth = 1.5
+    ctx.stroke()
     // 文字
     ctx.fillStyle = '#f0c878'
-    ctx.font = 'bold 14px sans-serif'
+    ctx.font = 'bold 12px monospace'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText('🐛', iconX + iconSize / 2, iconY + iconSize / 2 + 1)
+    ctx.fillText('DBG', iconX + iconSize / 2, iconY + iconSize / 2 + 1)
     // 调试轮数小角标
     if (debugLog.length > 0) {
       ctx.fillStyle = '#e04040'
@@ -1188,7 +1192,7 @@ function drawDebugPanel(ctx) {
   ctx.font = 'bold 14px sans-serif'
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
-  ctx.fillText('🐛 AI 调试 · 关闭 ↑', 12, closeBarH / 2)
+  ctx.fillText('DBG AI 调试 · 关闭 ↑', 12, closeBarH / 2)
   ctx.textAlign = 'right'
   // 向上箭头（顶部右）
   const arrowSize = 28

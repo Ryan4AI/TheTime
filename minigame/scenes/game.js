@@ -653,6 +653,15 @@ function drawSealTopBar(ctx) {
   ctx.fillText(infoStr, sealCenterX + 36, sealCenterY)
   ctx.restore()
 
+  // 2.5 v0.1.61 版本号水印（右下角小字，方便先生验证新版本）
+  ctx.save()
+  ctx.fillStyle = 'rgba(200,168,124,0.45)'
+  ctx.font = '9px monospace'
+  ctx.textAlign = 'right'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('v0.1.61', layout.windowW - padding - 4, sealCenterY)
+  ctx.restore()
+
   // 3. 暗金细线分隔（顶栏底部）
   ui.drawClassicalDivider(ctx, padding, safeTop + topH - 1, layout.windowW - padding * 2, 0.6)
 

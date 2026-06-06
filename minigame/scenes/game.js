@@ -205,6 +205,11 @@ function callAI(userInput) {
   // 改成从 narrativeHistory 长度推断
   const action = (narrativeHistory && narrativeHistory.length > 0) ? 'continue' : 'init'
 
+  // v0.1.63 (D005): 重试是前端兜底，__retry__ 是内部信号
+  // 不入对话流，不当 userPrompt，云函数端会识别并丢弃
+  const isRetry = userInput === '__retry__'
+  const realInput = isRetry ? '' : userInput
+
   const stateData = {
     life_number: state.life_number,
     name: state.name,
@@ -228,7 +233,8 @@ function callAI(userInput) {
 
   const data = {
     state: stateData,
-    input: userInput,
+    input: realInput,
+    is_retry: isRetry,  // v0.1.63 (D005): 重试标记，云函数据此丢弃
     history: narrativeHistory.slice(-12),
   }
 
@@ -355,8 +361,10 @@ function handleAIResponse(result, action, userInput) {
   }
 
   // 4. 记录历史
+  // v0.1.63 (D005): 重试是前端兜底，不是玩家真实意图
+  // 不入 narrativeHistory，避免污染对话流
   narrativeHistory.push({ role: 'ai', content: branch.content })
-  if (action === 'continue' && userInput) {
+  if (action === 'continue' && userInput && userInput !== '重试' && userInput !== '__retry__') {
     narrativeHistory.push({ role: 'user', content: userInput })
   }
 
@@ -1587,7 +1595,7 @@ function handleTouch(x, y, type) {
     if (isInOptionBounds(x, y, 0)) {
       errorMsg = ''
       options = []
-      callAI('重试')
+      callAI('__retry__')
       return null
     }
   }
@@ -1629,11 +1637,11 @@ function isInOptionBounds(x, y, idx) {
 
 // ─────── 处理选项点击 ───────
 function handleOptionSelected(opt) {
-  // 重试特殊处理
+  // 重试特殊处理 — v0.1.63 (D005) 用内部信号不污染对话流
   if (opt.key === '__retry__') {
     errorMsg = ''
     options = []
-    callAI('重试')
+    callAI('__retry__')
     return
   }
 

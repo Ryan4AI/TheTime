@@ -335,19 +335,36 @@ function handleAIResponse(result, action, userInput) {
   if (patch.coin !== undefined) state.coin = Math.max(0, state.coin + (patch.coin || 0))
   if (patch.health !== undefined) state.health = Math.max(0, Math.min(100, state.health + (patch.health || 0)))
 
-  // 物品状态变化 — 同时同步 currentItems（修 P0.3）
+  // 物品状态变化 — v10（D-1 改造）
+  // 改：AI 用物品中文名（"茶包"）当 key，不再用 id
+  // 改：数字 = 减 durability（0 时自动删物品）
+  // 改：字符串 = 拼接到 desc 后缀
   if (patch.items) {
-    for (const [itemId, change] of Object.entries(patch.items)) {
-      const it = state.items.find(i => i.id === itemId)
+    for (const [itemKey, change] of Object.entries(patch.items)) {
+      // 按中文 name 匹配（兼容旧的"lost"和字符串 desc 模式）
+      const it = state.items.find(i => i.name === itemKey || i.id === itemKey)
       if (it) {
-        if (change === 'lost') {
-          // 物品真的丢失：从两个数组都移除
-          state.items = state.items.filter(x => x.id !== itemId)
-          currentItems = currentItems.filter(x => x.id !== itemId)
+        if (typeof change === 'number') {
+          // 数字 = 减 durability
+          it.durability = (it.durability == null ? 100 : it.durability) + change
+          if (it.durability <= 0) {
+            // durability 减到 0 → 物品消失
+            state.items = state.items.filter(x => x.id !== it.id)
+            currentItems = currentItems.filter(x => x.id !== it.id)
+          } else {
+            // 更新 desc 显示当前 durability
+            it.desc = it.name + '（耐久 ' + it.durability + '）'
+            const ci = currentItems.find(x => x.id === it.id)
+            if (ci) ci.desc = it.desc
+          }
+        } else if (change === 'lost') {
+          // 兼容旧的"lost"字符串
+          state.items = state.items.filter(x => x.id !== it.id)
+          currentItems = currentItems.filter(x => x.id !== it.id)
         } else {
+          // 字符串 = 拼接到 desc 后缀（兼容旧 desc 模式）
           it.desc = it.name + '（' + change + '）'
-          // 同步 currentItems
-          const ci = currentItems.find(x => x.id === itemId)
+          const ci = currentItems.find(x => x.id === it.id)
           if (ci) ci.desc = it.desc
         }
       }

@@ -85,8 +85,8 @@ module.exports = {
       socialClass: id.socialClass || id.social_class || '庶人',
       dynasty: id.dynasty || '',
       eraDisplay: id.eraDisplay || id.eraLabel || '',
-      city: id.city || id.city_name || '某地',
-      year: id.year || 0,
+      city: id.city || id.residence || id.city_name || '某地',  // v0.1.70 多兜底 residence
+      year: typeof id.year === 'number' ? id.year : parseInt(id.year) || 0,  // v0.1.70 强制转数字
       month: 1,
       round: 0,
       health: 100,
@@ -140,22 +140,38 @@ function initLayout() {
   const safeTop = (sys.safeArea && sys.safeArea.top) || 0
   const topOffset = Math.max(safeTop, 0)
 
-  // v0.1.70 重做：把"画/文字/选项"按比例严格放在 safeTop+topBarH 和 itemBarY 之间
-  // 顶栏(52) → 画区(3:2，180) → 文字面板(可滚动，不封顶 130) → 选项(3×36+gap 4+输入 32 = 152) → 物品栏(64)
+  // v0.1.71 重做：画区按"是否加载完成"动态伸缩
+  // 顶栏(52) → 文字面板(自适应 narrative 行数) → 选项(3×40+gap 4+输入 32 = 160) → 物品栏(64)
   const topBarH = 52
   const itemBarH = 64
-  const optH = 36
+  const optH = 40
   const optGap = 4
   const freeInputH = 32
-  const optBlockH = 3 * optH + 2 * optGap + freeInputH + 12  // = 160
+  const optBlockH = 3 * optH + 2 * optGap + freeInputH + 12  // 3 选项 + 自由输入 + 间隔
 
-  const availableH = windowHeight - safeTop - topBarH - itemBarH
-  // v0.1.70：画区按宽 3:2 比例算 + 夹到 [120, 180]
+  // 画区：只在图片加载完成时占 130 高（按宽 3:2）；否则让位给文字
   const sceneW = windowWidth - 14 * 2
-  const sceneH = Math.min(180, Math.max(120, Math.floor(sceneW * 2 / 3)))
-  // 文字区 = 剩余 - 选项块 - 12 缓冲（C2 滚动版：不封顶）
-  const textH = availableH - sceneH - optBlockH - 12
-  const finalTextH = Math.max(80, textH)
+  const sceneH = Math.min(130, Math.max(80, Math.floor(sceneW * 2 / 3)))
+
+  // 文字区：根据 narrative 实际行数计算（不再封顶）
+  const availableH = windowHeight - topOffset - topBarH - itemBarH
+  const lineHeight = 22
+  const fontSize = 15
+  const maxW = windowWidth - 14 * 2 - 24  // 文字面板内边距
+  const narrativeLines = narrative ? Math.ceil(narrative.length * fontSize / maxW) : 4  // 估算行数
+  const lines = narrative ? narrative.split('\n') : []
+  const realLines = lines.length || narrativeLines
+  // 文字面板 = 实际行数 × 行高 + 内边距
+  let textH = realLines * lineHeight + 24
+  // v0.1.71: 画区是否占位 = 当前是否加载完成且有图
+  const sceneVisible = !!bgImgEl && bgImgEl.complete && !loading
+  if (sceneVisible) {
+    textH = availableH - sceneH - optBlockH - 12
+  } else {
+    // 文字占满剩余空间
+    textH = availableH - optBlockH - 12
+  }
+  const finalTextH = Math.max(100, textH)
 
   layout = {
     windowW: windowWidth,
@@ -165,10 +181,11 @@ function initLayout() {
     topBarH: topBarH,
     itemBarH: itemBarH,
     sceneY: topOffset + topBarH + 4,
-    sceneH: sceneH,
-    textY: topOffset + topBarH + 4 + sceneH + 12,
+    sceneH: sceneVisible ? sceneH : 0,
+    sceneVisible: sceneVisible,
+    textY: topOffset + topBarH + 4 + (sceneVisible ? sceneH : 0) + 8,
     textH: finalTextH,
-    optionY: topOffset + topBarH + 4 + sceneH + 12 + finalTextH + 6,
+    optionY: topOffset + topBarH + 4 + (sceneVisible ? sceneH : 0) + 8 + finalTextH + 6,
     optionH: optH,
     optionGap: optGap,
     freeInputH: freeInputH,
@@ -447,45 +464,47 @@ function adjustFluidLayout() {
 
   const topBarH = layout.topBarH
   const itemBarH = layout.itemBarH       // 钉死底部 64px
-  const optBlockH = 160                    // v0.1.70: 3×36 + 2×4 + 32 + 12
+  const optBlockH = 160                    // v0.1.70: 3×40 + 2×4 + 32 + 12
   const safeTop = layout.safeTop || 0
   const availableH = layout.windowH - safeTop - topBarH - itemBarH
 
-  // ── 1. 文字面板高度 = 按已显示字符数实时算（C2 滚动版：自然撑开，不封顶 280）──
-  let finalTextH = 80
-  if (narrative) {
-    const charPerLine = Math.max(8, Math.floor((layout.windowW - layout.padding * 2 - 24) / 16))
-    const lineCount = Math.max(2, Math.ceil(displayedChars / charPerLine))
-    const lineHeight = 24
-    const textPadding = 16
-    finalTextH = lineCount * lineHeight + textPadding
-  }
-  // 文字面板最大占可用区 60%（超出滚动）；最少 80
-  const maxTextH = Math.max(80, availableH * 0.6)
-  finalTextH = Math.min(maxTextH, Math.max(80, finalTextH))
-
-  // ── 2. 选项/自由输入：打字中不占空间（隐藏），打字完成后才占 ──
+  // v0.1.71 重写：画区按"是否加载完成"动态伸缩；文字优先占满；选项钉死下方
   const typingDone = narrative && displayedChars >= narrative.length
   const optReserveH = typingDone ? optBlockH : 0
   const optionGap = 6
+  const lineHeight = 22
+  const fontSize = 15
+  const innerW = layout.windowW - layout.padding * 2 - 24
+  const charPerLine = Math.max(8, Math.floor(innerW / fontSize))
 
-  // ── 3. 画区 = 全部可用 - 文字面板 - 选项块(条件) - 缓冲（v0.1.69：下限 120 不被压扁）──
-  let finalSceneH = availableH - finalTextH - optReserveH - optionGap - 12
-  finalSceneH = Math.min(280, Math.max(120, finalSceneH))
-
-  // 兜底：若仍然超出（极端长叙事），压到 60% 上限即可，文字面板自带滚动兜底
-  const usedH = finalSceneH + finalTextH + optReserveH + optionGap + 12
-  if (usedH > availableH) {
-    finalTextH = Math.min(finalTextH, maxTextH)
+  // 文字实际行数 = narrative 字符数 / charPerLine（v0.1.74 改进：按字符折行算）
+  let lineCount = 2
+  if (narrative) {
+    const paras = narrative.split('\n')
+    let total = 0
+    for (const p of paras) total += Math.max(1, Math.ceil(p.length / charPerLine))
+    lineCount = Math.max(total, Math.ceil(displayedChars / charPerLine), 2)
   }
+  const textPadding = 16
+  const neededTextH = lineCount * lineHeight + textPadding
 
-  // ── 4. 写回 layout ──
-  layout.sceneH = finalSceneH
-  layout.textY = safeTop + topBarH + 4 + finalSceneH + 12
+  // 画区：图片加载完 + 打字完 才占 130 高（让画与文字不挤）；否则不占
+  const sceneImgReady = !!bgImgEl && bgImgEl.complete && bgImgEl.width > 0
+  const showScene = sceneImgReady && typingDone
+  const sceneH = showScene ? Math.min(130, Math.max(80, Math.floor((layout.windowW - layout.padding * 2) * 2 / 3))) : 0
+
+  // 文字区 = 剩余 - 画区(条件) - 选项块(条件) - 缓冲
+  let finalTextH = availableH - sceneH - optReserveH - optionGap - 12
+  // 文字最少 100，最多 = neededTextH
+  finalTextH = Math.max(100, Math.min(neededTextH, finalTextH))
+
+  layout.sceneH = sceneH
+  layout.sceneVisible = showScene
+  layout.textY = safeTop + topBarH + 4 + (showScene ? sceneH : 0) + 8
   layout.textH = finalTextH
-  layout.optionY = safeTop + topBarH + 4 + finalSceneH + 12 + finalTextH + optionGap
+  layout.optionY = layout.textY + finalTextH + optionGap
   layout.optionFadeIn = typingDone ? 1 : 0
-  layout.optionH = 36                       // v0.1.70: 38 → 36（与 initLayout 一致）
+  layout.optionH = 40                       // v0.1.71: 与 initLayout 一致
   layout.optionGap = optionGap
   layout.itemBarY = layout.windowH - itemBarH   // 钉死屏底
 }
@@ -741,8 +760,13 @@ function drawNarrative(ctx) {
   ctx.fillRect(tx + 1, ty + 6, 2, th - 12)
   ctx.restore()
 
-  // 2. 文字内容
+  // 2. 文字内容（v0.1.74：加 clip 裁剪，文字超出面板不外溢）
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(tx, ty, tw, th)
+  ctx.clip()
   const contentEndY = drawTextInRect(ctx, text, tx + 14, ty + 8 + scrollOffset, maxW, lineHeight, fontSize)
+  ctx.restore()
 
   // 3. 限制滚动
   const contentH = contentEndY ? (contentEndY - ty - 8) : (text.split('\n').length * lineHeight)
@@ -1202,6 +1226,21 @@ function drawDebugPanel(ctx) {
   // 顶部关闭条（v0.1.66 修高一点，避免和正文文字重叠）
   ctx.fillStyle = '#1a1a1a'
   ctx.fillRect(0, 0, w, closeBarH)
+
+  // v0.1.75 加"复制"按钮（紧贴右上角 ▲ 左边）
+  const copyBtnW = 64
+  const _ARROW_SIZE = 28  // 占位用，避免 const 重复声明
+  const copyBtnX = w - _ARROW_SIZE - 8 - copyBtnW - 4
+  ctx.fillStyle = 'rgba(240,200,120,0.18)'
+  ctx.fillRect(copyBtnX, 4, copyBtnW, closeBarH - 8)
+  ctx.fillStyle = '#f0c878'
+  ctx.font = 'bold 13px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('复制', copyBtnX + copyBtnW / 2, closeBarH / 2 + 1)
+  // 标记按钮区域供触摸用
+  layout._copyBtn = { x: copyBtnX, y: 0, w: copyBtnW, h: closeBarH }
+
   ctx.fillStyle = '#f0c878'
   ctx.font = 'bold 14px sans-serif'
   ctx.textAlign = 'left'
@@ -1238,45 +1277,35 @@ function drawDebugPanel(ctx) {
   ctx.textBaseline = 'top'
   ctx.fillStyle = '#c0c0c0'
 
-  // 拼接所有轮次的完整文本
+  // 拼接所有轮次的完整文本（v0.1.70 精简：只留 AI 原始输入/输出）
   let allText = ''
   for (let i = 0; i < debugLog.length; i++) {
     const d = debugLog[i]
-    allText += `━━━ 第 ${i + 1}/${debugLog.length} 轮 · action=${d.action} · round=${d.round} ━━━\n`
-    allText += `[INPUT 玩家]: ${JSON.stringify(d.input)}\n`
-    allText += `[REQUEST data → 云函数]: ${JSON.stringify(d.data)}\n`
-    if (d.resultError) {
-      allText += `[ERROR]: ${d.resultError}\n`
-    } else if (d.result) {
-      allText += `[RESPONSE 完整]: ${JSON.stringify(d.result, null, 2)}\n`
-    } else {
-      allText += `[WAITING...]\n`
-    }
-    if (d.system_prompt) {
-      allText += `\n──── AI 接口完整入参 (system) ────\n`
-      allText += d.system_prompt + '\n'
-    }
-    if (d.user_prompt) {
-      allText += `──── AI 接口完整入参 (user) ────\n`
-      allText += d.user_prompt + '\n'
-    }
+    allText += `== 第 ${i + 1}/${debugLog.length} 轮 round=${d.round} ==\n`
+    allText += `[INPUT 玩家选项]: ${d.input || '(空)'}\n\n`
+
     if (d.messages_to_ai && d.messages_to_ai.length > 0) {
-      allText += `──── 完整 messages 数组（发给 DeepSeek 的 chat/completions）────\n`
+      allText += `[发给 AI 的 messages]:\n`
       d.messages_to_ai.forEach((m, j) => {
-        allText += `[messages[${j}]].role = "${m.role}"\n`
-        allText += `[messages[${j}]].content =\n${m.content}\n`
+        allText += `  ── messages[${j}].role="${m.role}" ──\n${m.content}\n\n`
       })
     }
+
     if (d.raw_response) {
-      allText += `──── DeepSeek 原始返回 (未清洗) ────\n`
-      allText += d.raw_response + '\n'
+      allText += `[AI 原始返回]:\n${d.raw_response}\n\n`
     }
+
     if (d.all_branches && d.all_branches.length > 0) {
-      allText += `──── AI 真实生成的 ${d.all_branches.length} 个分支（p 加权随机选了第 X 个）────\n`
+      allText += `[AI 生成 ${d.all_branches.length} 个分支]:\n`
       d.all_branches.forEach((b, j) => {
-        allText += `[分支${j}] p=${b.p} options=${JSON.stringify(b.options)}\n`
+        allText += `  分支${j + 1} p=${b.p}\n  ${b.content || ''}\n  options: ${JSON.stringify(b.options)}\n\n`
       })
     }
+
+    if (d.resultError) {
+      allText += `[ERROR]: ${d.resultError}\n\n`
+    }
+
     allText += '\n'
   }
 
@@ -1425,6 +1454,44 @@ function handleTouch(x, y, type) {
       const arrowSize = 28
       const _w = layout.windowW
       const _h = layout.windowH
+
+      // v0.1.75 复制按钮（顶部条右）
+      if (type === 'end' && layout._copyBtn && y <= closeBarH
+          && x >= layout._copyBtn.x && x <= layout._copyBtn.x + layout._copyBtn.w) {
+        // 拼接最近 N 轮 AI 输入输出为文本
+        const txt = debugLog.map((d, i) => {
+          let s = `== 第 ${i + 1}/${debugLog.length} 轮 round=${d.round} ==\n`
+          s += `[INPUT 玩家选项]: ${d.input || '(空)'}\n\n`
+          if (d.messages_to_ai && d.messages_to_ai.length > 0) {
+            s += `[发给 AI 的 messages]:\n`
+            d.messages_to_ai.forEach((m, j) => {
+              s += `  ── messages[${j}].role="${m.role}" ──\n${m.content}\n\n`
+            })
+          }
+          if (d.raw_response) s += `[AI 原始返回]:\n${d.raw_response}\n\n`
+          if (d.all_branches && d.all_branches.length > 0) {
+            s += `[AI 生成 ${d.all_branches.length} 个分支]:\n`
+            d.all_branches.forEach((b, j) => {
+              s += `  分支${j + 1} p=${b.p}\n  ${b.content || ''}\n  options: ${JSON.stringify(b.options)}\n\n`
+            })
+          }
+          if (d.resultError) s += `[ERROR]: ${d.resultError}\n`
+          return s
+        }).join('\n')
+        if (typeof wx !== 'undefined' && wx.setClipboardData) {
+          wx.setClipboardData({
+            data: txt,
+            success: () => {
+              if (wx.showToast) wx.showToast({ title: '已复制 ' + txt.length + ' 字符', icon: 'none', duration: 1500 })
+            },
+            fail: (e) => {
+              if (wx.showToast) wx.showToast({ title: '复制失败：' + (e.errMsg || ''), icon: 'none' })
+            }
+          })
+        }
+        return null
+      }
+
       if (type === 'end' && y <= closeBarH) {
         debugOpen = false
         return null

@@ -146,9 +146,9 @@ function drawStarDust(ctx, p) {
   var t = now / 1000  // 持续秒数
   for (var i = 0; i < STAR_DUST.length; i++) {
     var s = STAR_DUST[i]
-    // v0.1.67：p 锁 1.0 后光点仍持续漂移（用 sin/cos）
-    var nx = s.x + s.driftX * p + Math.sin(t * 0.6 + s.phase) * 0.025
-    var ny = s.y + s.driftY * p + Math.cos(t * 0.5 + s.phase * 1.3) * 0.025
+    // v0.1.68：加快漂移速度（先生 14:05 反馈太慢）
+    var nx = s.x + s.driftX * p + Math.sin(t * 1.8 + s.phase) * 0.04
+    var ny = s.y + s.driftY * p + Math.cos(t * 1.5 + s.phase * 1.3) * 0.04
     ctx.fillStyle = 'rgba(200,190,170,' + (s.alpha * (1 - p * 0.5)) + ')'
     ctx.beginPath()
     ctx.arc(w * nx, h * ny, s.size, 0, Math.PI * 2)

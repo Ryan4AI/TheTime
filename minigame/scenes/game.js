@@ -489,20 +489,21 @@ function adjustFluidLayout() {
 
   const topBarH = layout.topBarH
   const itemBarH = layout.itemBarH       // 钉死底部 64px
-  const optBlockH = 160                    // v0.1.70: 3×40 + 2×4 + 32 + 12
+  // v0.1.66: 缩小选项块（按钮 40→38、间距 6→4、自由输入 32→28）
+  // 从 160 减到 152，节省 8px 给叙事区
+  const optBlockH = 152
   const safeTop = layout.safeTop || 0
   const availableH = layout.windowH - safeTop - topBarH - itemBarH
 
-  // v0.1.71 重写：画区按"是否加载完成"动态伸缩；文字优先占满；选项钉死下方
   const typingDone = narrative && displayedChars >= narrative.length
   const optReserveH = typingDone ? optBlockH : 0
-  const optionGap = 6
+  const optionGap = 4
   const lineHeight = 22
   const fontSize = 15
   const innerW = layout.windowW - layout.padding * 2 - 24
   const charPerLine = Math.max(8, Math.floor(innerW / fontSize))
 
-  // 文字实际行数 = narrative 字符数 / charPerLine（v0.1.74 改进：按字符折行算）
+  // v0.1.74 改进：按字符折行算
   let lineCount = 2
   if (narrative) {
     const paras = narrative.split('\n')
@@ -518,10 +519,10 @@ function adjustFluidLayout() {
   const showScene = sceneImgReady && typingDone
   const sceneH = showScene ? Math.min(130, Math.max(80, Math.floor((layout.windowW - layout.padding * 2) * 2 / 3))) : 0
 
-  // 文字区 = 剩余 - 画区(条件) - 选项块(条件) - 缓冲
+  // v0.1.66 修复文字截断：取消 finalTextH 上限，让文字能完整显示
+  // 文字不够时也保持最小 100
   let finalTextH = availableH - sceneH - optReserveH - optionGap - 12
-  // 文字最少 100，最多 = neededTextH
-  finalTextH = Math.max(100, Math.min(neededTextH, finalTextH))
+  finalTextH = Math.max(100, finalTextH)  // 删掉 Math.min 上限
 
   layout.sceneH = sceneH
   layout.sceneVisible = showScene
@@ -529,9 +530,9 @@ function adjustFluidLayout() {
   layout.textH = finalTextH
   layout.optionY = layout.textY + finalTextH + optionGap
   layout.optionFadeIn = typingDone ? 1 : 0
-  layout.optionH = 40                       // v0.1.71: 与 initLayout 一致
+  layout.optionH = 38                       // v0.1.66: 40 → 38 缩 2px
   layout.optionGap = optionGap
-  layout.itemBarY = layout.windowH - itemBarH   // 钉死屏底
+  layout.itemBarY = layout.windowH - itemBarH
 }
 
 // ─────── 生图背景（v0.1.69：前端直连 Pollinations.ai，跳过云函数） ───────
@@ -924,7 +925,7 @@ function drawFreeInputButton(ctx) {
   const fadeIn = layout.optionFadeIn || 0
   if (fadeIn <= 0) return
   const freeY = layout.optionY + options.length * (layout.optionH + layout.optionGap) + 8
-  const freeH = 36
+  const freeH = 28  // v0.1.66: 36 → 28 缩 8px
   const freeX = layout.padding + 4
   const freeW = layout.windowW - (layout.padding + 4) * 2
 

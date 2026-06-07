@@ -56,6 +56,7 @@ function generateStarDust(w, h) {
       alpha: 0.2 + Math.random() * 0.4,
       driftX: (Math.random() - 0.5) * 0.3,
       driftY: (Math.random() - 0.5) * 0.3,
+      phase: Math.random() * Math.PI * 2,  // v0.1.67: 每个光点独立相位
     })
   }
   return arr
@@ -115,8 +116,14 @@ function init(items, identity, gender) {
         settledFate = (res.result.identity.dynasty || '') + '·' + (res.result.identity.city || '')
       }
     },
-    fail: function() {
-      if (state) state.cloudDone = true
+    fail: function(err) {
+      // v0.1.65 修复：失败时**不要**把 cloudDone 设成 true
+      // 之前这行导致云函数失败时动画直接卡在静止状态，但 identity 没生成
+      // 现在：失败时记录 error，动画继续转，玩家可以离开或重试
+      if (state) {
+        state.identityError = (err && (err.errMsg || err.message)) || '云函数调用失败'
+        console.error('[intro] generate_identity 失败:', state.identityError)
+      }
     }
   })
 }
@@ -124,7 +131,9 @@ function init(items, identity, gender) {
 function onTouch() {
   if (state) {
     var elapsed = Date.now() - state.startTime
-    if (elapsed > 400) {
+    // v0.1.65 修复：只有 identity 真的生成出来才允许跳过 intro
+    // 之前 elapsed > 400 就能跳，但 cloudDone=true 后 identity 可能还是 null
+    if (elapsed > 400 && state.cloudDone && state.identity) {
       module.exports.autoNext = { scene: 'identity', items: state.items, identity: state.identity }
     }
   }
@@ -133,11 +142,16 @@ function onTouch() {
 
 function drawStarDust(ctx, p) {
   var w = layout.w, h = layout.h
+  var now = Date.now()
+  var t = now / 1000  // 持续秒数
   for (var i = 0; i < STAR_DUST.length; i++) {
     var s = STAR_DUST[i]
+    // v0.1.67：p 锁 1.0 后光点仍持续漂移（用 sin/cos）
+    var nx = s.x + s.driftX * p + Math.sin(t * 0.6 + s.phase) * 0.025
+    var ny = s.y + s.driftY * p + Math.cos(t * 0.5 + s.phase * 1.3) * 0.025
     ctx.fillStyle = 'rgba(200,190,170,' + (s.alpha * (1 - p * 0.5)) + ')'
     ctx.beginPath()
-    ctx.arc(w * (s.x + s.driftX * p), h * (s.y + s.driftY * p), s.size, 0, Math.PI * 2)
+    ctx.arc(w * nx, h * ny, s.size, 0, Math.PI * 2)
     ctx.fill()
   }
 }

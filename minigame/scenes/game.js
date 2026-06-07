@@ -489,21 +489,21 @@ function adjustFluidLayout() {
 
   const topBarH = layout.topBarH
   const itemBarH = layout.itemBarH       // 钉死底部 64px
-  // v0.1.66: 缩小选项块（按钮 40→38、间距 6→4、自由输入 32→28）
-  // 从 160 减到 152，节省 8px 给叙事区
-  const optBlockH = 152
+  // v0.1.67: 进一步缩小（按钮 38→36、间距 4→3、自由输入 28→24）
+  // 从 152 减到 145，节省 7px 给叙事区
+  const optBlockH = 145
   const safeTop = layout.safeTop || 0
   const availableH = layout.windowH - safeTop - topBarH - itemBarH
 
   const typingDone = narrative && displayedChars >= narrative.length
   const optReserveH = typingDone ? optBlockH : 0
-  const optionGap = 4
+  const optionGap = 3
   const lineHeight = 22
   const fontSize = 15
   const innerW = layout.windowW - layout.padding * 2 - 24
   const charPerLine = Math.max(8, Math.floor(innerW / fontSize))
 
-  // v0.1.74 改进：按字符折行算
+  // 文字行数按 narrative 完整字符数算
   let lineCount = 2
   if (narrative) {
     const paras = narrative.split('\n')
@@ -514,23 +514,24 @@ function adjustFluidLayout() {
   const textPadding = 16
   const neededTextH = lineCount * lineHeight + textPadding
 
-  // 画区：图片加载完 + 打字完 才占 130 高（让画与文字不挤）；否则不占
+  // v0.1.67 修复：画区总是显示（不依赖 typingDone）
+  // 先生要"画板随文字展开"——所以图片加载好就显示
   const sceneImgReady = !!bgImgEl && bgImgEl.complete && bgImgEl.width > 0
-  const showScene = sceneImgReady && typingDone
-  const sceneH = showScene ? Math.min(130, Math.max(80, Math.floor((layout.windowW - layout.padding * 2) * 2 / 3))) : 0
+  const showScene = sceneImgReady
+  const sceneH = showScene ? 130 : 0  // 固定 130 高
 
-  // v0.1.66 修复文字截断：取消 finalTextH 上限，让文字能完整显示
-  // 文字不够时也保持最小 100
+  // 文字区高度 = 剩余 - 画区 - 选项块 - 间距
   let finalTextH = availableH - sceneH - optReserveH - optionGap - 12
-  finalTextH = Math.max(100, finalTextH)  // 删掉 Math.min 上限
+  finalTextH = Math.max(100, finalTextH)  // 不限上限
 
   layout.sceneH = sceneH
   layout.sceneVisible = showScene
-  layout.textY = safeTop + topBarH + 4 + (showScene ? sceneH : 0) + 8
+  layout.textY = safeTop + topBarH + 4 + sceneH + 8
   layout.textH = finalTextH
-  layout.optionY = layout.textY + finalTextH + optionGap
+  // v0.1.67: 文字面板底部 + 6px 缓冲后再放选项（解决按钮紧贴文字面板的"下溢"感）
+  layout.optionY = layout.textY + finalTextH + 6
   layout.optionFadeIn = typingDone ? 1 : 0
-  layout.optionH = 38                       // v0.1.66: 40 → 38 缩 2px
+  layout.optionH = 36                       // v0.1.67: 38 → 36 缩 2px
   layout.optionGap = optionGap
   layout.itemBarY = layout.windowH - itemBarH
 }
@@ -925,7 +926,7 @@ function drawFreeInputButton(ctx) {
   const fadeIn = layout.optionFadeIn || 0
   if (fadeIn <= 0) return
   const freeY = layout.optionY + options.length * (layout.optionH + layout.optionGap) + 8
-  const freeH = 28  // v0.1.66: 36 → 28 缩 8px
+  const freeH = 24  // v0.1.67: 28 → 24 缩 4px
   const freeX = layout.padding + 4
   const freeW = layout.windowW - (layout.padding + 4) * 2
 

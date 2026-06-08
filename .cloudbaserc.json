@@ -51,6 +51,13 @@
       "envVariables": {
         "DS_API_KEY": "sk-26d0e090ed7b4d90803aae706d9b7247"
       }
+    },
+    {
+      "name": "gen_image",
+      "timeout": 20,
+      "memorySize": 256,
+      "params": {},
+      "entryFile": "index.js"
     }
   ]
 }

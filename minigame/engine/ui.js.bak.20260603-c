@@ -63,8 +63,6 @@ function getSystemInfo() {
   return {
     width: sys.windowWidth,
     height: sys.windowHeight,
-    windowWidth: sys.windowWidth,
-    windowHeight: sys.windowHeight,
     pixelRatio: sys.pixelRatio,
     safeArea: sys.safeArea || { top: 0, bottom: sys.windowHeight }
   }
@@ -298,64 +296,6 @@ function hitTest(tx, ty, x, y, w, h) {
   return tx >= x && tx <= x + w && ty >= y && ty <= y + h
 }
 
-// Draw text centered at (x, y) — 居中绘制
-function drawCenteredText(ctx, text, x, y, fontSize, color) {
-  if (!text) return
-  ctx.save()
-  ctx.font = (fontSize || 14) + 'px ' + getFontStack()
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillStyle = color || COLORS.paper
-  ctx.fillText(String(text), x, y)
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'alphabetic'
-  ctx.restore()
-}
-
-// Draw text inside a rectangle with auto-wrap on \n and word-wrap
-// x, y 是左上角；maxW 文字宽度限制；lineHeight 行高；fontSize 字号
-// 不真正实现按字拆词的复杂换行，遇到换行符 \n 才换行（保持单段长度可控）
-function drawTextInRect(ctx, text, x, y, maxW, lineHeight, fontSize) {
-  if (text == null) return
-  ctx.save()
-  ctx.font = (fontSize || 14) + 'px ' + getFontStack()
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'top'
-  ctx.fillStyle = COLORS.text || COLORS.paper
-  // 按 \n 拆段
-  const paragraphs = String(text).split('\n')
-  let cy = y
-  for (let p = 0; p < paragraphs.length; p++) {
-    const line = paragraphs[p]
-    if (line === '') {
-      cy += lineHeight
-      continue
-    }
-    // 简单按字符折行（中文按字符，英文按空格）
-    let buf = ''
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i]
-      const test = buf + ch
-      const w = ctx.measureText(test).width
-      if (w > maxW && buf.length > 0) {
-        ctx.fillText(buf, x, cy)
-        cy += lineHeight
-        buf = ch
-      } else {
-        buf = test
-      }
-    }
-    if (buf.length > 0) {
-      ctx.fillText(buf, x, cy)
-      cy += lineHeight
-    }
-  }
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'alphabetic'
-  ctx.restore()
-  return cy
-}
-
 module.exports = {
   COLORS,
   FONT_FAMILY, setCustomFont, getFontStack,
@@ -366,8 +306,6 @@ module.exports = {
   drawClassicalDivider,
   drawBackground,
   drawText,
-  drawCenteredText,
-  drawTextInRect,
   drawButton,
   drawPrimaryButton,
   hitTest,

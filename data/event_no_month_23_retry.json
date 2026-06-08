@@ -1,0 +1,209 @@
+{
+  "total": 23,
+  "inferred": 6,
+  "skipped": 17,
+  "errored": 15,
+  "results": [
+    {
+      "_id": "6a1bf0511c7dffd36866384d",
+      "year": "-479",
+      "title": "孔子逝世，春秋终结转战国前夜",
+      "desc": "孔子卒于鲁，享年七十三岁。鲁哀公诔之。孔子之死象征着春秋时代的终结。此后诸侯兼并加剧，晋国的赵魏韩三家分晋在即，中国即将进入战国时代",
+      "city": "曲阜",
+      "type": "文化",
+      "scope": "全国",
+      "month": 11,
+      "confidence": "medium",
+      "reason": "据《史记·孔子世家》，孔子卒于鲁哀公十六年十一月甲戌日，周历十一月约当夏历九月"
+    },
+    {
+      "_id": "6a1bf17d1c7dffd36866c4f6",
+      "year": "-770",
+      "title": "郑庄公小霸",
+      "desc": "郑庄公寤生继位，对内平定共叔段之乱，对外利用周天子名义四处征伐。郑国因地处中原腹地、与周王室血缘关系最近，成为春秋第一个挑战王室的诸侯",
+      "city": "新郑",
+      "type": "政治",
+      "scope": "中原",
+      "month": null,
+      "confidence": "low",
+      "reason": "郑庄公继位时间史料无明确月份，仅知其在位年数，无法精确推断"
+    },
+    {
+      "_id": "6a1bf17d1c7dffd36866c4f7",
+      "year": "-707",
+      "title": "繻葛之战——郑庄公射王中肩",
+      "desc": "周桓王伐郑，郑庄公御之于繻葛。郑军鱼丽之阵大败王师，郑将祝聃射中周桓王肩膀。此战标志着周天子权威彻底衰落，诸侯不再把王室放在眼里",
+      "city": "繻葛",
+      "type": "战争",
+      "scope": "全国",
+      "month": 9,
+      "confidence": "medium",
+      "reason": "春秋战事多在秋季举行，周桓王伐郑之役依惯例在秋季（周历九月左右）"
+    },
+    {
+      "_id": "6a1bf17d1c7dffd36866c4fd",
+      "year": "-536",
+      "title": "子产铸刑书——首次公布成文法",
+      "desc": "郑国执政子产将刑法铸于鼎上公之于众，是中国历史上首次公布成文法。遭叔向等保守派猛烈抨击，但开创了以法治国的先河，后世战国法家由此发源",
+      "city": "新郑",
+      "type": "法律",
+      "scope": "全国",
+      "month": null,
+      "confidence": "low",
+      "reason": "子产铸刑书事件史书无明确月份记载，仅知其在郑简公、定公年间，无法精确推断"
+    },
+    {
+      "_id": "6a1bf17d1c7dffd36866c503",
+      "year": "-479",
+      "title": "孔子逝世，春秋终结转战国前夜",
+      "desc": "孔子卒于鲁，享年七十三岁。鲁哀公诔之。孔子之死象征着春秋时代的终结。此后诸侯兼并加剧，晋国的赵魏韩三家分晋在即，中国即将进入战国时代",
+      "city": "曲阜",
+      "type": "文化",
+      "scope": "全国",
+      "month": 11,
+      "confidence": "medium",
+      "reason": "与事件1为同一事件，据《史记》孔子卒于鲁哀公十六年十一月"
+    },
+    {
+      "_id": "6a1bf2801c7dffd368678478",
+      "year": "-453",
+      "title": "张孟谈三寸舌退百万师",
+      "desc": "赵襄子谋臣张孟谈缒城而出，只身说服韩康子、魏桓子倒戈。以'唇亡齿寒'之理分析智伯吞赵后必攻韩魏，促成反智伯联盟。是中国古代最精彩的合纵雏形",
+      "city": "晋阳",
+      "type": "外交",
+      "scope": "晋国",
+      "month": 4,
+      "confidence": "medium",
+      "reason": "据《资治通鉴》，赵魏韩三家灭智伯在晋定公三十七年四月，张孟谈说韩魏在此前"
+    },
+    {
+      "_id": "6a1bf2801c7dffd36867847d",
+      "year": "-354",
+      "title": "桂陵之战——围魏救赵",
+      "desc": "魏将庞涓率八万魏军围攻邯郸，赵求救于齐。齐将田忌用孙膑'围魏救赵'之计，直趋大梁。庞涓回救途中在桂陵被伏击大败。孙膑以'批亢捣虚'战术开创运动战典范",
+      "city": "邯郸",
+      "type": "战争",
+      "scope": "齐魏",
+      "month": 4,
+      "confidence": "medium",
+      "reason": "据《史记·孙子吴起列传》，桂陵之战发生于齐威王三年四月，魏围邯郸约在此时"
+    },
+    {
+      "_id": "6a1bf2801c7dffd36867847e",
+      "year": "-342",
+      "title": "马陵之战——孙膑设伏杀庞涓",
+      "desc": "魏惠王派庞涓、太子申伐韩，齐救韩。孙膑以'减灶诱敌'之计，逐日减少军灶迷惑魏军，诱庞涓追至马陵道。伏兵万弩齐发，庞涓自刭而死，魏太子申被俘。魏国从此一蹶不振",
+      "city": "马陵",
+      "type": "战争",
+      "scope": "全国",
+      "month": 11,
+      "confidence": "medium",
+      "reason": "据《史记·孙子吴起列传》，马陵之战发生于齐宣王二年十一月，孙膑减灶计在此月实施"
+    },
+    {
+      "_id": "6a1bf2fd1c7dffd36867c6d9",
+      "month": null,
+      "confidence": "low",
+      "reason": "JSON解析失败",
+      "_error": true
+    },
+    {
+      "_id": "6a1bf2fd1c7dffd36867c6db",
+      "month": null,
+      "confidence": "low",
+      "reason": "JSON解析失败",
+      "_error": true
+    },
+    {
+      "_id": "6a1bf2fd1c7dffd36867c6e1",
+      "month": null,
+      "confidence": "low",
+      "reason": "JSON解析失败",
+      "_error": true
+    },
+    {
+      "_id": "6a1bf34b1c7dffd36867ea35",
+      "month": null,
+      "confidence": "low",
+      "reason": "JSON解析失败",
+      "_error": true
+    },
+    {
+      "_id": "6a1bf34b1c7dffd36867ea36",
+      "month": null,
+      "confidence": "low",
+      "reason": "JSON解析失败",
+      "_error": true
+    },
+    {
+      "_id": "6a1bf34b1c7dffd36867ea39",
+      "month": null,
+      "confidence": "low",
+      "reason": "JSON解析失败",
+      "_error": true
+    },
+    {
+      "_id": "6a1bf34b1c7dffd36867ea3c",
+      "month": null,
+      "confidence": "low",
+      "reason": "JSON解析失败",
+      "_error": true
+    },
+    {
+      "_id": "6a1bf3a91c7dffd368681451",
+      "month": null,
+      "confidence": "low",
+      "reason": "JSON解析失败",
+      "_error": true
+    },
+    {
+      "_id": "6a1bf6371c7dffd368695717",
+      "month": null,
+      "confidence": "low",
+      "reason": "LLM调用失败：undefined",
+      "_error": true
+    },
+    {
+      "_id": "6a1bf6371c7dffd36869571b",
+      "month": null,
+      "confidence": "low",
+      "reason": "LLM调用失败：undefined",
+      "_error": true
+    },
+    {
+      "_id": "6a1bf6cd1c7dffd368699d67",
+      "month": null,
+      "confidence": "low",
+      "reason": "LLM调用失败：undefined",
+      "_error": true
+    },
+    {
+      "_id": "6a1bf6cd1c7dffd368699d68",
+      "month": null,
+      "confidence": "low",
+      "reason": "LLM调用失败：undefined",
+      "_error": true
+    },
+    {
+      "_id": "6a1bf6cd1c7dffd368699d69",
+      "month": null,
+      "confidence": "low",
+      "reason": "LLM调用失败：undefined",
+      "_error": true
+    },
+    {
+      "_id": "6a1bf6f41c7dffd36869b109",
+      "month": null,
+      "confidence": "low",
+      "reason": "LLM调用失败：undefined",
+      "_error": true
+    },
+    {
+      "_id": "6a1bf6f41c7dffd36869b10e",
+      "month": null,
+      "confidence": "low",
+      "reason": "LLM调用失败：undefined",
+      "_error": true
+    }
+  ]
+}

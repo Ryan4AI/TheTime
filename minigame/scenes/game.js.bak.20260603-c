@@ -1,0 +1,656 @@
+// Game scene — 穿越后的主游戏场景
+// AI 驱动叙事：调用 ai_narrate 云函数 → 显示叙事 + 选项 → 玩家选择 → 循环
+// 模式：init() / render(ctx) / onTouch(x,y,type) — 与项目其他场景保持一致
+
+const ui = require('../engine/ui')
+const { COLORS, getSystemInfo, drawBackground, drawText, drawCenteredText, drawTextInRect, hitTest, roundRect } = ui
+
+// ─────── 状态 ───────
+var state = null
+var layout = null
+var currentItems = []
+var narrative = ''           // 当前显示的叙事文本
+var displayedChars = 0        // 打字机效果：已显示字符数
+var displayStartTime = 0     // 打字开始时间
+var options = []             // 当前选项
+var optionsAppearTime = 0    // 选项出现时间
+var freeInputActive = false  // 自由输入模式
+var freeInputText = ''       // 自由输入文本
+var loading = false          // AI 调用中
+var loadingStart = 0
+var errorMsg = ''
+var narrativeHistory = []    // {role, content}
+var alive = true             // 死亡标记
+var fadeOut = null           // 淡出动画
+var monthChanged = false     // 月份变化（用于显示特殊提示）
+var newEvent = null          // 新事件
+
+const TYPEWRITE_SPEED = 25   // 每字符毫秒
+const MAX_NARRATIVE_CHARS = 600  // 单次叙事最大字符数
+
+// ─────── 入口 ───────
+module.exports = {
+  init(items, identity) {
+    const id = identity || {}
+    items = items || []
+
+    state = {
+      life_number: id.life_number || 1,
+      name: id.name || '无名',
+      gender: id.gender || '男',
+      age: id.age || 20,
+      occupation: id.occupation || '庶民',
+      social_class: id.social_class || '庶人',
+      dynasty: id.dynasty || '',
+      eraDisplay: id.eraDisplay || id.eraLabel || '',
+      city_name: id.city_name || id.city || '某地',
+      year: id.year || 0,
+      month: 1,
+      round: 0,
+      health: 100,
+      coin: 1000,
+      items: items.map(i => ({ ...i })),
+      legacy: '',
+      alive: true,
+    }
+
+    currentItems = items
+    narrative = ''
+    displayedChars = 0
+    displayStartTime = 0
+    options = []
+    optionsAppearTime = 0
+    freeInputActive = false
+    freeInputText = ''
+    loading = false
+    errorMsg = ''
+    narrativeHistory = []
+    alive = true
+    fadeOut = null
+    monthChanged = false
+    newEvent = null
+
+    initLayout()
+
+    // 首次调用 AI
+    callAI('init', '初始回合')
+
+    module.exports.autoNext = null
+  },
+
+  render,
+
+  onTouch(x, y, type) {
+    return handleTouch(x, y, type)
+  },
+
+  autoNext: null,
+}
+
+// ─────── 初始化布局 ───────
+function initLayout() {
+  const sys = getSystemInfo()
+  const windowWidth = sys.windowWidth
+  const windowHeight = sys.windowHeight
+
+  layout = {
+    windowW: windowWidth,
+    windowH: windowHeight,
+    padding: 24,
+    topBarH: 50,
+    itemBarH: 50,
+    narrativeY: 60,
+    narrativeMaxY: windowHeight - 60 - 50 - 220, // 上方顶部栏 + 下方选项+物品栏
+    optionY: windowHeight - 60 - 50 - 200,
+    optionH: 50,
+    optionGap: 12,
+    itemBarY: windowHeight - 60,
+  }
+}
+
+// ─────── 调用 ai_narrate 云函数 ───────
+function callAI(action, userInput) {
+  loading = true
+  loadingStart = Date.now()
+  errorMsg = ''
+
+  const stateData = {
+    life_number: state.life_number,
+    name: state.name,
+    gender: state.gender,
+    age: state.age,
+    occupation: state.occupation,
+    social_class: state.social_class,
+    dynasty: state.dynasty,
+    eraDisplay: state.eraDisplay,
+    city_name: state.city_name,
+    year: state.year,
+    month: state.month,
+    round: state.round,
+    health: state.health,
+    coin: state.coin,
+    items: state.items.map(i => ({ id: i.id, name: i.name, desc: i.desc })),
+    legacy: state.legacy,
+    alive: state.alive,
+  }
+
+  const data = {
+    action: action,
+    state: stateData,
+    input: userInput,
+    history: narrativeHistory.slice(-12),
+  }
+
+  if (typeof wx !== 'undefined' && wx.cloud && wx.cloud.callFunction) {
+    wx.cloud.callFunction({
+      name: 'ai_narrate',
+      data,
+      success: (res) => {
+        const result = (res && res.result) || {}
+        handleAIResponse(result, action, userInput)
+      },
+      fail: (err) => {
+        loading = false
+        errorMsg = '网络异常，请重试'
+        options = [{ label: '重试', key: '__retry__' }]
+        optionsAppearTime = Date.now() + 300
+      },
+    })
+  } else {
+    // 模拟环境 fallback
+    setTimeout(() => {
+      handleAIResponse({
+        success: true,
+        branch: {
+          content: '你睁开眼，泥墙透光，稻草味扑鼻，远处传来鸡叫和村里孩子的笑声。',
+          options: ['打量四周', '起身查看', '躺一会儿'],
+          patch: { coin: 0, health: 0 },
+        },
+        state: { age: state.age, health: 100, coin: 1000, year: state.year, month: state.month },
+      }, action, userInput)
+    }, 500)
+  }
+}
+
+// ─────── 处理 AI 返回 ───────
+function handleAIResponse(result, action, userInput) {
+  loading = false
+
+  if (!result || result.error) {
+    errorMsg = (result && result.error) || 'AI服务暂不可用'
+    options = [{ label: '重试', key: '__retry__' }]
+    optionsAppearTime = Date.now() + 300
+    return
+  }
+
+  const { branch, state: newState, month_changed, event } = result
+  if (!branch || !branch.content) {
+    errorMsg = 'AI 返回内容为空'
+    options = [{ label: '重试', key: '__retry__' }]
+    optionsAppearTime = Date.now() + 300
+    return
+  }
+
+  // 1. 应用 AI 返回的 state 更新
+  if (newState) {
+    if (newState.age) state.age = newState.age
+    if (newState.health !== undefined) state.health = newState.health
+    if (newState.coin !== undefined) state.coin = newState.coin
+    if (newState.month) state.month = newState.month
+    if (newState.year) state.year = newState.year
+    if (newState.round !== undefined) state.round = newState.round
+  }
+
+  // 2. 应用 patch
+  const patch = branch.patch || {}
+  if (patch.coin) state.coin = Math.max(0, state.coin + (patch.coin || 0))
+  if (patch.health) state.health = Math.max(0, Math.min(100, state.health + (patch.health || 0)))
+
+  // 物品状态变化
+  if (patch.items) {
+    for (const [itemId, change] of Object.entries(patch.items)) {
+      const it = state.items.find(i => i.id === itemId)
+      if (it) {
+        if (change === 'lost') {
+          it.desc = it.name + '（已丢失）'
+        } else {
+          it.desc = it.name + '（' + change + '）'
+        }
+      }
+    }
+  }
+
+  // 3. 死亡判定
+  if (state.health <= 0 || newState && newState.alive === false) {
+    state.alive = false
+    alive = false
+  }
+
+  // 4. 记录历史
+  narrativeHistory.push({ role: 'ai', content: branch.content })
+  if (action === 'continue' && userInput) {
+    narrativeHistory.push({ role: 'user', content: userInput })
+  }
+
+  // 5. 准备显示
+  narrative = (branch.content || '').slice(0, MAX_NARRATIVE_CHARS)
+  displayedChars = 0
+  displayStartTime = Date.now()
+  options = (branch.options || []).slice(0, 3).map(label => ({ label, key: label }))
+  optionsAppearTime = displayStartTime + narrative.length * TYPEWRITE_SPEED + 300
+  monthChanged = month_changed
+  newEvent = event || null
+}
+
+// ─────── 渲染 ───────
+function render(ctx) {
+  if (!ctx || !layout) return
+
+  // 淡出处理（死亡时）
+  if (fadeOut) {
+    const elapsed = Date.now() - fadeOut.start
+    const p = Math.min(1, elapsed / fadeOut.duration)
+    ctx.fillStyle = 'rgba(0,0,0,' + p + ')'
+    ctx.fillRect(0, 0, layout.windowW, layout.windowH)
+    if (p >= 1) {
+      module.exports.autoNext = { scene: 'death', state: state }
+      return
+    }
+  }
+
+  // 1. 暗色古风背景
+  drawBackground(ctx, layout.windowW, layout.windowH, 'game')
+
+  // 2. 顶部状态栏
+  drawTopBar(ctx)
+
+  // 3. 月份变化提示（如有）
+  if (monthChanged) {
+    drawMonthNotice(ctx)
+  }
+
+  // 4. 叙事文字（打字机效果）
+  drawNarrative(ctx)
+
+  // 5. 选项按钮
+  if (Date.now() >= optionsAppearTime && options.length > 0) {
+    drawOptions(ctx)
+  }
+
+  // 6. 自由输入按钮
+  if (Date.now() >= optionsAppearTime && options.length > 0) {
+    drawFreeInputButton(ctx)
+  }
+
+  // 7. 底部物品栏
+  drawItemBar(ctx)
+
+  // 8. 加载中
+  if (loading) {
+    drawLoading(ctx)
+  }
+
+  // 9. 错误提示
+  if (errorMsg) {
+    drawError(ctx)
+  }
+}
+
+// ─────── 顶部状态栏 ───────
+function drawTopBar(ctx) {
+  const padding = layout.padding
+
+  // 半透明黑底
+  ctx.fillStyle = 'rgba(0,0,0,0.7)'
+  ctx.fillRect(0, 0, layout.windowW, layout.topBarH)
+
+  // 纪年（左上）
+  const eraStr = state.eraDisplay || (state.dynasty + ' ' + state.year + '年')
+  ctx.fillStyle = COLORS.gold
+  ctx.font = '13px ' + ui.fontFamily
+  ctx.textAlign = 'left'
+  ctx.fillText(eraStr, padding, 22)
+
+  // 姓名 + 年龄
+  ctx.fillStyle = COLORS.textDim
+  ctx.font = '12px ' + ui.fontFamily
+  ctx.fillText(state.name + ' · ' + state.age + '岁', padding, 42)
+
+  // 右上：金钱 + 健康
+  ctx.textAlign = 'right'
+  ctx.fillStyle = COLORS.gold
+  ctx.font = '13px ' + ui.fontFamily
+  ctx.fillText(state.coin + '文', layout.windowW - padding, 22)
+
+  // 健康条
+  const hpW = 60
+  const hpX = layout.windowW - padding - hpW
+  const hpY = 34
+  const hpH = 8
+  ctx.fillStyle = 'rgba(255,255,255,0.1)'
+  roundRect(ctx, hpX, hpY, hpW, hpH, 4, { fill: 'rgba(255,255,255,0.1)' })
+  const hpRatio = Math.max(0, Math.min(1, state.health / 100))
+  const hpColor = hpRatio > 0.6 ? '#6ec96e' : (hpRatio > 0.3 ? '#e0c050' : '#e06060')
+  ctx.fillStyle = hpColor
+  roundRect(ctx, hpX, hpY, hpW * hpRatio, hpH, 4, { fill: hpColor })
+
+  ctx.textAlign = 'left'
+}
+
+// ─────── 月份变化提示 ───────
+function drawMonthNotice(ctx) {
+  if (Date.now() - displayStartTime > 3000) return // 只显示3秒
+
+  const notice = '· 时光流转 ·'
+  const y = layout.topBarH + 8
+  const alpha = Math.min(1, (Date.now() - optionsAppearTime + 200) / 600) * 0.7
+  ctx.fillStyle = 'rgba(212,168,83,' + alpha + ')'
+  ctx.font = '11px ' + ui.fontFamily
+  ctx.textAlign = 'center'
+  ctx.fillText(notice, layout.windowW / 2, y)
+  ctx.textAlign = 'left'
+
+  if (newEvent && newEvent.title) {
+    ctx.fillStyle = 'rgba(255,200,100,' + alpha + ')'
+    ctx.font = '10px ' + ui.fontFamily
+    ctx.fillText('📜 ' + newEvent.title, layout.windowW / 2, y + 14)
+  }
+}
+
+// ─────── 叙事文字（打字机效果） ───────
+function drawNarrative(ctx) {
+  if (!narrative) return
+
+  const elapsed = Date.now() - displayStartTime
+  const totalChars = narrative.length
+  const targetChars = Math.min(totalChars, Math.floor(elapsed / TYPEWRITE_SPEED))
+  displayedChars = targetChars
+
+  const text = narrative.slice(0, displayedChars)
+
+  const x = layout.padding
+  const y = layout.narrativeY
+  const maxW = layout.windowW - layout.padding * 2
+  const lineHeight = 26
+  const fontSize = 15
+
+  ctx.fillStyle = COLORS.text
+  ctx.font = fontSize + 'px ' + ui.fontFamily
+  ctx.textAlign = 'left'
+  drawTextInRect(ctx, text, x, y, maxW, lineHeight, fontSize)
+
+  // 打字光标
+  if (displayedChars < totalChars) {
+    const blink = (Date.now() % 800) < 400
+    if (blink) {
+      const lines = text.split('\n')
+      const lastLine = lines[lines.length - 1] || ''
+      const cursorX = x + ctx.measureText(lastLine).width + 2
+      const cursorY = y + (lines.length - 1) * lineHeight
+      ctx.fillStyle = 'rgba(255,255,255,0.7)'
+      ctx.fillRect(cursorX, cursorY + 4, 2, fontSize)
+    }
+  }
+}
+
+// ─────── 选项按钮 ───────
+function drawOptions(ctx) {
+  if (!options || options.length === 0) return
+
+  const optX = layout.padding
+  const optW = layout.windowW - layout.padding * 2
+  const optH = layout.optionH
+  const optGap = layout.optionGap
+  const baseY = layout.optionY
+
+  options.forEach((opt, i) => {
+    const oy = baseY + i * (optH + optGap)
+    const appearElapsed = Date.now() - optionsAppearTime - i * 100
+    if (appearElapsed < 0) return
+    const alpha = Math.min(1, appearElapsed / 300)
+
+    // 按钮背景
+    ctx.fillStyle = 'rgba(20,18,15,' + (alpha * 0.85) + ')'
+    roundRect(ctx, optX, oy, optW, optH, 10, {
+      fill: 'rgba(20,18,15,' + (alpha * 0.85) + ')',
+      stroke: 'rgba(212,168,83,' + (alpha * 0.6) + ')',
+      lineWidth: 1,
+    })
+
+    // 选项文字
+    ctx.fillStyle = 'rgba(255,255,255,' + alpha + ')'
+    ctx.font = '14px ' + ui.fontFamily
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(opt.label, optX + optW / 2, oy + optH / 2)
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'alphabetic'
+
+    // 记录热区
+    opt.bounds = { x: optX, y: oy, w: optW, h: optH }
+  })
+}
+
+// ─────── 自由输入按钮 ───────
+function drawFreeInputButton(ctx) {
+  const freeY = layout.optionY + options.length * (layout.optionH + layout.optionGap) + 8
+  const freeH = 38
+  const freeX = layout.padding
+  const freeW = layout.windowW - layout.padding * 2
+
+  const appearElapsed = Date.now() - optionsAppearTime - options.length * 100
+  if (appearElapsed < 0) return
+  const alpha = Math.min(1, appearElapsed / 300)
+
+  ctx.fillStyle = 'rgba(255,255,255,' + (alpha * 0.08) + ')'
+  roundRect(ctx, freeX, freeY, freeW, freeH, 8, {
+    fill: 'rgba(255,255,255,' + (alpha * 0.08) + ')',
+    stroke: 'rgba(255,255,255,' + (alpha * 0.2) + ')',
+    lineWidth: 1,
+  })
+
+  ctx.fillStyle = 'rgba(255,255,255,' + (alpha * 0.5) + ')'
+  ctx.font = '12px ' + ui.fontFamily
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('✏️ 自由输入', freeX + freeW / 2, freeY + freeH / 2)
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+
+  layout.freeInputBounds = { x: freeX, y: freeY, w: freeW, h: freeH }
+}
+
+// ─────── 底部物品栏 ───────
+function drawItemBar(ctx) {
+  const barY = layout.itemBarY
+  const items = currentItems || []
+  const barH = layout.itemBarH
+
+  // 背景
+  ctx.fillStyle = 'rgba(0,0,0,0.85)'
+  ctx.fillRect(0, barY, layout.windowW, barH)
+  ctx.fillStyle = 'rgba(212,168,83,0.3)'
+  ctx.fillRect(0, barY, layout.windowW, 1)
+
+  if (items.length === 0) return
+
+  // 物品图标
+  const iconSize = 32
+  const totalW = items.length * (iconSize + 16) - 16
+  const startX = (layout.windowW - totalW) / 2
+
+  items.forEach((item, i) => {
+    const ix = startX + i * (iconSize + 16)
+    const iy = barY + (barH - iconSize) / 2
+
+    // 背景
+    roundRect(ctx, ix, iy, iconSize, iconSize, 6, {
+      fill: 'rgba(255,255,255,0.08)',
+      stroke: 'rgba(212,168,83,0.3)',
+      lineWidth: 1,
+    })
+
+    // 图标
+    ctx.fillStyle = COLORS.gold
+    ctx.font = '18px ' + ui.fontFamily
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(item.icon || '📦', ix + iconSize / 2, iy + iconSize / 2)
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'alphabetic'
+  })
+}
+
+// ─────── 加载中 ───────
+function drawLoading(ctx) {
+  ctx.fillStyle = 'rgba(0,0,0,0.4)'
+  ctx.fillRect(0, 0, layout.windowW, layout.windowH)
+
+  ctx.fillStyle = COLORS.gold
+  ctx.font = '14px ' + ui.fontFamily
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  const dots = '.'.repeat(((Date.now() - loadingStart) / 500 % 4) | 0)
+  ctx.fillText('AI 穿越中' + dots, layout.windowW / 2, layout.windowH / 2)
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+}
+
+// ─────── 错误提示 ───────
+function drawError(ctx) {
+  ctx.fillStyle = 'rgba(0,0,0,0.85)'
+  ctx.fillRect(0, 0, layout.windowW, layout.windowH)
+
+  ctx.fillStyle = '#e06060'
+  ctx.font = '14px ' + ui.fontFamily
+  ctx.textAlign = 'center'
+  ctx.fillText(errorMsg, layout.windowW / 2, layout.windowH / 2 - 10)
+  ctx.textAlign = 'left'
+}
+
+// ─────── 触摸处理 ───────
+function handleTouch(x, y, type) {
+  if (type !== 'end') return null
+
+  // 死亡触发淡出
+  if (!alive) {
+    if (!fadeOut) {
+      fadeOut = { start: Date.now(), duration: 1500 }
+    }
+    return null
+  }
+
+  // 加载中不接受输入
+  if (loading) return null
+
+  // 错误状态下点重试
+  if (errorMsg && options.length > 0) {
+    if (isInOptionBounds(x, y, 0)) {
+      errorMsg = ''
+      options = []
+      callAI('continue', '重试')
+      return null
+    }
+  }
+
+  // 检查选项按钮
+  for (let i = 0; i < options.length; i++) {
+    if (isInOptionBounds(x, y, i)) {
+      const opt = options[i]
+      handleOptionSelected(opt)
+      return null
+    }
+  }
+
+  // 检查自由输入
+  if (layout.freeInputBounds && hitTest(x, y, layout.freeInputBounds.x, layout.freeInputBounds.y, layout.freeInputBounds.w, layout.freeInputBounds.h)) {
+    handleFreeInput()
+    return null
+  }
+}
+
+function isInOptionBounds(x, y, idx) {
+  const opt = options[idx]
+  if (!opt || !opt.bounds) return false
+  return hitTest(x, y, opt.bounds.x, opt.bounds.y, opt.bounds.w, opt.bounds.h)
+}
+
+// ─────── 处理选项点击 ───────
+function handleOptionSelected(opt) {
+  // 重试特殊处理
+  if (opt.key === '__retry__') {
+    errorMsg = ''
+    options = []
+    callAI('continue', '重试')
+    return
+  }
+
+  // 标记玩家选择，立即反馈
+  opt.selected = true
+  options = []  // 清除选项防止重复点击
+
+  // 调用 AI
+  callAI('continue', opt.label)
+}
+
+// ─────── 处理自由输入 ───────
+function handleFreeInput() {
+  if (typeof wx === 'undefined' || !wx.showKeyboard) {
+    // 桌面调试 fallback
+    const text = prompt('输入你想做的事：')
+    if (text && text.trim()) {
+      options = []
+      callAI('continue', text.trim())
+    }
+    return
+  }
+
+  // 微信小游戏：使用 showKeyboard + onKeyboardInput + onKeyboardConfirm
+  freeInputActive = true
+  freeInputText = ''
+
+  wx.showKeyboard({
+    defaultValue: '',
+    maxLength: 100,
+    confirmType: 'send',
+    success: () => {
+      // 键盘已弹出，监听用户输入
+      if (wx.onKeyboardInput) {
+        wx.offKeyboardInput && wx.offKeyboardInput()
+        wx.onKeyboardInput && wx.onKeyboardInput((res) => {
+          freeInputText = res.value || ''
+        })
+      }
+      if (wx.onKeyboardConfirm) {
+        wx.offKeyboardConfirm && wx.offKeyboardConfirm()
+        wx.onKeyboardConfirm && wx.onKeyboardConfirm((res) => {
+          const text = (res.value || freeInputText || '').trim()
+          if (text) {
+            options = []
+            callAI('continue', text)
+          }
+          freeInputActive = false
+          if (wx.hideKeyboard) wx.hideKeyboard({})
+          if (wx.offKeyboardInput) wx.offKeyboardInput()
+          if (wx.offKeyboardConfirm) wx.offKeyboardConfirm()
+        })
+      }
+    },
+    fail: (err) => {
+      // 备用方案：使用 modal 输入
+      if (wx.showModal) {
+        wx.showModal({
+          title: '你想做什么？',
+          editable: true,
+          placeholderText: '例如：去茶摊打听消息',
+          success: (res) => {
+            if (res.confirm && res.content && res.content.trim()) {
+              options = []
+              callAI('continue', res.content.trim())
+            }
+          },
+        })
+      }
+    },
+  })
+}

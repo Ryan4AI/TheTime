@@ -73,6 +73,8 @@ function init(items, identity) {
       occupation: identity.occupation || '',
       socialClass: identity.socialClass || '',
       residence: identity.city || '',
+      city: identity.city || '',         // v0.1.70 保留原字段（game.js 读 id.city）
+      year: identity.year,               // v0.1.70 加 year 字段（game.js 读 id.year）
       eraDisplay: identity.eraDisplay || '',
       eraLabel: identity.eraLabel || '',
       dynasty: identity.dynasty || '',
@@ -334,7 +336,9 @@ function render(ctx) {
   var sOp = anims.seal.update(now)
   if (sOp > 0) {
     ctx.save()
-    ctx.globalAlpha = sOp * 0.12
+    // v0.1.72 持续闪烁（一次性淡入 sOp 完成后改为 sin 呼吸）
+    var breathe = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(now / 600))
+    ctx.globalAlpha = sOp * breathe * 0.18
 
     // 金色菱形装饰点
     var dotX = l.cardX + l.cardW - 42
@@ -355,6 +359,15 @@ function render(ctx) {
     ctx.moveTo(l.cardX + l.cardW - 50, l.yearY - 8)
     ctx.lineTo(l.cardX + l.cardW - 50, l.yearY + 8)
     ctx.stroke()
+
+    // v0.1.72 多加 2 个外圈光点（左上/右下）持续闪烁
+    var breathe2 = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(now / 700 + 1.2))
+    ctx.globalAlpha = sOp * breathe2 * 0.22
+    ;[{ x: l.cardX + 18, y: l.yearY - 8 }, { x: l.cardX + l.cardW - 18, y: l.yearY + 6 }].forEach(p => {
+      ctx.beginPath()
+      ctx.arc(p.x, p.y, 2, 0, Math.PI * 2)
+      ctx.fill()
+    })
 
     ctx.restore()
   }

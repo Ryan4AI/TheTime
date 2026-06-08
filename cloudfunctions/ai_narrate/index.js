@@ -32,7 +32,12 @@ const _ = db.command
 const https = require('https')
 
 // ─────── 配置 ────────
-// v0.1.67 临时切回 MiniMax-M2.7（DeepSeek 402 余额不足，等先生充值后切回）
+// v0.1.69 修 3 个硬编码 bug（D008 · 2026-06-09 凌晨）
+//   1. eventsContext 之前算了但没塞进 prompt（`当前状态`段后有拼接，但被遗漏）
+//   2. `当前状态`段所有字段（姓名/朝代/位置/金钱/物品）硬编码"耆英碧霞"
+//   3. `前世痕迹`段硬编码"这是你第一次穿越"
+//
+// 配合：v0.1.67 临时切回 MiniMax-M2.7（DeepSeek 402 余额不足，等先生充值后切回）
 const MM_API_KEY = process.env.MM_API_KEY || 'sk-cp-c5wSwWsnIcUkewTEe9JhETRKZNyJ1OBnphm_4B1HdOV0LMNh9vP80kJFBKZV5jpCtp22_xyBUtF0zRAwgWaxU4YECc_LL8GPzEj6GVOHmMiovcfwylDgCDM'
 const MM_BASE_URL = 'https://api.minimaxi.com/v1'
 const MM_MODEL = 'MiniMax-M2.7'  // 切回 M2.7 兜底
@@ -478,20 +483,20 @@ function buildSystemPrompt(state, monthEvent) {
     `20. 回合递进：危险不能"原地踏步"——每一回合必须比上一回合更紧迫。第 1 回合"听到远方的声音" → 第 2 回合"声音逼近" → 第 3 回合"门被推开" → 第 4 回合"必须选"。不能连续 3 回合"危险都在远处没发生"。`,
     ``,
     `# 当前状态`,
-    `- 世数：第1世`,
-    `- 姓名：耆英碧霞，女，7岁（精力充沛）`,
-    `- 职业：庶民，阶层：夏后`,
-    `- 朝代：清 · 道光元年`,
-    `- 位置：京师 · 腊月`,
-    `- 年份：1812年（第1世）`,
-    `- 金钱：996文`,
-    `- 携带物品：茶包、针线包、镊子`,
+    `- 世数：第${state.life_number || 1}世`,
+    `- 姓名：${state.name || '无名'}，${state.gender || '男'}，${state.age}岁（${healthDesc}）`,
+    `- 职业：${state.occupation || '庶民'}，阶层：${state.socialClass || '庶人'}`,
+    `- 朝代：${state.dynasty || '?'} · ${state.eraDisplay || ''}`,
+    `- 位置：${state.city || state.city_name || '?'} · ${monthStr}`,
+    `- 年份：${state.year}年（第${state.life_number || 1}世）`,
+    `- 金钱：${state.coin || 0}文`,
+    `- 携带物品：${itemsList || '无'}`,
     ``,
     `# 前世痕迹`,
-    `这是你第一次穿越，没有前世痕迹。`,
+    legacyContext || `这是你第一次穿越，没有前世痕迹。`,
     ``,
     `# 历史事件`,
-    `本月无重大历史事件。无事件月1~2轮快速推进日常剧情，不要拖沓。`,
+    eventsContext || `${state.year || '?'}年${monthStr}，史书未录重大事件，民间自有其烟火。无事件月1~2轮快速推进日常剧情，不要拖沓。`,
     `事件分成影响全国和影响城市2种。对于影响全国的历史事件，需要5-10轮对话完成。对于影响城市的历史事件，需要3-5轮对话完成。`,
     `如果玩家在事件中的行为影响了历史走向（蝴蝶效应），可以改编事件细节，不一定完全贴合真实。`,
     ``,

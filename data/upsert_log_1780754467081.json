@@ -1,0 +1,1048 @@
+{
+  "ok": 0,
+  "fail": 129,
+  "results": [
+    {
+      "_id": "6a1bd9b11c7dffd3685b4b3a",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bd9b11c7dffd3685b4b3a\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":2,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:01:07.082Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "夏桀暴政，成汤伐桀，夏亡",
+      "year": "-1600",
+      "month": 2
+    },
+    {
+      "_id": "6a1bdae61c7dffd3685bcebc",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bdae61c7dffd3685bcebc\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":2,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:01:10.411Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "成汤灭夏，建立商朝",
+      "year": "-1600",
+      "month": 2
+    },
+    {
+      "_id": "6a1bdae61c7dffd3685bcebf",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bdae61c7dffd3685bcebf\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":9,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:01:13.735Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "妇好率军出征",
+      "year": "-1200",
+      "month": 9
+    },
+    {
+      "_id": "6a1bdae61c7dffd3685bcec0",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bdae61c7dffd3685bcec0\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":1,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:01:16.978Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "牧野之战，武王伐纣，商亡",
+      "year": "-1046",
+      "month": 1
+    },
+    {
+      "_id": "6a1be4a71c7dffd368605472",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1be4a71c7dffd368605472\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":1,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:01:20.367Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "牧野之战",
+      "year": "-1046",
+      "month": 1
+    },
+    {
+      "_id": "6a1be4a71c7dffd368605473",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1be4a71c7dffd368605473\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":5,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:01:23.720Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "周公东征",
+      "year": "-1042",
+      "month": 5
+    },
+    {
+      "_id": "6a1bf0511c7dffd36866383f",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf0511c7dffd36866383f\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":1,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:01:27.051Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "平王东迁，春秋时代开始",
+      "year": "-770",
+      "month": 1
+    },
+    {
+      "_id": "6a1bf17d1c7dffd36866c4f5",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf17d1c7dffd36866c4f5\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":1,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:01:30.345Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "平王东迁，春秋时代开始",
+      "year": "-770",
+      "month": 1
+    },
+    {
+      "_id": "6a1bf17d1c7dffd36866c4f8",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf17d1c7dffd36866c4f8\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":1,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:01:33.597Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "齐桓公即位，管仲改革开始",
+      "year": "-685",
+      "month": 1
+    },
+    {
+      "_id": "6a1bf0511c7dffd368663843",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf0511c7dffd368663843\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":4,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:01:36.881Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "召陵之盟——齐桓首霸",
+      "year": "-656",
+      "month": 4
+    },
+    {
+      "_id": "6a1bf17d1c7dffd36866c4f9",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf17d1c7dffd36866c4f9\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":4,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:01:40.237Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "召陵之盟——齐桓首霸",
+      "year": "-656",
+      "month": 4
+    },
+    {
+      "_id": "6a1bf17d1c7dffd36866c4fa",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf17d1c7dffd36866c4fa\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":5,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:01:43.504Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "城濮之战——晋文公大败楚军",
+      "year": "-632",
+      "month": 5
+    },
+    {
+      "_id": "6a1bf17d1c7dffd36866c4fb",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf17d1c7dffd36866c4fb\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":1,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:01:46.750Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "崤之战——秦晋失和",
+      "year": "-627",
+      "month": 1
+    },
+    {
+      "_id": "6a1bd9b11c7dffd3685b4c31",
+      "ok": false,
+      "error": "未匹配到记录或更新失败",
+      "raw": "{\"data\":{\"results\":[[{\"n\":{\"$numberInt\":\"0\"},\"nModified\":{\"$numberInt\":\"0\"},\"opTime\":{\"ts\":{\"$timestamp\":{\"t\":1780754510,\"i\":1}},\"t\":{\"$numberLong\":\"1\"}},\"electionId\":{\"$oid\":\"7fffffff0000000000000001\"},\"ok\":{\"$numberDouble\":\"1.0\"},\"operationTime\":{\"$timestamp\":{\"t\":1780754510,\"i\":1}},\"$clusterTime\"",
+      "title": "孔子诞生",
+      "year": "-551",
+      "month": 8
+    },
+    {
+      "_id": "6a1bd9b11c7dffd3685b4c33",
+      "ok": false,
+      "error": "未匹配到记录或更新失败",
+      "raw": "{\"data\":{\"results\":[[{\"n\":{\"$numberInt\":\"0\"},\"nModified\":{\"$numberInt\":\"0\"},\"opTime\":{\"ts\":{\"$timestamp\":{\"t\":1780754510,\"i\":1}},\"t\":{\"$numberLong\":\"1\"}},\"electionId\":{\"$oid\":\"7fffffff0000000000000001\"},\"ok\":{\"$numberDouble\":\"1.0\"},\"operationTime\":{\"$timestamp\":{\"t\":1780754510,\"i\":1}},\"$clusterTime\"",
+      "title": "孔子诞生",
+      "year": "-551",
+      "month": 8
+    },
+    {
+      "_id": "6a1bf0511c7dffd368663846",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf0511c7dffd368663846\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":6,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:01:54.646Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "弭兵之会——晋楚四十年和平",
+      "year": "-546",
+      "month": 6
+    },
+    {
+      "_id": "6a1bf17d1c7dffd36866c4fc",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf17d1c7dffd36866c4fc\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":8,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:01:57.897Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "弭兵之会——晋楚四十年和平",
+      "year": "-546",
+      "month": 8
+    },
+    {
+      "_id": "6a1bf17d1c7dffd36866c4fe",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf17d1c7dffd36866c4fe\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":11,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:02:01.167Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "吴王阖闾西破强楚",
+      "year": "-506",
+      "month": 11
+    },
+    {
+      "_id": "6a1bf17d1c7dffd36866c4ff",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf17d1c7dffd36866c4ff\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":2,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:02:04.571Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "夫椒之战——越王勾践始为奴",
+      "year": "-494",
+      "month": 2
+    },
+    {
+      "_id": "6a1bf0511c7dffd36866384a",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf0511c7dffd36866384a\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":7,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:02:07.911Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "黄池之会——吴王夫差北上争霸",
+      "year": "-482",
+      "month": 7
+    },
+    {
+      "_id": "6a1bf17d1c7dffd36866c500",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf17d1c7dffd36866c500\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":7,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:02:11.253Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "黄池之会——吴王夫差北上争霸",
+      "year": "-482",
+      "month": 7
+    },
+    {
+      "_id": "6a1bd9b11c7dffd3685b4c32",
+      "ok": false,
+      "error": "未匹配到记录或更新失败",
+      "raw": "{\"data\":{\"results\":[[{\"n\":{\"$numberInt\":\"0\"},\"nModified\":{\"$numberInt\":\"0\"},\"opTime\":{\"ts\":{\"$timestamp\":{\"t\":1780754530,\"i\":1}},\"t\":{\"$numberLong\":\"1\"}},\"electionId\":{\"$oid\":\"7fffffff0000000000000001\"},\"ok\":{\"$numberDouble\":\"1.0\"},\"operationTime\":{\"$timestamp\":{\"t\":1780754530,\"i\":1}},\"$clusterTime\"",
+      "title": "孔子逝世，春秋终结转战国前夜",
+      "year": "-479",
+      "month": 4
+    },
+    {
+      "_id": "6a1bd9b11c7dffd3685b4c34",
+      "ok": false,
+      "error": "未匹配到记录或更新失败",
+      "raw": "{\"data\":{\"results\":[[{\"n\":{\"$numberInt\":\"0\"},\"nModified\":{\"$numberInt\":\"0\"},\"opTime\":{\"ts\":{\"$timestamp\":{\"t\":1780754530,\"i\":1}},\"t\":{\"$numberLong\":\"1\"}},\"electionId\":{\"$oid\":\"7fffffff0000000000000001\"},\"ok\":{\"$numberDouble\":\"1.0\"},\"operationTime\":{\"$timestamp\":{\"t\":1780754530,\"i\":1}},\"$clusterTime\"",
+      "title": "孔子逝世，春秋终结转战国前夜",
+      "year": "-479",
+      "month": 4
+    },
+    {
+      "_id": "6a1bf17d1c7dffd36866c501",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf17d1c7dffd36866c501\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":11,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:02:19.176Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "越王勾践灭吴",
+      "year": "-473",
+      "month": 11
+    },
+    {
+      "_id": "6a1bf2801c7dffd368678477",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf2801c7dffd368678477\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":10,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:02:22.485Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "晋阳之战——智伯覆灭三家分晋开端",
+      "year": "-453",
+      "month": 10
+    },
+    {
+      "_id": "6a1bf2801c7dffd368678479",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf2801c7dffd368678479\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":2,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:02:25.741Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "周威烈王册封三晋为诸侯",
+      "year": "-403",
+      "month": 2
+    },
+    {
+      "_id": "6a1bf2801c7dffd36867847a",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf2801c7dffd36867847a\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":2,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:02:29.017Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "田和立为齐侯——姜齐终结田齐始",
+      "year": "-386",
+      "month": 2
+    },
+    {
+      "_id": "6a1bf2801c7dffd36867847b",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf2801c7dffd36867847b\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":1,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:02:32.390Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "商鞅在秦国首次变法",
+      "year": "-356",
+      "month": 1
+    },
+    {
+      "_id": "6a1bf2801c7dffd36867847c",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf2801c7dffd36867847c\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":10,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:02:35.672Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "商鞅第二次变法——迁都咸阳",
+      "year": "-350",
+      "month": 10
+    },
+    {
+      "_id": "6a1bf2801c7dffd368678489",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf2801c7dffd368678489\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":11,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:02:38.983Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "秦灭楚——王翦六十万大军平楚",
+      "year": "-223",
+      "month": 11
+    },
+    {
+      "_id": "6a1bf2801c7dffd36867848a",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf2801c7dffd36867848a\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":10,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:02:42.350Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "秦灭燕——王贲破辽东",
+      "year": "-222",
+      "month": 10
+    },
+    {
+      "_id": "6a1bf2801c7dffd36867848b",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf2801c7dffd36867848b\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":1,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:02:45.669Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "秦灭齐——天下一统",
+      "year": "-221",
+      "month": 1
+    },
+    {
+      "_id": "6a1bf2fd1c7dffd36867c6da",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf2fd1c7dffd36867c6da\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":7,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:02:48.995Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "大泽乡起义——王侯将相宁有种乎",
+      "year": "-209",
+      "month": 7
+    },
+    {
+      "_id": "6a1bf2fd1c7dffd36867c6dc",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf2fd1c7dffd36867c6dc\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":9,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:02:52.332Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "刘邦起兵沛县",
+      "year": "-208",
+      "month": 9
+    },
+    {
+      "_id": "6a1bf2fd1c7dffd36867c6dd",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf2fd1c7dffd36867c6dd\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":9,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:02:55.748Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "项梁项羽吴中起兵",
+      "year": "-208",
+      "month": 9
+    },
+    {
+      "_id": "6a1bf2fd1c7dffd36867c6de",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf2fd1c7dffd36867c6de\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":12,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:02:59.129Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "陈胜死章邯破张楚",
+      "year": "-208",
+      "month": 12
+    },
+    {
+      "_id": "6a1bf2fd1c7dffd36867c6e0",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf2fd1c7dffd36867c6e0\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":1,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:03:02.461Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "刘邦入关秦王子婴降",
+      "year": "-207",
+      "month": 1
+    },
+    {
+      "_id": "6a1bf2fd1c7dffd36867c6df",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf2fd1c7dffd36867c6df\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":10,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:03:05.725Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "巨鹿之战——项羽破釜沉舟灭秦军主力",
+      "year": "-207",
+      "month": 10
+    },
+    {
+      "_id": "6a1bf34b1c7dffd36867ea30",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf34b1c7dffd36867ea30\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":1,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:03:09.138Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "刘邦称帝建立汉朝",
+      "year": "-202",
+      "month": 1
+    },
+    {
+      "_id": "6a1bf34b1c7dffd36867ea31",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf34b1c7dffd36867ea31\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":12,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:03:12.421Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "白登之围——刘邦险被匈奴擒",
+      "year": "-200",
+      "month": 12
+    },
+    {
+      "_id": "6a1bf34b1c7dffd36867ea32",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf34b1c7dffd36867ea32\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":4,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:03:15.757Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "高祖崩——吕后专权开始",
+      "year": "-195",
+      "month": 4
+    },
+    {
+      "_id": "6a1bf34b1c7dffd36867ea33",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf34b1c7dffd36867ea33\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":7,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:03:18.983Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "吕后崩——周勃安刘诛诸吕",
+      "year": "-180",
+      "month": 7
+    },
+    {
+      "_id": "6a1bf34b1c7dffd36867ea34",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf34b1c7dffd36867ea34\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":2,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:03:22.333Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "七国之乱——吴王刘濞反",
+      "year": "-154",
+      "month": 2
+    },
+    {
+      "_id": "6a1bdae61c7dffd3685bcef1",
+      "ok": false,
+      "error": "未匹配到记录或更新失败",
+      "raw": "{\"data\":{\"results\":[[{\"n\":{\"$numberInt\":\"0\"},\"nModified\":{\"$numberInt\":\"0\"},\"opTime\":{\"ts\":{\"$timestamp\":{\"t\":1780754600,\"i\":1}},\"t\":{\"$numberLong\":\"1\"}},\"electionId\":{\"$oid\":\"7fffffff0000000000000001\"},\"ok\":{\"$numberDouble\":\"1.0\"},\"operationTime\":{\"$timestamp\":{\"t\":1780754600,\"i\":1}},\"$clusterTime\"",
+      "title": "董仲舒对策——罢黜百家独尊儒术",
+      "year": "-141",
+      "month": 5
+    },
+    {
+      "_id": "6a1bf34b1c7dffd36867ea37",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf34b1c7dffd36867ea37\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":3,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:03:27.912Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "卫青收复河南地置朔方郡",
+      "year": "-127",
+      "month": 3
+    },
+    {
+      "_id": "6a1bf34b1c7dffd36867ea38",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf34b1c7dffd36867ea38\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":4,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:03:31.202Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "漠北之战——封狼居胥",
+      "year": "-119",
+      "month": 4
+    },
+    {
+      "_id": "6a1bf34b1c7dffd36867ea3a",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf34b1c7dffd36867ea3a\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":2,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:03:34.473Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "武帝崩——霍光辅政昭宣中兴",
+      "year": "-87",
+      "month": 2
+    },
+    {
+      "_id": "6a1bf34b1c7dffd36867ea3b",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf34b1c7dffd36867ea3b\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":1,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:03:37.786Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "王莽篡汉——新朝建立",
+      "year": "9",
+      "month": 1
+    },
+    {
+      "_id": "6a1bf3a91c7dffd368681450",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf3a91c7dffd368681450\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":6,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:03:41.202Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "刘秀称帝——光武中兴",
+      "year": "25",
+      "month": 6
+    },
+    {
+      "_id": "6a1bf3a91c7dffd368681452",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf3a91c7dffd368681452\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":6,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:03:44.621Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "窦宪大破北匈奴——勒石燕然",
+      "year": "89",
+      "month": 6
+    },
+    {
+      "_id": "6a1bdae61c7dffd3685bcef3",
+      "ok": false,
+      "error": "未匹配到记录或更新失败",
+      "raw": "{\"data\":{\"results\":[[{\"n\":{\"$numberInt\":\"0\"},\"nModified\":{\"$numberInt\":\"0\"},\"opTime\":{\"ts\":{\"$timestamp\":{\"t\":1780754630,\"i\":1}},\"t\":{\"$numberLong\":\"1\"}},\"electionId\":{\"$oid\":\"7fffffff0000000000000001\"},\"ok\":{\"$numberDouble\":\"1.0\"},\"operationTime\":{\"$timestamp\":{\"t\":1780754630,\"i\":1}},\"$clusterTime\"",
+      "title": "蔡伦改进造纸术",
+      "year": "105",
+      "month": 12
+    },
+    {
+      "_id": "6a1bf3a91c7dffd368681454",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf3a91c7dffd368681454\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":12,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:03:50.379Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "第一次党锢之祸",
+      "year": "166",
+      "month": 12
+    },
+    {
+      "_id": "6a1bf3a91c7dffd368681455",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf3a91c7dffd368681455\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":2,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:03:53.692Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "黄巾大起义——苍天已死黄天当立",
+      "year": "184",
+      "month": 2
+    },
+    {
+      "_id": "6a1bf3a91c7dffd368681456",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf3a91c7dffd368681456\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":8,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:03:56.974Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "董卓入京——东汉名存实亡",
+      "year": "189",
+      "month": 8
+    },
+    {
+      "_id": "6a1bf3a91c7dffd368681457",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf3a91c7dffd368681457\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":10,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:04:00.448Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "官渡之战——曹操统一北方",
+      "year": "200",
+      "month": 10
+    },
+    {
+      "_id": "6a1bf3a91c7dffd368681458",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf3a91c7dffd368681458\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":12,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:04:03.751Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "赤壁之战——天下三分之始",
+      "year": "208",
+      "month": 12
+    },
+    {
+      "_id": "6a1bf3a91c7dffd368681459",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf3a91c7dffd368681459\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":12,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:04:07.075Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "曹丕受禅——东汉灭亡",
+      "year": "220",
+      "month": 12
+    },
+    {
+      "_id": "6a1bf4181c7dffd36868486b",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4181c7dffd36868486b\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":12,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:04:10.353Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "曹丕受禅建魏",
+      "year": "220",
+      "month": 12
+    },
+    {
+      "_id": "6a1bf4181c7dffd36868486c",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4181c7dffd36868486c\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":4,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:04:13.626Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "刘备称帝建蜀汉",
+      "year": "221",
+      "month": 4
+    },
+    {
+      "_id": "6a1bf4181c7dffd36868486d",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4181c7dffd36868486d\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":7,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:04:16.924Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "夷陵之战——陆逊火烧连营七百里",
+      "year": "222",
+      "month": 7
+    },
+    {
+      "_id": "6a1bf4181c7dffd36868486e",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4181c7dffd36868486e\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":3,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:04:20.285Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "诸葛亮七擒孟获定南中",
+      "year": "225",
+      "month": 3
+    },
+    {
+      "_id": "6a1bf4181c7dffd36868486f",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4181c7dffd36868486f\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":5,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:04:23.607Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "孙权称帝建吴",
+      "year": "229",
+      "month": 5
+    },
+    {
+      "_id": "6a1bf4181c7dffd368684870",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4181c7dffd368684870\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":8,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:04:26.935Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "诸葛亮北伐——星落五丈原",
+      "year": "234",
+      "month": 8
+    },
+    {
+      "_id": "6a1bf4181c7dffd368684871",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4181c7dffd368684871\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":1,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:04:30.329Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "高平陵之变——司马氏夺权",
+      "year": "249",
+      "month": 1
+    },
+    {
+      "_id": "6a1bf4181c7dffd368684872",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4181c7dffd368684872\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":11,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:04:33.713Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "邓艾灭蜀汉",
+      "year": "263",
+      "month": 11
+    },
+    {
+      "_id": "6a1bf4461c7dffd368685e0e",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4461c7dffd368685e0e\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":12,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:04:37.152Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "司马炎代魏建西晋",
+      "year": "265",
+      "month": 12
+    },
+    {
+      "_id": "6a1bf4181c7dffd368684873",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4181c7dffd368684873\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":3,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:04:40.619Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "王濬楼船下益州——吴灭三国终归一统",
+      "year": "280",
+      "month": 3
+    },
+    {
+      "_id": "6a1bf4461c7dffd368685e10",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4461c7dffd368685e10\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":11,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:04:44.067Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "刘渊建汉——五胡乱华开始",
+      "year": "304",
+      "month": 11
+    },
+    {
+      "_id": "6a1bf4461c7dffd368685e11",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4461c7dffd368685e11\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":5,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:04:47.474Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "永嘉之乱——匈奴攻陷洛阳",
+      "year": "311",
+      "month": 5
+    },
+    {
+      "_id": "6a1bf4461c7dffd368685e12",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4461c7dffd368685e12\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":12,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:04:50.897Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "西晋灭亡",
+      "year": "316",
+      "month": 12
+    },
+    {
+      "_id": "6a1bf4461c7dffd368685e13",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4461c7dffd368685e13\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":4,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:04:54.234Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "司马睿称帝——衣冠南渡",
+      "year": "317",
+      "month": 4
+    },
+    {
+      "_id": "6a1bf4461c7dffd368685e14",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4461c7dffd368685e14\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":8,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:04:57.623Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "淝水之战——草木皆兵",
+      "year": "383",
+      "month": 8
+    },
+    {
+      "_id": "6a1bf4461c7dffd368685e15",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4461c7dffd368685e15\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":7,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:05:01.008Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "拓跋珪建北魏——南北朝格局雏形",
+      "year": "398",
+      "month": 7
+    },
+    {
+      "_id": "6a1bf4461c7dffd368685e16",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4461c7dffd368685e16\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":1,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:05:04.455Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "刘裕代晋建宋——南北朝开始",
+      "year": "420",
+      "month": 1
+    },
+    {
+      "_id": "6a1bf4751c7dffd3686875ab",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4751c7dffd3686875ab\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":1,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:05:07.946Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "刘裕建宋——南朝开始",
+      "year": "420",
+      "month": 1
+    },
+    {
+      "_id": "6a1bf4751c7dffd3686875ac",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4751c7dffd3686875ac\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":9,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:05:11.420Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "太武帝灭北凉统一北方",
+      "year": "439",
+      "month": 9
+    },
+    {
+      "_id": "6a1bf4751c7dffd3686875ad",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4751c7dffd3686875ad\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":10,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:05:14.814Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "孝文帝迁都洛阳全面汉化",
+      "year": "493",
+      "month": 10
+    },
+    {
+      "_id": "6a1bf4751c7dffd3686875af",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4751c7dffd3686875af\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":5,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:05:18.155Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "侯景之乱——江南浩劫",
+      "year": "548",
+      "month": 5
+    },
+    {
+      "_id": "6a1bf4751c7dffd3686875b0",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4751c7dffd3686875b0\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":1,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:05:21.623Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "北周灭北齐统一北方",
+      "year": "577",
+      "month": 1
+    },
+    {
+      "_id": "6a1bf4751c7dffd3686875b1",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4751c7dffd3686875b1\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":2,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:05:25.018Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "杨坚代周建隋",
+      "year": "581",
+      "month": 2
+    },
+    {
+      "_id": "6a1bf4751c7dffd3686875b2",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4751c7dffd3686875b2\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":1,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:05:28.503Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "隋灭陈——三百年分裂终归一统",
+      "year": "589",
+      "month": 1
+    },
+    {
+      "_id": "6a1bf4ab1c7dffd36868917a",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4ab1c7dffd36868917a\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":5,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:05:31.930Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "李渊称帝建唐",
+      "year": "618",
+      "month": 5
+    },
+    {
+      "_id": "6a1bf4ab1c7dffd36868917b",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4ab1c7dffd36868917b\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":7,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:05:35.323Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "玄武门之变——李世民杀兄夺位",
+      "year": "626",
+      "month": 7
+    },
+    {
+      "_id": "6a1bf4ab1c7dffd36868917e",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4ab1c7dffd36868917e\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":9,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:05:38.720Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "武则天称帝——女皇时代",
+      "year": "690",
+      "month": 9
+    },
+    {
+      "_id": "6a1bf4ab1c7dffd368689180",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4ab1c7dffd368689180\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":11,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:05:42.256Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "安史之乱——盛极而衰",
+      "year": "755",
+      "month": 11
+    },
+    {
+      "_id": "6a1bf4ab1c7dffd368689182",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4ab1c7dffd368689182\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":7,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:05:45.632Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "黄巢起义——满城尽带黄金甲",
+      "year": "875",
+      "month": 7
+    },
+    {
+      "_id": "6a1bf4dc1c7dffd36868aa83",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4dc1c7dffd36868aa83\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":4,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:05:49.085Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "后梁建立五代开始",
+      "year": "907",
+      "month": 4
+    },
+    {
+      "_id": "6a1bf4dc1c7dffd36868aa84",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4dc1c7dffd36868aa84\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":4,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:05:52.591Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "李存勖灭梁建后唐",
+      "year": "923",
+      "month": 4
+    },
+    {
+      "_id": "6a1bf4dc1c7dffd36868aa85",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4dc1c7dffd36868aa85\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":11,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:05:55.956Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "石敬瑭割燕云十六州",
+      "year": "936",
+      "month": 11
+    },
+    {
+      "_id": "6a1bf4dc1c7dffd36868aa86",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4dc1c7dffd36868aa86\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":2,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:05:59.326Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "契丹灭后晋——开封被掠",
+      "year": "947",
+      "month": 2
+    },
+    {
+      "_id": "6a1bf4dc1c7dffd36868aa87",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4dc1c7dffd36868aa87\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":1,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:06:02.668Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "郭威建后周——改革奠基",
+      "year": "951",
+      "month": 1
+    },
+    {
+      "_id": "6a1bf4dc1c7dffd36868aa88",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4dc1c7dffd36868aa88\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":1,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:06:06.941Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "高平之战——柴荣亲征破北汉",
+      "year": "954",
+      "month": 1
+    },
+    {
+      "_id": "6a1bf4dc1c7dffd36868aa89",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4dc1c7dffd36868aa89\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":1,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:06:10.417Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "陈桥兵变——赵匡胤黄袍加身",
+      "year": "960",
+      "month": 1
+    },
+    {
+      "_id": "6a1bf4dc1c7dffd36868aa8a",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf4dc1c7dffd36868aa8a\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":4,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:06:13.837Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "宋太宗灭北汉——五代十国终结",
+      "year": "979",
+      "month": 4
+    },
+    {
+      "_id": "6a1bf5b91c7dffd36869164b",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf5b91c7dffd36869164b\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":12,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:06:17.117Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "澶渊之盟——宋辽百年和平",
+      "year": "1005",
+      "month": 12
+    },
+    {
+      "_id": "6a1bf5b91c7dffd36869164e",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf5b91c7dffd36869164e\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":4,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:06:20.589Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "靖康之变——北宋灭亡",
+      "year": "1127",
+      "month": 4
+    },
+    {
+      "_id": "6a1bf5b91c7dffd368691650",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf5b91c7dffd368691650\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":1,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:06:23.978Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "端平入洛——联蒙灭金",
+      "year": "1234",
+      "month": 1
+    },
+    {
+      "_id": "6a1bf5b91c7dffd368691651",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf5b91c7dffd368691651\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":7,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:06:27.347Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "钓鱼城之战——上帝折鞭处",
+      "year": "1259",
+      "month": 7
+    },
+    {
+      "_id": "6a1bf5e41c7dffd368692cea",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf5e41c7dffd368692cea\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":8,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:06:30.683Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "忽必烈建元——大元帝国",
+      "year": "1271",
+      "month": 8
+    },
+    {
+      "_id": "6a1bf5b91c7dffd368691652",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf5b91c7dffd368691652\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":2,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:06:34.075Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "崖山海战——南宋最后悲歌",
+      "year": "1279",
+      "month": 2
+    },
+    {
+      "_id": "6a1bf5e41c7dffd368692ceb",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf5e41c7dffd368692ceb\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":2,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:06:37.421Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "崖山海战——元灭南宋统一全国",
+      "year": "1279",
+      "month": 2
+    },
+    {
+      "_id": "6a1bdae61c7dffd3685bcef5",
+      "ok": false,
+      "error": "未匹配到记录或更新失败",
+      "raw": "{\"data\":{\"results\":[[{\"n\":{\"$numberInt\":\"0\"},\"nModified\":{\"$numberInt\":\"0\"},\"opTime\":{\"ts\":{\"$timestamp\":{\"t\":1780754800,\"i\":1}},\"t\":{\"$numberLong\":\"1\"}},\"electionId\":{\"$oid\":\"7fffffff0000000000000001\"},\"ok\":{\"$numberDouble\":\"1.0\"},\"operationTime\":{\"$timestamp\":{\"t\":1780754800,\"i\":1}},\"$clusterTime\"",
+      "title": "郭守敬编制《授时历》",
+      "year": "1280",
+      "month": 2
+    },
+    {
+      "_id": "6a1bf60c1c7dffd36869413c",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf60c1c7dffd36869413c\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":1,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:06:43.293Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "朱元璋称帝建明朝",
+      "year": "1368",
+      "month": 1
+    },
+    {
+      "_id": "6a1bf5e41c7dffd368692cef",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf5e41c7dffd368692cef\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":8,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:06:46.681Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "徐达北伐——元朝灭亡",
+      "year": "1368",
+      "month": 8
+    },
+    {
+      "_id": "6a1bf60c1c7dffd36869413d",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf60c1c7dffd36869413d\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":12,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:06:50.069Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "胡惟庸案——朱元璋废丞相",
+      "year": "1380",
+      "month": 12
+    },
+    {
+      "_id": "6a1bf60c1c7dffd36869413e",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf60c1c7dffd36869413e\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":6,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:06:53.609Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "郑和下西洋——七下西洋",
+      "year": "1405",
+      "month": 6
+    },
+    {
+      "_id": "6a1bdae61c7dffd3685bcef2",
+      "ok": false,
+      "error": "未匹配到记录或更新失败",
+      "raw": "{\"data\":{\"results\":[[{\"n\":{\"$numberInt\":\"0\"},\"nModified\":{\"$numberInt\":\"0\"},\"opTime\":{\"ts\":{\"$timestamp\":{\"t\":1780754813,\"i\":1}},\"t\":{\"$numberLong\":\"1\"}},\"electionId\":{\"$oid\":\"7fffffff0000000000000001\"},\"ok\":{\"$numberDouble\":\"1.0\"},\"operationTime\":{\"$timestamp\":{\"t\":1780754813,\"i\":1}},\"$clusterTime\"",
+      "title": "王阳明去世——心学大成",
+      "year": "1529",
+      "month": 1
+    },
+    {
+      "_id": "6a1bf60c1c7dffd368694141",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf60c1c7dffd368694141\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":6,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:06:59.378Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "张居正改革——一条鞭法",
+      "year": "1572",
+      "month": 6
+    },
+    {
+      "_id": "6a1bf60c1c7dffd368694142",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf60c1c7dffd368694142\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":3,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:07:02.754Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "崇祯自缢——明朝灭亡",
+      "year": "1644",
+      "month": 3
+    },
+    {
+      "_id": "6a1bf6371c7dffd368695718",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf6371c7dffd368695718\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":7,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:07:06.145Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "施琅攻台——台湾入版图",
+      "year": "1683",
+      "month": 7
+    },
+    {
+      "_id": "6a1bf6371c7dffd368695719",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf6371c7dffd368695719\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":9,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:07:09.667Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "《尼布楚条约》——中俄边境划定",
+      "year": "1689",
+      "month": 9
+    },
+    {
+      "_id": "6a1bf6371c7dffd36869571a",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf6371c7dffd36869571a\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":8,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:07:13.066Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "土尔扈特东归——万里归国",
+      "year": "1771",
+      "month": 8
+    },
+    {
+      "_id": "6a1bf6371c7dffd36869571c",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf6371c7dffd36869571c\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":1,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:07:16.543Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "太平天国——洪秀全起事",
+      "year": "1851",
+      "month": 1
+    },
+    {
+      "_id": "6a1bf6371c7dffd36869571d",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf6371c7dffd36869571d\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":4,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:07:19.903Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "戊戌变法——百日维新",
+      "year": "1898",
+      "month": 4
+    },
+    {
+      "_id": "6a1bf6371c7dffd36869571e",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf6371c7dffd36869571e\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":10,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:07:23.199Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "辛亥革命——武昌起义",
+      "year": "1911",
+      "month": 10
+    },
+    {
+      "_id": "6a1bf6cd1c7dffd368699d63",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf6cd1c7dffd368699d63\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":1,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:07:26.539Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "中华民国成立——帝制终结",
+      "year": "1912",
+      "month": 1
+    },
+    {
+      "_id": "6a1bf6371c7dffd36869571f",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf6371c7dffd36869571f\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":2,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:07:29.880Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "清帝退位——两千年帝制终结",
+      "year": "1912",
+      "month": 2
+    },
+    {
+      "_id": "6a1bf6cd1c7dffd368699d64",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf6cd1c7dffd368699d64\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":5,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:07:33.194Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "五四运动——新民主主义革命开端",
+      "year": "1919",
+      "month": 5
+    },
+    {
+      "_id": "6a1bf6cd1c7dffd368699d65",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf6cd1c7dffd368699d65\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":7,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:07:36.529Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "中国共产党成立",
+      "year": "1921",
+      "month": 7
+    },
+    {
+      "_id": "6a1bf6cd1c7dffd368699d66",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf6cd1c7dffd368699d66\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":9,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:07:39.887Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "九一八事变——日本侵占东北",
+      "year": "1931",
+      "month": 9
+    },
+    {
+      "_id": "6a1bf6f41c7dffd36869b107",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf6f41c7dffd36869b107\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":10,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:07:43.260Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "中华人民共和国成立",
+      "year": "1949",
+      "month": 10
+    },
+    {
+      "_id": "6a1bf6f41c7dffd36869b108",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf6f41c7dffd36869b108\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":10,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:07:46.641Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "抗美援朝——保家卫国",
+      "year": "1950",
+      "month": 10
+    },
+    {
+      "_id": "6a1bdae61c7dffd3685bcef7",
+      "ok": false,
+      "error": "未匹配到记录或更新失败",
+      "raw": "{\"data\":{\"results\":[[{\"n\":{\"$numberInt\":\"0\"},\"nModified\":{\"$numberInt\":\"0\"},\"opTime\":{\"ts\":{\"$timestamp\":{\"t\":1780754870,\"i\":1}},\"t\":{\"$numberLong\":\"1\"}},\"electionId\":{\"$oid\":\"7fffffff0000000000000001\"},\"ok\":{\"$numberDouble\":\"1.0\"},\"operationTime\":{\"$timestamp\":{\"t\":1780754870,\"i\":1}},\"$clusterTime\"",
+      "title": "中国第一颗原子弹爆炸成功",
+      "year": "1964",
+      "month": 10
+    },
+    {
+      "_id": "6a1bf6f41c7dffd36869b10a",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf6f41c7dffd36869b10a\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":12,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:07:52.427Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "十一届三中全会——改革开放起航",
+      "year": "1978",
+      "month": 12
+    },
+    {
+      "_id": "6a1bf6f41c7dffd36869b10b",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf6f41c7dffd36869b10b\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":1,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:07:55.695Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "邓小平南巡——市场经济确定",
+      "year": "1992",
+      "month": 1
+    },
+    {
+      "_id": "6a1bf6f41c7dffd36869b10c",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf6f41c7dffd36869b10c\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":7,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:07:59.059Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "香港回归——一国两制",
+      "year": "1997",
+      "month": 7
+    },
+    {
+      "_id": "6a1bf6f41c7dffd36869b10d",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf6f41c7dffd36869b10d\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":11,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:08:02.418Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "中国加入WTO——融入世界",
+      "year": "2001",
+      "month": 11
+    },
+    {
+      "_id": "6a1bdae61c7dffd3685bcef8",
+      "ok": false,
+      "error": "未匹配到记录或更新失败",
+      "raw": "{\"data\":{\"results\":[[{\"n\":{\"$numberInt\":\"0\"},\"nModified\":{\"$numberInt\":\"0\"},\"opTime\":{\"ts\":{\"$timestamp\":{\"t\":1780754885,\"i\":2}},\"t\":{\"$numberLong\":\"1\"}},\"electionId\":{\"$oid\":\"7fffffff0000000000000001\"},\"ok\":{\"$numberDouble\":\"1.0\"},\"operationTime\":{\"$timestamp\":{\"t\":1780754885,\"i\":2}},\"$clusterTime\"",
+      "title": "北京奥运会——百年梦圆",
+      "year": "2008",
+      "month": 8
+    },
+    {
+      "_id": "6a1bf6f41c7dffd36869b10f",
+      "ok": false,
+      "error": "Command failed: npx tcb db nosql execute --command '[{\"TableName\":\"event\",\"CommandType\":\"UPDATE\",\"Command\":\"{\\\"update\\\":\\\"event\\\",\\\"updates\\\":[{\\\"q\\\":{\\\"_id\\\":{\\\"$oid\\\":\\\"6a1bf6f41c7dffd36869b10f\\\"}},\\\"u\\\":{\\\"$set\\\":{\\\"month\\\":5,\\\"month_provided\\\":true,\\\"month_inferred_at\\\":\\\"2026-06-06T14:08:08.125Z\\\"}},\\\"multi\\\":false,\\\"upsert\\\":false}]}\"}]' --json\n- Loading data...\n- Executing command...\n",
+      "title": "上海世博会——中国与世界对话",
+      "year": "2010",
+      "month": 5
+    }
+  ]
+}

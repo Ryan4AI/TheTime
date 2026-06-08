@@ -1,0 +1,9 @@
+{
+  "name": "gen_image",
+  "version": "1.0.0",
+  "description": "穿越日记 · AI 水墨场景图生成（Pollinations 兜底，未来可切 LoRA）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

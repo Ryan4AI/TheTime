@@ -1172,10 +1172,13 @@ function drawJadeTablet(ctx) {
   ctx.stroke()
 
   // 内容行
+  const seasonNames = ['正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '冬月', '腊月']
+  const monthStr = seasonNames[(state.month || 1) - 1] || ''
   const fields = [
     { label: '姓  名', value: state.name },
     { label: '年  岁', value: state.age + '岁' },
     { label: '身  份', value: state.occupation || '庶民' },
+    { label: '年  月', value: (state.year || '?') + '年 ' + (monthStr || '') },
     { label: '金银', value: state.coin + '文' },
   ]
 

@@ -6,18 +6,18 @@
 
 ---
 
-## 状态快照（最新一次 cron 运行 · 2026-06-08 21:01）
+## 状态快照（最新一次 cron 运行 · 2026-06-09 09:01）
 
 | 维度 | 状态 | 备注 |
 |------|------|------|
-| Git 工作树 | 脏（4 modified / 24 untracked） | 先生本地独有改动，**未 commit / 未 push** |
-| 远端 main | `9fcdaef`（prompt v10 自检 20 条） | 本地已同步，**远端 5 天无新 commit** |
-| 本地 main | `9fcdaef` | 跟远端一致 |
-| 云函数部署 | 6 个 ✅ / 1 个新 (`ai_narrate`) 未部署 | 本地 `ai_narrate/index.js` 612 行 + `eventsContext` 已修 |
-| 新增云函数 | `gen_image`（Pollinations 水墨图）97 行 | 本地新建，`.cloudbaserc.json` 已加配置，**未部署** |
-| 数据库 | 5 集合：era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197 | 5 集合共 ~10979 条；event 比上次 100+ 涨至 197 |
-| 场景文件 | 5 个：entry / game / identity / intro / selection | game.js 1735 行（已重写），identity 393 行 |
-| 上次 PMO cron | 2026-06-08 09:01 | 本次是同日 21:01（晚上档），距上次 12 小时 |
+| Git 工作树 | 脏（3 modified / 0 untracked） | 先生昨晚 02:06 已 commit（D008 bugfix），昨日 24 个 untracked 全部入库 |
+| 远端 main | `329fc56`（D008 v0.1.69 ai_narrate 修 3 硬编码 bug） | 本地已同步，**远端 7 小时无新 commit** |
+| 本地 main | `329fc56`（作者：久月） | 跟远端一致 · 凌晨由 久月代 commit（D008 包） |
+| 云函数部署 | 6 个 ✅ / 1 个新 (`ai_narrate`) 未部署 | 本地 `ai_narrate/index.js` 612 行 + 凌晨调优未部署（max_tokens 2500 / timeout 120s / M2.7-highspeed） |
+| 新增云函数 | `gen_image`（Pollinations 水墨图）97 行 | 本地新建，**未部署** |
+| 数据库 | 5 集合：era_meta **115/22 朝代** / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197 | era_meta 22 个朝代（夏/商/西周/春秋/战国/秦/西汉/东汉/三国/西晋/东晋/南北朝/隋/唐/五代十国/北宋/南宋/元/明/清/中华民国/中华人民共和国），event 未涨 |
+| 场景文件 | 5 个：entry / game / identity / intro / selection | game.js 1735 行（凌晨 commit 中改了 +32/-19 行，复制按钮改"只复制最新一轮"） |
+| 上次 PMO cron | 2026-06-08 21:01（第 3 次） | 本次是 2026-06-09 09:01（早档），距上次 12 小时 |
 
 ---
 
@@ -151,13 +151,31 @@
 
 ## ⚠️ 需先生决策（PMO 没法自己定）
 
-1. **是否把 `gen_image` 加进 design.md §七**？当前未立项，但 `.cloudbaserc.json` 已配 → 已半立项状态
-2. **`.cloudbaserc.json` vs `cloudbaserc.json` 两个文件并存** —— 哪个是真相源？v1 + v2 混用？
-3. **先生本地 12 个 untracked `data/event_*.json`** —— 是要入库的中间产物，还是失败回滚？PMO 不擅自清理
+1. **`gen_image` 是否立项并部署？** 当前未在 design.md §七 立项，但 `.cloudbaserc.json` 已配 97 行代码 → 已半立项状态；是穿越日记水墨配图，非 D001 关键路径
+2. **`.cloudbaserc.json` vs `cloudbaserc.json` 双文件合并？** v1 + v2 并存，先生凌晨 commit 里两个都保留了，哪个是真相源？
+3. **`ai_narrate` 部署？** v0.1.73（max_tokens 2500 / M2.7-highspeed / timeout 120s）已在工作树，本地未部署 → 需先生决定何时 deploy
+4. **message 集合写入逻辑是否优先？** D001 关键路径，当前 game.js AI 集成已接入 `ai_narrate`，但 message 写入尚未实现
 
 ---
 
 ## 📅 PMO cron 简报历史
+
+### 2026-06-08 21:01 · 第 3 次（周一晚）
+- **重要观察**：先生白天有大动作（09:01 → 21:01 12 小时内）
+- D001 集成链路清晰化：`ai_narrate` + `game.js` + `identity.js` + `ui.js` 都在动
+- 关键 bug 修复：`eventsContext` 真正接入 prompt 段（v0.1.69）
+- 新增：`gen_image` 水墨配图云函数（97 行 + .cloudbaserc.json 已配）
+- 数据库 event 197 条（vs 09:01 提到 100+，先生今天又入了 90+ 条）
+- 远端 5 天无新 commit → 先生还在堆本地改动
+- 未决：先生手头 `ai_narrate` 部署 / `gen_image` 是否立项 / message 集合写入
+
+### 2026-06-09 09:01 · 第 4 次（周二早）
+- 凌晨 02:06 由 久月代 commit（D008 bugfix 包）——先生授权后操作
+- 工作树：3 modified / 0 untracked（昨日 24 个 untracked 全部入库）
+- 本地/远端均已同步至 `329fc56`（ai_narrate v0.1.69）
+- **era_meta 新里程碑**：22 个朝代（115 切片），cron 目标 22+ 已达成
+- 事件库未涨（event 197 条），`events_to_upsert.json` 已入库但未实际 upsert
+- 需先生决策：`gen_image` 立项 / `.cloudbaserc.json` 双文件合并 / `ai_narrate` 部署
 
 ### 2026-06-08 21:01 · 第 3 次（周一晚）
 - **重要观察**：先生白天有大动作（09:01 → 21:01 12 小时内）

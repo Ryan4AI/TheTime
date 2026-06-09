@@ -18,6 +18,7 @@ var freeInputActive = false  // 自由输入模式
 var freeInputText = ''       // 自由输入文本
 var loading = false          // AI 调用中
 var loadingStart = 0
+var loadingText = '史官正在落笔…'  // v0.1.74 (D008): 轮询期间显示等待时长
 var errorMsg = ''
 var narrativeHistory = []    // {role, content}
 var alive = true             // 死亡标记
@@ -194,19 +195,17 @@ function initLayout() {
 }
 
 // ─────── 调用 ai_narrate 云函数 ───────
-// v0.1.66: 不再传 action（init/continue 区分由云函数看 history 长度判断）
+// v0.1.74 (D008): 异步轮询方案
+// 之前直接调 ai_narrate → 客户端 callFunction 15s 超时 → -504003
+// 现在分两步：
+//   1. submit（< 2 秒返回 request_id）
+//   2. 每 5 秒轮询一次 get_result，直到 done/error
 function callAI(userInput) {
   loading = true
   loadingStart = Date.now()
   errorMsg = ''
 
-  // v0.1.62: 动作类型（init 初始 / continue 继续 / retry 重试）
-  // 之前 216 行直接用 `action` 变量导致 ReferenceError，callAI 整段崩
-  // 改成从 narrativeHistory 长度推断
   const action = (narrativeHistory && narrativeHistory.length > 0) ? 'continue' : 'init'
-
-  // v0.1.63 (D005): 重试是前端兜底，__retry__ 是内部信号
-  // 不入对话流，不当 userPrompt，云函数端会识别并丢弃
   const isRetry = userInput === '__retry__'
   const realInput = isRetry ? '' : userInput
 
@@ -216,7 +215,6 @@ function callAI(userInput) {
     gender: state.gender,
     age: state.age,
     occupation: state.occupation,
-    // P1.4 字段名对齐
     socialClass: state.socialClass,
     dynasty: state.dynasty,
     eraDisplay: state.eraDisplay,
@@ -234,7 +232,7 @@ function callAI(userInput) {
   const data = {
     state: stateData,
     input: realInput,
-    is_retry: isRetry,  // v0.1.63 (D005): 重试标记，云函数据此丢弃
+    is_retry: isRetry,
     history: narrativeHistory.slice(-12),
   }
 
@@ -243,7 +241,7 @@ function callAI(userInput) {
     round: state.round,
     action: action,
     input: userInput,
-    data: JSON.parse(JSON.stringify(data)),  // 深拷贝
+    data: JSON.parse(JSON.stringify(data)),
     result: null,
     resultError: null,
     ts: Date.now(),
@@ -251,27 +249,25 @@ function callAI(userInput) {
   if (debugLog.length > DEBUG_MAX_ROUNDS) debugLog.shift()
 
   if (typeof wx !== 'undefined' && wx.cloud && wx.cloud.callFunction) {
+    // ── 步骤 1：submit（拿 request_id，< 2s 完成）──
     wx.cloud.callFunction({
-      name: 'ai_narrate',
+      name: 'ai_narrate_submit',
       data,
       success: (res) => {
-        const result = (res && res.result) || {}
-        // ── 调试：记录完整 result + AI 接口完整入参（v0.1.62）──
-        if (debugLog.length > 0) {
-          const last = debugLog[debugLog.length - 1]
-          last.result = result
-          if (result.debug) {
-            last.system_prompt = result.debug.system_prompt
-            last.user_prompt = result.debug.user_prompt
-            last.messages_to_ai = result.debug.messages || null  // v0.1.64: 完整 messages 数组
-            last.raw_response = result.debug.raw_response
-            last.all_branches = result.branches || null
-          }
+        const submitResult = (res && res.result) || {}
+        if (!submitResult.success || !submitResult.request_id) {
+          // submit 失败 — 用史官文案告知，不静默
+          loading = false
+          errorMsg = `史官落笔卡壳了——${submitResult.error || '提交失败'}。点此重试。`
+          options = [{ label: '重试', key: '__retry__' }]
+          optionsAppearTime = Date.now() + 300
+          return
         }
-        handleAIResponse(result, action, userInput)
+        const requestId = submitResult.request_id
+        // ── 步骤 2：轮询结果 ──
+        pollNarrateResult(requestId, action, userInput, 0)
       },
       fail: (err) => {
-        // ── 调试：记录失败信息 ──
         if (debugLog.length > 0) {
           debugLog[debugLog.length - 1].resultError = (err && (err.errMsg || err.message)) || String(err)
         }
@@ -282,14 +278,96 @@ function callAI(userInput) {
       },
     })
   } else {
-    // ❌ 不再提供 mock fallback — 之前这里会硬塞"打量四周/起身查看/躺一会儿"
-    // 造成真机小游戏云开发不可用时，玩家看到永远不变的伪选项。
-    // 改为明确报错，让玩家知道是环境问题而不是游戏内容。
     loading = false
     errorMsg = '史官落笔卡壳了——云开发不可用，点此重试。'
     options = [{ label: '重试', key: '__retry__' }]
     optionsAppearTime = Date.now() + 300
   }
+}
+
+// ─────── 轮询 narrate_get_result ───────
+// 每 5 秒一次，最多 24 次（120 秒兜底）
+// 玩家看到 loading 文案：loadingText = "史官正在落笔…（已等 X 秒）"
+function pollNarrateResult(requestId, action, userInput, attempt) {
+  const MAX_ATTEMPTS = 24  // 24 × 5 秒 = 120 秒
+
+  if (attempt >= MAX_ATTEMPTS) {
+    loading = false
+    errorMsg = `史官落笔太久没回音（已等 ${attempt * 5} 秒）。点此重试。`
+    options = [{ label: '重试', key: '__retry__' }]
+    optionsAppearTime = Date.now() + 300
+    return
+  }
+
+  setTimeout(() => {
+    if (typeof wx === 'undefined' || !wx.cloud || !wx.cloud.callFunction) {
+      loading = false
+      errorMsg = '史官落笔卡壳了——云开发不可用，点此重试。'
+      options = [{ label: '重试', key: '__retry__' }]
+      optionsAppearTime = Date.now() + 300
+      return
+    }
+
+    wx.cloud.callFunction({
+      name: 'narrate_get_result',
+      data: { request_id: requestId },
+      success: (res) => {
+        const pollResult = (res && res.result) || {}
+
+        if (pollResult.status === 'done') {
+          // ── 成功：处理 result ──
+          const result = pollResult.result || {}
+          // 调试记录
+          if (debugLog.length > 0) {
+            const last = debugLog[debugLog.length - 1]
+            last.result = result
+            if (result.debug) {
+              last.system_prompt = result.debug.system_prompt
+              last.user_prompt = result.debug.user_prompt
+              last.messages_to_ai = result.debug.messages || null
+              last.raw_response = result.debug.raw_response
+              last.all_branches = result.branches || null
+            }
+            last.poll_elapsed_ms = pollResult.result && pollResult.result.elapsed_ms || 0
+            last.poll_attempts = attempt + 1
+          }
+          handleAIResponse(result, action, userInput)
+        } else if (pollResult.status === 'error') {
+          loading = false
+          errorMsg = `史官落笔卡壳了——${pollResult.error || 'AI服务暂不可用'}。点此重试。`
+          options = [{ label: '重试', key: '__retry__' }]
+          optionsAppearTime = Date.now() + 300
+        } else if (pollResult.status === 'not_found') {
+          // request_id 不存在（TTL 过期被清理 / 数据库挂了）
+          loading = false
+          errorMsg = '史官落笔卡壳了——记录找不到了，点此重试。'
+          options = [{ label: '重试', key: '__retry__' }]
+          optionsAppearTime = Date.now() + 300
+        } else {
+          // processing — 更新 loading 文案让玩家知道还在等
+          const elapsedSec = Math.round((pollResult.elapsed_ms || 0) / 1000)
+          loadingText = `史官正在落笔…（已等 ${elapsedSec} 秒）`
+          pollNarrateResult(requestId, action, userInput, attempt + 1)
+        }
+      },
+      fail: (err) => {
+        // 单次轮询失败：继续下一次（不立即放弃）
+        // 但如果连续失败 ≥ 5 次，主动放弃
+        if (attempt >= 4) {
+          if (debugLog.length > 0) {
+            debugLog[debugLog.length - 1].resultError = `轮询失败 ${attempt + 1} 次: ${(err && (err.errMsg || err.message)) || String(err)}`
+          }
+          loading = false
+          errorMsg = '史官落笔卡壳了——网络不稳，点此重试。'
+          options = [{ label: '重试', key: '__retry__' }]
+          optionsAppearTime = Date.now() + 300
+          return
+        }
+        // 继续轮询
+        pollNarrateResult(requestId, action, userInput, attempt + 1)
+      },
+    })
+  }, 5000)
 }
 
 // ─────── 处理 AI 返回 ───────
@@ -1172,7 +1250,8 @@ function drawLoading(ctx) {
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   const dots = '.'.repeat(((Date.now() - loadingStart) / 500 % 4) | 0)
-  ctx.fillText('AI 穿越中' + dots, layout.windowW / 2, barY + barH / 2)
+  // v0.1.74 (D008): 异步轮询期间显示等待时长
+  ctx.fillText(loadingText + dots, layout.windowW / 2, barY + barH / 2)
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
 }
@@ -1483,28 +1562,32 @@ function handleTouch(x, y, type) {
       const _h = layout.windowH
 
       // v0.1.75 复制按钮（顶部条右）
+      // v0.1.69 (D008): v10 prompt 单条 3000+ 字符 + history ×6 + AI 返回 = 单轮 txt 几万字符
+      // wx.setClipboardData 实测 4-5 万字符以上容易失败 → 改为"只复制最新一轮"
       if (type === 'end' && layout._copyBtn && y <= closeBarH
           && x >= layout._copyBtn.x && x <= layout._copyBtn.x + layout._copyBtn.w) {
-        // 拼接最近 N 轮 AI 输入输出为文本
-        const txt = debugLog.map((d, i) => {
-          let s = `== 第 ${i + 1}/${debugLog.length} 轮 round=${d.round} ==\n`
-          s += `[INPUT 玩家选项]: ${d.input || '(空)'}\n\n`
-          if (d.messages_to_ai && d.messages_to_ai.length > 0) {
-            s += `[发给 AI 的 messages]:\n`
-            d.messages_to_ai.forEach((m, j) => {
-              s += `  ── messages[${j}].role="${m.role}" ──\n${m.content}\n\n`
-            })
-          }
-          if (d.raw_response) s += `[AI 原始返回]:\n${d.raw_response}\n\n`
-          if (d.all_branches && d.all_branches.length > 0) {
-            s += `[AI 生成 ${d.all_branches.length} 个分支]:\n`
-            d.all_branches.forEach((b, j) => {
-              s += `  分支${j + 1} p=${b.p}\n  ${b.content || ''}\n  options: ${JSON.stringify(b.options)}\n\n`
-            })
-          }
-          if (d.resultError) s += `[ERROR]: ${d.resultError}\n`
-          return s
-        }).join('\n')
+        // 拼接最近一轮 AI 输入输出为文本（D008: 单轮策略，避开剪贴板字符上限）
+        if (debugLog.length === 0) {
+          if (wx.showToast) wx.showToast({ title: '暂无调试数据', icon: 'none' })
+          return null
+        }
+        const d = debugLog[debugLog.length - 1]
+        let txt = `== 最新一轮 round=${d.round} ==\n`
+        txt += `[INPUT 玩家选项]: ${d.input || '(空)'}\n\n`
+        if (d.messages_to_ai && d.messages_to_ai.length > 0) {
+          txt += `[发给 AI 的 messages]:\n`
+          d.messages_to_ai.forEach((m, j) => {
+            txt += `  ── messages[${j}].role="${m.role}" ──\n${m.content}\n\n`
+          })
+        }
+        if (d.raw_response) txt += `[AI 原始返回]:\n${d.raw_response}\n\n`
+        if (d.all_branches && d.all_branches.length > 0) {
+          txt += `[AI 生成 ${d.all_branches.length} 个分支]:\n`
+          d.all_branches.forEach((b, j) => {
+            txt += `  分支${j + 1} p=${b.p}\n  ${b.content || ''}\n  options: ${JSON.stringify(b.options)}\n\n`
+          })
+        }
+        if (d.resultError) txt += `[ERROR]: ${d.resultError}\n`
         if (typeof wx !== 'undefined' && wx.setClipboardData) {
           wx.setClipboardData({
             data: txt,

@@ -5,11 +5,39 @@
   "functions": [
     {
       "name": "ai_narrate",
-      "timeout": 60,
+      "timeout": 120,
       "memorySize": 512,
       "envVariables": {
         "DS_API_KEY": "sk-26d0e090ed7b4d90803aae706d9b7247"
       },
+      "installDependency": true,
+      "handler": "index.main"
+    },
+    {
+      "name": "ai_narrate_submit",
+      "timeout": 15,
+      "memorySize": 256,
+      "installDependency": true,
+      "handler": "index.main"
+    },
+    {
+      "name": "ai_narrate_worker",
+      "timeout": 120,
+      "memorySize": 512,
+      "installDependency": true,
+      "handler": "index.main"
+    },
+    {
+      "name": "narrate_get_result",
+      "timeout": 10,
+      "memorySize": 128,
+      "installDependency": true,
+      "handler": "index.main"
+    },
+    {
+      "name": "init_pending",
+      "timeout": 10,
+      "memorySize": 128,
       "installDependency": true,
       "handler": "index.main"
     }

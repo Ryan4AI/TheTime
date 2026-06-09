@@ -249,23 +249,28 @@ function callAI(userInput) {
   if (debugLog.length > DEBUG_MAX_ROUNDS) debugLog.shift()
 
   if (typeof wx !== 'undefined' && wx.cloud && wx.cloud.callFunction) {
-    // ── 步骤 1：submit（拿 request_id，< 2s 完成）──
+    // v0.1.76: ai_narrate_submit 同步等 worker 完成，直接返回 result
+    // 不再需要轮询（submit 等 40 秒 → 前端 loading 40 秒 → 直接拿到 result）
     wx.cloud.callFunction({
       name: 'ai_narrate_submit',
       data,
       success: (res) => {
-        const submitResult = (res && res.result) || {}
-        if (!submitResult.success || !submitResult.request_id) {
-          // submit 失败 — 用史官文案告知，不静默
-          loading = false
-          errorMsg = `史官落笔卡壳了——${submitResult.error || '提交失败'}。点此重试。`
-          options = [{ label: '重试', key: '__retry__' }]
-          optionsAppearTime = Date.now() + 300
-          return
+        const result = (res && res.result) || {}
+
+        // 调试记录
+        if (debugLog.length > 0) {
+          const last = debugLog[debugLog.length - 1]
+          last.result = result
+          if (result.debug) {
+            last.system_prompt = result.debug.system_prompt
+            last.user_prompt = result.debug.user_prompt
+            last.messages_to_ai = result.debug.messages || null
+            last.raw_response = result.debug.raw_response
+            last.all_branches = result.branches || null
+          }
         }
-        const requestId = submitResult.request_id
-        // ── 步骤 2：轮询结果 ──
-        pollNarrateResult(requestId, action, userInput, 0)
+
+        handleAIResponse(result, action, userInput)
       },
       fail: (err) => {
         if (debugLog.length > 0) {
@@ -338,11 +343,17 @@ function pollNarrateResult(requestId, action, userInput, attempt) {
           options = [{ label: '重试', key: '__retry__' }]
           optionsAppearTime = Date.now() + 300
         } else if (pollResult.status === 'not_found') {
-          // request_id 不存在（TTL 过期被清理 / 数据库挂了）
-          loading = false
-          errorMsg = '史官落笔卡壳了——记录找不到了，点此重试。'
-          options = [{ label: '重试', key: '__retry__' }]
-          optionsAppearTime = Date.now() + 300
+          // v0.1.75: request_id 还没写入（CAP 滞后）或真不存在
+          // 前 3 次轮询遇到 not_found 视为"还在创建"，继续等
+          if (attempt < 3) {
+            loadingText = `史官正在落笔…（已等 ${(attempt + 1) * 5} 秒）`
+            pollNarrateResult(requestId, action, userInput, attempt + 1)
+          } else {
+            loading = false
+            errorMsg = '史官落笔卡壳了——记录找不到了，点此重试。'
+            options = [{ label: '重试', key: '__retry__' }]
+            optionsAppearTime = Date.now() + 300
+          }
         } else {
           // processing — 更新 loading 文案让玩家知道还在等
           const elapsedSec = Math.round((pollResult.elapsed_ms || 0) / 1000)

@@ -6,18 +6,17 @@
 
 ---
 
-## 状态快照（最新一次 cron 运行 · 2026-06-09 09:01）
+## 状态快照（最新一次 cron 运行 · 2026-06-09 21:01 · 第 5 次）
 
 | 维度 | 状态 | 备注 |
 |------|------|------|
-| Git 工作树 | 脏（3 modified / 0 untracked） | 先生昨晚 02:06 已 commit（D008 bugfix），昨日 24 个 untracked 全部入库 |
-| 远端 main | `329fc56`（D008 v0.1.69 ai_narrate 修 3 硬编码 bug） | 本地已同步，**远端 7 小时无新 commit** |
-| 本地 main | `329fc56`（作者：久月） | 跟远端一致 · 凌晨由 久月代 commit（D008 包） |
-| 云函数部署 | 6 个 ✅ / 1 个新 (`ai_narrate`) 未部署 | 本地 `ai_narrate/index.js` 612 行 + 凌晨调优未部署（max_tokens 2500 / timeout 120s / M2.7-highspeed） |
-| 新增云函数 | `gen_image`（Pollinations 水墨图）97 行 | 本地新建，**未部署** |
-| 数据库 | 5 集合：era_meta **115/22 朝代** / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197 | era_meta 22 个朝代（夏/商/西周/春秋/战国/秦/西汉/东汉/三国/西晋/东晋/南北朝/隋/唐/五代十国/北宋/南宋/元/明/清/中华民国/中华人民共和国），event 未涨 |
-| 场景文件 | 5 个：entry / game / identity / intro / selection | game.js 1735 行（凌晨 commit 中改了 +32/-19 行，复制按钮改"只复制最新一轮"） |
-| 上次 PMO cron | 2026-06-08 21:01（第 3 次） | 本次是 2026-06-09 09:01（早档），距上次 12 小时 |
+| Git 工作树 | 干净（3 ahead of origin/main） | 本地 3 个 commit 未推（先生亲自审） |
+| 远端 main | `329fc56`（origin 不可达，github.com:443 超时） | 本地 ahead：`5fa96d7` / `90e2ce5` / `8e1d49a` |
+| 本地 main | `8e1d49a`（D008 init_pending 修复） | 3 个新 commit 全部由 久月代 commit（D008 v0.1.74 + D008 文档 + init_pending 修复） |
+| 云函数部署 | **8 个 ✅**（D008 trio + init_pending 已上线） | 凌晨 18:42~18:57 完成 `ai_narrate_submit` / `ai_narrate_worker` / `narrate_get_result` / `init_pending` 部署；`init_pending` 已运行，narrate_pending 集合 1 条记录 |
+| 数据库 | 5 表 + 1 新（narrate_pending） | era_meta 115/22朝代 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event **197**（与早档持平，先生今天没动 event）/ narrate_pending 1 条 |
+| 场景文件 | 5 个：entry / game / identity / intro / selection | game.js 1816 行（v0.1.74 +181/-64，callAI 改用 submit + 5s 轮询） |
+| 上次 PMO cron | 2026-06-09 09:01（第 4 次） | 本次是 2026-06-09 21:01（晚档），距上次 12 小时 |
 
 ---
 

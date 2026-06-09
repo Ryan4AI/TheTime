@@ -461,20 +461,6 @@ function handleAIResponse(result, action, userInput) {
     alive = false
   }
 
-  // 3.5 v0.1.79: 检测 patch 中未被消费的字段（先生凌晨问的关键问题）
-  // AI 在 prompt 里被允许返回 events / flags / reputation / relationships 等
-  // 前端当前只处理 coin / health / items，其他字段全部被默默丢弃
-  // 这里记录到 debugLog，方便先生定位
-  if (debugLog.length > 0 && patch && typeof patch === 'object') {
-    const KNOWN = ['coin', 'health', 'items']
-    const unknown = Object.keys(patch).filter(k => !KNOWN.includes(k))
-    if (unknown.length > 0) {
-      debugLog[debugLog.length - 1].patch_unknown_fields = unknown
-      console.warn('[game.js] AI 返回的 patch 里有未处理字段:', unknown, '当前实现只处理 coin/health/items')
-    }
-    debugLog[debugLog.length - 1].patch_applied = patch
-  }
-
   // 4. 记录历史
   // v0.1.63 (D005): 重试是前端兜底，不是玩家真实意图
   // 不入 narrativeHistory，避免污染对话流

@@ -249,28 +249,23 @@ function callAI(userInput) {
   if (debugLog.length > DEBUG_MAX_ROUNDS) debugLog.shift()
 
   if (typeof wx !== 'undefined' && wx.cloud && wx.cloud.callFunction) {
-    // v0.1.76: ai_narrate_submit 同步等 worker 完成，直接返回 result
-    // 不再需要轮询（submit 等 40 秒 → 前端 loading 40 秒 → 直接拿到 result）
+    // v0.1.77 终极修复：submit 返回 request_id（< 2s），前端轮询 get_result
+    // submit 是 fire-and-forget 触发 worker，前端不能 await submit 等结果
     wx.cloud.callFunction({
       name: 'ai_narrate_submit',
       data,
       success: (res) => {
-        const result = (res && res.result) || {}
-
-        // 调试记录
-        if (debugLog.length > 0) {
-          const last = debugLog[debugLog.length - 1]
-          last.result = result
-          if (result.debug) {
-            last.system_prompt = result.debug.system_prompt
-            last.user_prompt = result.debug.user_prompt
-            last.messages_to_ai = result.debug.messages || null
-            last.raw_response = result.debug.raw_response
-            last.all_branches = result.branches || null
-          }
+        const submitResult = (res && res.result) || {}
+        if (!submitResult.success || !submitResult.request_id) {
+          loading = false
+          errorMsg = `史官落笔卡壳了——${submitResult.error || '提交失败'}。点此重试。`
+          options = [{ label: '重试', key: '__retry__' }]
+          optionsAppearTime = Date.now() + 300
+          return
         }
-
-        handleAIResponse(result, action, userInput)
+        const requestId = submitResult.request_id
+        // 开始轮询
+        pollNarrateResult(requestId, action, userInput, 0)
       },
       fail: (err) => {
         if (debugLog.length > 0) {
@@ -294,7 +289,7 @@ function callAI(userInput) {
 // 每 5 秒一次，最多 24 次（120 秒兜底）
 // 玩家看到 loading 文案：loadingText = "史官正在落笔…（已等 X 秒）"
 function pollNarrateResult(requestId, action, userInput, attempt) {
-  const MAX_ATTEMPTS = 24  // 24 × 5 秒 = 120 秒
+  const MAX_ATTEMPTS = 48  // 48 × 5 秒 = 240 秒（4 分钟兜底）
 
   if (attempt >= MAX_ATTEMPTS) {
     loading = false

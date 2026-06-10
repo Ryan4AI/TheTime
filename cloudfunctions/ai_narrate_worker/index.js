@@ -281,7 +281,7 @@ async function callAI(state, input, history, monthEvent, isRetry) {
   const userPrompt = buildUserPrompt(input, history)
   const messages = [{ role: 'system', content: systemPrompt }]
   if (history && Array.isArray(history)) {
-    const recent = history.slice(-3)  // v0.1.83: 从-6改-3，节省输入 tokens，避免 prompt 过长触发 400
+    const recent = history  // v0.1.84: 全量 history（不截断），prompt 长度不是瓶颈，叙事连贯性优先
     for (const msg of recent) {
       if (msg.role === 'ai') messages.push({ role: 'assistant', content: msg.content })
       else messages.push({ role: 'user', content: msg.content })

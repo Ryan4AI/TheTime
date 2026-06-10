@@ -10,6 +10,7 @@ var state = null
 var layout = null
 var currentItems = []
 var narrative = ''           // 当前显示的叙事文本
+var systemLineCount = 0     // v0.1.80 (D008): 当前 narrative 顶部的 system 行数（淡灰色显示）
 var displayedChars = 0        // 打字机效果：已显示字符数
 var displayStartTime = 0     // 打字开始时间
 var options = []             // 当前选项
@@ -388,7 +389,7 @@ function handleAIResponse(result, action, userInput) {
     return
   }
 
-  const { branch, state: newState, month_changed, event } = result
+  const { branch, state: newState, month_changed, event, system_messages } = result
   if (!branch || !branch.content) {
     errorMsg = '史官落笔卡壳了——这一页是空白。点此重试。'
     options = [{ label: '重试', key: '__retry__' }]
@@ -465,6 +466,12 @@ function handleAIResponse(result, action, userInput) {
   // v0.1.63 (D005): 重试是前端兜底，不是玩家真实意图
   // 不入 narrativeHistory，避免污染对话流
   narrativeHistory.push({ role: 'ai', content: branch.content })
+  // v0.1.80 (D008): system message 进流，AI 下一回合可读
+  if (Array.isArray(system_messages)) {
+    for (const sm of system_messages) {
+      narrativeHistory.push({ role: 'system', content: sm.content })
+    }
+  }
   if (action === 'continue' && userInput && userInput !== '重试' && userInput !== '__retry__') {
     narrativeHistory.push({ role: 'user', content: userInput })
   }
@@ -476,7 +483,14 @@ function handleAIResponse(result, action, userInput) {
   fetchBgImage(branch.content || '')
 
   // 6. 准备显示
-  narrative = (branch.content || '').slice(0, MAX_NARRATIVE_CHARS)
+  // v0.1.80 (D008): system messages 拼到 narrative 顶部，淡灰色短行
+  let sysPrefix = ''
+  if (Array.isArray(system_messages) && system_messages.length > 0) {
+    sysPrefix = system_messages.map(sm => sm.content).join('\n') + '\n\n'
+  }
+  narrative = sysPrefix + (branch.content || '').slice(0, MAX_NARRATIVE_CHARS)
+  // v0.1.80 (D008): 记下哪些字符是 system 行（淡灰色显示，不计入叙事字数）
+  systemLineCount = sysPrefix ? sysPrefix.split('\n').filter(Boolean).length : 0
   displayedChars = 0
   displayStartTime = Date.now()
   options = (branch.options || []).slice(0, 3).map(label => ({ label, key: label }))
@@ -876,7 +890,34 @@ function drawNarrative(ctx) {
   ctx.beginPath()
   ctx.rect(tx, ty, tw, th)
   ctx.clip()
-  const contentEndY = drawTextInRect(ctx, text, tx + 14, ty + 8 + scrollOffset, maxW, lineHeight, fontSize)
+
+  // v0.1.80 (D008): system 行淡灰色小字 + 正文用主色分开
+  let mainText = text
+  if (systemLineCount > 0) {
+    const allLines = text.split('\n')
+    const sysLines = allLines.slice(0, systemLineCount).filter(Boolean)
+    mainText = allLines.slice(systemLineCount).join('\n')
+
+    // 画 system 行（淡灰，13px 小字）
+    ctx.fillStyle = 'rgba(200,168,124,0.55)'  // 暗金 + 半透，淡墨色感
+    ctx.font = '13px "Source Han Serif SC", "Noto Serif SC", serif'
+    let sysY = ty + 8 + scrollOffset + lineHeight - 5  // 第一行 baseline
+    for (let i = 0; i < sysLines.length; i++) {
+      // 左侧加一个细"·"前缀作为视觉分隔
+      ctx.fillText('· ' + sysLines[i], tx + 14, sysY)
+      sysY += lineHeight
+    }
+    // system 行下方加一条暗金细线分隔
+    const sepY = ty + 8 + scrollOffset + sysLines.length * lineHeight + 2
+    ctx.strokeStyle = 'rgba(200,168,124,0.25)'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(tx + 14, sepY)
+    ctx.lineTo(tx + tw - 14, sepY)
+    ctx.stroke()
+  }
+
+  const contentEndY = drawTextInRect(ctx, mainText, tx + 14, ty + 8 + scrollOffset + systemLineCount * lineHeight + (systemLineCount > 0 ? 8 : 0), maxW, lineHeight, fontSize)
   ctx.restore()
 
   // 3. 限制滚动

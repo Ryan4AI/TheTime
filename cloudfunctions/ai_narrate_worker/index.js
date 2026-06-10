@@ -283,6 +283,10 @@ async function callAI(state, input, history, monthEvent, isRetry) {
   if (history && Array.isArray(history)) {
     const recent = history  // v0.1.84: 全量 history（不截断），prompt 长度不是瓶颈，叙事连贯性优先
     for (const msg of recent) {
+      // v0.1.85: 跳过 system 角色（不喂给 LLM，避免 MiniMax 2013 "chat content is empty"）
+      // system message 是 [system · 时间/气血/...] 提示，由 emitSystemMessages 注入，
+      // 玩家对话流里能看到但不进 LLM messages（避免多个 system 触发 2013）
+      if (msg.role === 'system') continue
       if (msg.role === 'ai') messages.push({ role: 'assistant', content: msg.content })
       else messages.push({ role: 'user', content: msg.content })
     }

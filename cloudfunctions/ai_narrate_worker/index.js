@@ -281,7 +281,7 @@ async function callAI(state, input, history, monthEvent, isRetry) {
   const userPrompt = buildUserPrompt(input, history)
   const messages = [{ role: 'system', content: systemPrompt }]
   if (history && Array.isArray(history)) {
-    const recent = history.slice(-6)
+    const recent = history.slice(-3)  // v0.1.83: 从-6改-3，节省输入 tokens，避免 prompt 过长触发 400
     for (const msg of recent) {
       if (msg.role === 'ai') messages.push({ role: 'assistant', content: msg.content })
       else messages.push({ role: 'user', content: msg.content })
@@ -289,7 +289,19 @@ async function callAI(state, input, history, monthEvent, isRetry) {
   }
   if (!isRetry) messages.push({ role: 'user', content: userPrompt })
 
-  const response = await callLLM(messages)
+  // v0.1.83: 400/5xx 时自动 fallback 到 M2（更通用模型）
+  let response
+  try {
+    response = await callLLM(messages, MM_MODEL)
+  } catch (e) {
+    const status = e.statusCode || 0
+    if (status === 400 || status === 429 || (status >= 500 && status < 600)) {
+      console.error('[ai_narrate_worker] 主模型失败，回退 M2:', status, e.message)
+      response = await callLLM(messages, 'MiniMax-M2')
+    } else {
+      throw e
+    }
+  }
   const content = response.choices?.[0]?.message?.content || ''
   let cleaned = content.replace(/think[\s\S]*?\/think/g, '').replace(/```json\s*/gi, '').replace(/```\s*$/g, '').trim()
   const firstBracket = cleaned.indexOf('[')
@@ -398,9 +410,11 @@ function pickBranch(branches) {
   return { content: branches[0].content, options: branches[0].options, patch: branches[0].patch }
 }
 
-function callLLM(messages) {
+function callLLM(messages, modelOverride) {
+  // v0.1.83: 支持 modelOverride fallback（默认 M2.7-highspeed，400 时回退 M2）
   return new Promise((resolve, reject) => {
-    const data = JSON.stringify({ model: MM_MODEL, messages, max_tokens: MAX_TOKENS, temperature: TEMPERATURE })
+    const useModel = modelOverride || MM_MODEL
+    const data = JSON.stringify({ model: useModel, messages, max_tokens: MAX_TOKENS, temperature: TEMPERATURE })
     const url = new URL(MM_BASE_URL + '/chat/completions')
     const req = https.request({
       hostname: url.hostname, path: url.pathname, method: 'POST',
@@ -410,7 +424,15 @@ function callLLM(messages) {
       let body = ''
       res.on('data', chunk => body += chunk)
       res.on('end', () => {
-        if (res.statusCode !== 200) { reject(new Error(`AI服务暂不可用 (${res.statusCode})`)); return }
+        if (res.statusCode !== 200) {
+          // v0.1.83: log 完整错误响应体（不截断），方便排查
+          console.error('[ai_narrate_worker] AI 非 200 响应，model=' + useModel + ', status=' + res.statusCode + ', body:', body)
+          const err = new Error(`AI服务暂不可用 (${res.statusCode})`)
+          err.statusCode = res.statusCode
+          err.body = body
+          reject(err)
+          return
+        }
         try { resolve(JSON.parse(body)) } catch (e) { reject(new Error('AI响应格式异常')) }
       })
     })

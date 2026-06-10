@@ -467,13 +467,16 @@ function handleAIResponse(result, action, userInput) {
   // 4. 记录历史
   // v0.1.63 (D005): 重试是前端兜底，不是玩家真实意图
   // 不入 narrativeHistory，避免污染对话流
-  narrativeHistory.push({ role: 'ai', content: branch.content })
+  // v0.1.87: 先生提议 — 顺序 system → ai → user（与时间因果对齐）
+  //   因果链：玩家上轮选择 user → worker 推 patch → emit system → AI 接续写剧情 ai
+  //   LLM 看到的 messages: user/assistant/user/assistant/... 完全符合 OpenAI 风格
   // v0.1.80 (D008): system message 进流，AI 下一回合可读
   if (Array.isArray(system_messages)) {
     for (const sm of system_messages) {
       narrativeHistory.push({ role: 'system', content: sm.content })
     }
   }
+  narrativeHistory.push({ role: 'ai', content: branch.content })
   if (action === 'continue' && userInput && userInput !== '重试' && userInput !== '__retry__') {
     narrativeHistory.push({ role: 'user', content: userInput })
   }

@@ -212,13 +212,13 @@ function emitSystemMessages(oldState, newState) {
   const msgs = []
   const seasonNames = ['正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '冬月', '腊月']
 
-  // 1) 时间
+  // 1) 时间 — 显示新状态
   if (newState.year !== (oldState.year || newState.year) ||
       newState.month !== (oldState.month || 1)) {
     const monthStr = seasonNames[(newState.month || 1) - 1]
     msgs.push({
       role: 'system',
-      content: `[system · 时间] ${newState.year || ''}年${monthStr || ''}`,
+      content: `[system · 时间] ${oldState.year || newState.year}年${seasonNames[(oldState.month || 1) - 1] || ''} → ${newState.year || ''}年${monthStr || ''}`,
     })
   }
 
@@ -228,7 +228,7 @@ function emitSystemMessages(oldState, newState) {
   if (newLoc && newLoc !== oldLoc) {
     msgs.push({
       role: 'system',
-      content: `[system · 地点] ${newLoc}`,
+      content: oldLoc ? `[system · 地点] ${oldLoc} → ${newLoc}` : `[system · 地点] ${newLoc}`,
     })
   }
 
@@ -236,27 +236,26 @@ function emitSystemMessages(oldState, newState) {
   if (oldState.occupation && newState.occupation && newState.occupation !== oldState.occupation) {
     msgs.push({
       role: 'system',
-      content: `[system · 身份] 从「${oldState.occupation}」变为「${newState.occupation}」`,
+      content: `[system · 身份] ${oldState.occupation} → ${newState.occupation}`,
     })
   }
 
-  // 4) 健康剧变（>= 10 点）
+  // 4) 健康 — 显示新状态（先生原话："包含当前变化后的新状态"）
   const healthDelta = (newState.health || 0) - (oldState.health || 0)
-  if (Math.abs(healthDelta) >= 10) {
-    const direction = healthDelta < 0 ? '损耗' : '恢复'
+  if (Math.abs(healthDelta) >= 1) {  // v0.1.82: 阈值从10→1，任何变化都显示
     msgs.push({
       role: 'system',
-      content: `[system · 健康] ${direction} ${Math.abs(healthDelta)} · 当前 ${newState.health}`,
+      content: `[system · 气血] ${oldState.health || 0} → ${newState.health || 0}`,
     })
   }
 
-  // 5) 财富剧变（>= 旧值 30%）
+  // 5) 财富 — 显示新状态
   const oldCoin = oldState.coin || 0
-  const coinDelta = (newState.coin || 0) - oldCoin
-  if (oldCoin > 0 && Math.abs(coinDelta) >= oldCoin * 0.3) {
+  const newCoin = newState.coin || 0
+  if (oldCoin !== newCoin) {
     msgs.push({
       role: 'system',
-      content: `[system · 财富] 变化 ${coinDelta} · 当前 ${newState.coin || 0} 文`,
+      content: `[system · 金银] ${oldCoin} → ${newCoin} 文`,
     })
   }
 

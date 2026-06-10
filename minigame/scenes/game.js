@@ -145,6 +145,7 @@ function initLayout() {
   // v0.1.71 重做：画区按"是否加载完成"动态伸缩
   // 顶栏(52) → 文字面板(自适应 narrative 行数) → 选项(3×40+gap 4+输入 32 = 160) → 物品栏(64)
   const topBarH = 52
+  const statusBarH = 26  // v0.1.82 (D008 显示): 状态条（health/coin/身份）常显
   const itemBarH = 64
   const optH = 40
   const optGap = 4
@@ -156,7 +157,7 @@ function initLayout() {
   const sceneH = Math.min(130, Math.max(80, Math.floor(sceneW * 2 / 3)))
 
   // 文字区：根据 narrative 实际行数计算（不再封顶）
-  const availableH = windowHeight - topOffset - topBarH - itemBarH
+  const availableH = windowHeight - topOffset - topBarH - statusBarH - itemBarH
   const lineHeight = 22
   const fontSize = 15
   const maxW = windowWidth - 14 * 2 - 24  // 文字面板内边距
@@ -185,9 +186,10 @@ function initLayout() {
     sceneY: topOffset + topBarH + 4,
     sceneH: sceneVisible ? sceneH : 0,
     sceneVisible: sceneVisible,
-    textY: topOffset + topBarH + 4 + (sceneVisible ? sceneH : 0) + 8,
+    textY: topOffset + topBarH + statusBarH + 4 + (sceneVisible ? sceneH : 0) + 8,
+    statusBarH: statusBarH,  // v0.1.82 (D008 显示)
     textH: finalTextH,
-    optionY: topOffset + topBarH + 4 + (sceneVisible ? sceneH : 0) + 8 + finalTextH + 6,
+    optionY: topOffset + topBarH + statusBarH + 4 + (sceneVisible ? sceneH : 0) + 8 + finalTextH + 6,
     optionH: optH,
     optionGap: optGap,
     freeInputH: freeInputH,
@@ -527,6 +529,9 @@ function render(ctx) {
   // 2. 顶部朱砂印（古卷风顶栏）
   drawSealTopBar(ctx)
 
+  // 2.5 v0.1.82 状态条（health / coin /身份 常显）
+  drawStatusBar(ctx)
+
   // 3. 月份变化提示（如有）
   if (monthChanged) {
     drawMonthNotice(ctx)
@@ -819,6 +824,84 @@ function drawSealTopBar(ctx) {
 }
 
 // ─────── 月份变化提示 ───────
+function drawStatusBar(ctx) {
+  // v0.1.82 (D008 显示): 常显状态条（health / coin /身份 /年月）
+  const padding = layout.padding
+  const top = layout.safeTop + layout.topBarH
+  const h = layout.statusBarH
+  const w = layout.windowW - padding * 2
+
+  // 1. 底色（暗木色半透）
+  ctx.save()
+  ctx.fillStyle = 'rgba(20,16,12,0.6)'
+  ctx.fillRect(padding, top, w, h)
+
+  // 上下细线
+  ctx.strokeStyle = 'rgba(200,168,124,0.25)'
+  ctx.lineWidth = 0.5
+  ctx.beginPath()
+  ctx.moveTo(padding, top + 0.5)
+  ctx.lineTo(padding + w, top + 0.5)
+  ctx.moveTo(padding, top + h - 0.5)
+  ctx.lineTo(padding + w, top + h - 0.5)
+  ctx.stroke()
+  ctx.restore()
+
+  // 2. 4 段信息：气血 / 金银 / 身份 / 年月
+  const seasonNames = ['正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '冬月', '腊月']
+  const monthStr = seasonNames[(state.month || 1) - 1] || ''
+
+  ctx.font = '11px ' + ui.fontFamily
+  ctx.textBaseline = 'middle'
+
+  // 分段布局：气血 25% / 金银 25% / 身份 30% / 年月 20%
+  const segW = w / 4
+  const cy = top + h / 2
+
+  // 段 1：气血（health + 进度条）
+  const seg1X = padding + 4
+  ctx.textAlign = 'left'
+  ctx.fillStyle = 'rgba(200,200,200,0.6)'
+  ctx.fillText('气血', seg1X, cy)
+  const hpBarX = seg1X + 32
+  const hpBarW = segW - 36
+  const hpBarH = 8
+  const hpBarY = cy - hpBarH / 2
+  ctx.fillStyle = 'rgba(255,255,255,0.08)'
+  roundRect(ctx, hpBarX, hpBarY, hpBarW, hpBarH, 4)
+  ctx.fill()
+  const hpRatio = Math.max(0, Math.min(1, (state.health || 0) / 100))
+  const hpColor = hpRatio > 0.6 ? 'rgba(90,138,112,0.85)' : (hpRatio > 0.3 ? 'rgba(200,168,124,0.85)' : 'rgba(200,58,46,0.85)')
+  ctx.fillStyle = hpColor
+  roundRect(ctx, hpBarX, hpBarY, hpBarW * hpRatio, hpBarH, 4)
+  ctx.fill()
+
+  // 段 2：金银
+  const seg2X = padding + segW
+  ctx.fillStyle = 'rgba(200,200,200,0.6)'
+  ctx.fillText('金银', seg2X + 4, cy)
+  ctx.fillStyle = 'rgba(245,239,224,0.85)'
+  ctx.fillText((state.coin || 0) + '文', seg2X + 36, cy)
+
+  // 段 3：身份（职业）
+  const seg3X = padding + segW * 2
+  ctx.fillStyle = 'rgba(200,200,200,0.6)'
+  ctx.fillText('身份', seg3X + 4, cy)
+  ctx.fillStyle = 'rgba(245,239,224,0.85)'
+  const occStr = state.occupation || '庶民'
+  ctx.fillText(occStr.length > 6 ? occStr.slice(0, 5) + '…' : occStr, seg3X + 36, cy)
+
+  // 段 4：年月
+  const seg4X = padding + segW * 3
+  ctx.fillStyle = 'rgba(200,200,200,0.6)'
+  ctx.fillText('年月', seg4X + 4, cy)
+  ctx.fillStyle = 'rgba(245,239,224,0.85)'
+  ctx.fillText((state.year || '?') + '·' + monthStr, seg4X + 36, cy)
+
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+}
+
 function drawMonthNotice(ctx) {
   if (Date.now() - displayStartTime > 3000) return // 只显示3秒
 

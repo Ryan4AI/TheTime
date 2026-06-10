@@ -1721,8 +1721,8 @@ function handleTouch(x, y, type) {
 
     isScrolling = false
 
-    // 滑动超过阈值 → 不触发按钮点击
-    if (scrollTouchStartY !== 0 && Math.abs(y - scrollTouchStartY) > 10) {
+    // 滑动超过阈值 → 不触发按钮点击（但错误状态下不要吞，让玩家能点重试）
+    if (scrollTouchStartY !== 0 && Math.abs(y - scrollTouchStartY) > 10 && !errorMsg) {
       scrollTouchStartY = 0
       return null
     }
@@ -1742,9 +1742,20 @@ function handleTouch(x, y, type) {
   // 加载中不接受输入
   if (loading) return null
 
-  // 错误状态下点重试
+  // 错误状态下点重试 — v0.1.81 修复：点 errorMsg 提示条 + options[0] 都能重试
   if (errorMsg && options.length > 0) {
+    // 1. 标准重试按钮
     if (isInOptionBounds(x, y, 0)) {
+      errorMsg = ''
+      options = []
+      callAI('__retry__')
+      return null
+    }
+    // 2. 兜底：点 errorMsg 提示条也能重试（防止 options 按钮被 layout 偏移遮挡）
+    const barH = 44
+    const barY = layout.windowH - layout.itemBarH - barH - 10
+    if (x >= layout.padding && x <= layout.windowW - layout.padding &&
+        y >= barY && y <= barY + barH) {
       errorMsg = ''
       options = []
       callAI('__retry__')

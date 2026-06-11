@@ -261,6 +261,11 @@ function callAI(userInput) {
         const submitResult = (res && res.result) || {}
         if (!submitResult.success || !submitResult.request_id) {
           loading = false
+          // v0.2.3: 错误时填齐 debugLog（状态/时间/次数/status/错误信息）
+          if (debugLog.length > 0) {
+            const last = debugLog[debugLog.length - 1]
+            last.resultError = `[SUBMIT_FAIL] status=${submitResult.success ? 'success' : 'fail'}, err=${submitResult.error || '提交失败'}, ts=${Date.now()}, elapsed_ms=${Date.now() - last.ts}`
+          }
           errorMsg = `史官落笔卡壳了——${submitResult.error || '提交失败'}。点此重试。`
           options = [{ label: '重试', key: '__retry__' }]
           optionsAppearTime = Date.now() + 300
@@ -272,7 +277,8 @@ function callAI(userInput) {
       },
       fail: (err) => {
         if (debugLog.length > 0) {
-          debugLog[debugLog.length - 1].resultError = (err && (err.errMsg || err.message)) || String(err)
+          const last = debugLog[debugLog.length - 1]
+          last.resultError = `[SUBMIT_NETWORK_FAIL] ${(err && (err.errMsg || err.message)) || String(err)}, ts=${Date.now()}, elapsed_ms=${Date.now() - last.ts}`
         }
         loading = false
         errorMsg = '史官落笔卡壳了——网络断了，点此重试。'
@@ -296,6 +302,12 @@ function pollNarrateResult(requestId, action, userInput, attempt) {
 
   if (attempt >= MAX_ATTEMPTS) {
     loading = false
+    // v0.2.3: 超时时填齐 debugLog
+    if (debugLog.length > 0) {
+      const last = debugLog[debugLog.length - 1]
+      last.resultError = `[POLL_TIMEOUT] 超时 ${attempt * 5} 秒（attempt=${attempt}/${MAX_ATTEMPTS}）, ts=${Date.now()}, elapsed_ms=${Date.now() - last.ts}`
+      last.poll_attempts = attempt
+    }
     errorMsg = `史官落笔太久没回音（已等 ${attempt * 5} 秒）。点此重试。`
     options = [{ label: '重试', key: '__retry__' }]
     optionsAppearTime = Date.now() + 300
@@ -305,6 +317,11 @@ function pollNarrateResult(requestId, action, userInput, attempt) {
   setTimeout(() => {
     if (typeof wx === 'undefined' || !wx.cloud || !wx.cloud.callFunction) {
       loading = false
+      // v0.2.3: wx.cloud 不可用
+      if (debugLog.length > 0) {
+        const last = debugLog[debugLog.length - 1]
+        last.resultError = `[WX_UNAVAILABLE] wx.cloud 不可用, ts=${Date.now()}, elapsed_ms=${Date.now() - last.ts}`
+      }
       errorMsg = '史官落笔卡壳了——云开发不可用，点此重试。'
       options = [{ label: '重试', key: '__retry__' }]
       optionsAppearTime = Date.now() + 300
@@ -331,12 +348,18 @@ function pollNarrateResult(requestId, action, userInput, attempt) {
               last.raw_response = result.debug.raw_response
               last.all_branches = result.branches || null
             }
-            last.poll_elapsed_ms = pollResult.result && pollResult.result.elapsed_ms || 0
+            last.poll_elapsed_ms = (pollResult.result && pollResult.result.elapsed_ms) || 0
             last.poll_attempts = attempt + 1
           }
           handleAIResponse(result, action, userInput)
         } else if (pollResult.status === 'error') {
           loading = false
+          // v0.2.3: worker 返回 status=error
+          if (debugLog.length > 0) {
+            const last = debugLog[debugLog.length - 1]
+            last.resultError = `[WORKER_ERROR] ${pollResult.error || 'AI服务暂不可用'}, attempt=${attempt + 1}, ts=${Date.now()}, elapsed_ms=${Date.now() - last.ts}`
+            last.poll_attempts = attempt + 1
+          }
           errorMsg = `史官落笔卡壳了——${pollResult.error || 'AI服务暂不可用'}。点此重试。`
           options = [{ label: '重试', key: '__retry__' }]
           optionsAppearTime = Date.now() + 300
@@ -348,6 +371,12 @@ function pollNarrateResult(requestId, action, userInput, attempt) {
             pollNarrateResult(requestId, action, userInput, attempt + 1)
           } else {
             loading = false
+            // v0.2.3: 3 次后还 not_found，标记
+            if (debugLog.length > 0) {
+              const last = debugLog[debugLog.length - 1]
+              last.resultError = `[NOT_FOUND] request_id=${requestId} 不存在或写入滞后, attempt=${attempt + 1}, ts=${Date.now()}, elapsed_ms=${Date.now() - last.ts}`
+              last.poll_attempts = attempt + 1
+            }
             errorMsg = '史官落笔卡壳了——记录找不到了，点此重试。'
             options = [{ label: '重试', key: '__retry__' }]
             optionsAppearTime = Date.now() + 300
@@ -364,7 +393,9 @@ function pollNarrateResult(requestId, action, userInput, attempt) {
         // 但如果连续失败 ≥ 5 次，主动放弃
         if (attempt >= 4) {
           if (debugLog.length > 0) {
-            debugLog[debugLog.length - 1].resultError = `轮询失败 ${attempt + 1} 次: ${(err && (err.errMsg || err.message)) || String(err)}`
+            const last = debugLog[debugLog.length - 1]
+            last.resultError = `[POLL_NETWORK_FAIL] 轮询失败 ${attempt + 1} 次: ${(err && (err.errMsg || err.message)) || String(err)}, ts=${Date.now()}, elapsed_ms=${Date.now() - last.ts}`
+            last.poll_attempts = attempt + 1
           }
           loading = false
           errorMsg = '史官落笔卡壳了——网络不稳，点此重试。'
@@ -385,6 +416,11 @@ function handleAIResponse(result, action, userInput) {
 
   if (!result || result.error) {
     // 显式错误：玩家看得懂的史官风格
+    // v0.2.3: 把错误填进 debugLog
+    if (debugLog.length > 0) {
+      const last = debugLog[debugLog.length - 1]
+      last.resultError = `[RESPONSE_ERROR] ${(result && result.error) || 'AI服务暂不可用'}, ts=${Date.now()}, elapsed_ms=${Date.now() - last.ts}`
+    }
     errorMsg = `史官落笔卡壳了——${(result && result.error) || 'AI服务暂不可用'}。点此重试。`
     options = [{ label: '重试', key: '__retry__' }]
     optionsAppearTime = Date.now() + 300
@@ -393,6 +429,11 @@ function handleAIResponse(result, action, userInput) {
 
   const { branch, state: newState, month_changed, event, system_messages } = result
   if (!branch || !branch.content) {
+    // v0.2.3: 分支内容为空
+    if (debugLog.length > 0) {
+      const last = debugLog[debugLog.length - 1]
+      last.resultError = `[EMPTY_BRANCH] branch=${!!branch}, content=${!!(branch && branch.content)}, ts=${Date.now()}, elapsed_ms=${Date.now() - last.ts}`
+    }
     errorMsg = '史官落笔卡壳了——这一页是空白。点此重试。'
     options = [{ label: '重试', key: '__retry__' }]
     optionsAppearTime = Date.now() + 300
@@ -401,6 +442,11 @@ function handleAIResponse(result, action, userInput) {
 
   // 分支 options 缺失或为空：明确报错，不补默认
   if (!Array.isArray(branch.options) || branch.options.length === 0) {
+    // v0.2.3: 分支 options 缺失
+    if (debugLog.length > 0) {
+      const last = debugLog[debugLog.length - 1]
+      last.resultError = `[EMPTY_OPTIONS] branch.options 缺失或为空, ts=${Date.now()}, elapsed_ms=${Date.now() - last.ts}`
+    }
     errorMsg = '史官落笔卡壳了——这一段选项没写出来。点此重试。'
     options = [{ label: '重试', key: '__retry__' }]
     optionsAppearTime = Date.now() + 300
@@ -782,47 +828,46 @@ function drawBgImage(ctx) {
 }
 
 // ─────── 顶部朱砂印 + 纪代（古卷风 v0.1.61） ───────
+// v0.2.2 — 顶部栏（加"穿越日记"主标题 + 楷体副标题）
 function drawSealTopBar(ctx) {
   const padding = layout.padding
   const topH = layout.topBarH
   const safeTop = layout.safeTop || 0
 
-  // 1. 朱砂印（用 ui.drawSealStamp：宣纸色字 + 朱砂红底，size=20 字号 11px）
+  // 1. 左侧朱砂印（保持原版，size=20 单字朝代印）
   const sealChar = state.dynasty ? state.dynasty.charAt(0) : '時'
   const sealCenterX = padding + 14
   const sealCenterY = safeTop + topH / 2
   ui.drawSealStamp(ctx, sealCenterX, sealCenterY, 20, sealChar)
 
-  // 2. 纪年 + 姓名（朱砂印右侧，单行排版）
-  const eraStr = state.eraDisplay || (state.dynasty + ' ' + state.year + '年')
-  const infoStr = eraStr + '  ·  ' + state.name + state.age + '岁'
+  // 2. "穿越日记"主标题（朱砂印右侧，楷体大字，v0.2.2 新增）
   ctx.save()
-  // 暗金点装饰（纪年名前）
-  ctx.fillStyle = 'rgba(200,168,124,0.6)'
-  ctx.beginPath()
-  ctx.arc(sealCenterX + 26, sealCenterY, 2, 0, Math.PI * 2)
-  ctx.fill()
-  // 文字
-  ctx.fillStyle = 'rgba(232,221,208,0.85)'
-  ctx.font = '14px ' + ui.fontFamily
+  ctx.fillStyle = 'rgba(232,221,208,0.95)'  // 暖米黄（宣纸色）
+  ctx.font = 'bold 17px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
-  ctx.fillText(infoStr, sealCenterX + 36, sealCenterY)
+  ctx.fillText('穿越日记', sealCenterX + 36, sealCenterY - 7)
+  // 副标题：纪年 + 姓名（小字，暗金）
+  const eraStr = state.eraDisplay || (state.dynasty + ' ' + state.year + '年')
+  const subInfo = eraStr + '  ·  ' + state.name + state.age + '岁'
+  ctx.fillStyle = 'rgba(200,168,124,0.7)'
+  ctx.font = '11px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+  ctx.fillText(subInfo, sealCenterX + 36, sealCenterY + 9)
   ctx.restore()
 
-  // 2.5 v0.1.61 版本号水印（右下角小字，方便先生验证新版本）
+  // 3. 版本号水印（右下角小字，方便先生验证新版本）
   ctx.save()
   ctx.fillStyle = 'rgba(200,168,124,0.45)'
   ctx.font = '9px monospace'
   ctx.textAlign = 'right'
   ctx.textBaseline = 'middle'
-  ctx.fillText('v0.1.62', layout.windowW - padding - 4, sealCenterY)
+  ctx.fillText('v0.2.2', layout.windowW - padding - 4, sealCenterY)
   ctx.restore()
 
-  // 3. 暗金细线分隔（顶栏底部）
+  // 4. 暗金细线分隔（顶栏底部）
   ui.drawClassicalDivider(ctx, padding, safeTop + topH - 1, layout.windowW - padding * 2, 0.6)
 
-  // 4. 触摸区域（整个顶栏 = 长按呼出玉牒）
+  // 5. 触摸区域
   layout._sealArea = { x: 0, y: 0, w: layout.windowW, h: safeTop + topH }
 }
 
@@ -905,22 +950,24 @@ function drawStatusBar(ctx) {
   ctx.textBaseline = 'alphabetic'
 }
 
+// v0.2.2 — 月份变化提示（加大字号 + 朱砂色 + 楷体）
 function drawMonthNotice(ctx) {
   if (Date.now() - displayStartTime > 3000) return // 只显示3秒
 
-  const notice = '· 时光流转 ·'
+  const notice = '◇ 时光流转 ◇'
   const y = layout.topBarH + 8
-  const alpha = Math.min(1, (Date.now() - optionsAppearTime + 200) / 600) * 0.7
-  ctx.fillStyle = 'rgba(212,168,83,' + alpha + ')'
-  ctx.font = '11px ' + ui.fontFamily
+  const alpha = Math.min(1, (Date.now() - optionsAppearTime + 200) / 600) * 0.85
+  // 朱砂色（v0.2.2 改：暗金 → 朱砂）
+  ctx.fillStyle = 'rgba(192, 48, 48, ' + alpha + ')'
+  ctx.font = 'bold 14px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
   ctx.textAlign = 'center'
   ctx.fillText(notice, layout.windowW / 2, y)
   ctx.textAlign = 'left'
 
   if (newEvent && newEvent.title) {
-    ctx.fillStyle = 'rgba(255,200,100,' + alpha + ')'
-    ctx.font = '10px ' + ui.fontFamily
-    ctx.fillText('📜 ' + newEvent.title, layout.windowW / 2, y + 14)
+    ctx.fillStyle = 'rgba(232, 200, 130, ' + alpha + ')'  // 暖金色
+    ctx.font = '12px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+    ctx.fillText('📜 ' + newEvent.title, layout.windowW / 2, y + 18)
   }
 }
 
@@ -935,6 +982,7 @@ var isLongPressing = false       // 是否在长按中
 var sealAnimProgress = 0         // 印章动画进度（0-1）
 const SEAL_SIZE = 30             // 朱砂印尺寸
 
+// v0.2.2 — 叙事区（去白底卡片 + 文字直渲染 + 卷首小印 + 楷体）
 function drawNarrative(ctx) {
   if (!narrative) return
 
@@ -945,88 +993,93 @@ function drawNarrative(ctx) {
 
   const text = narrative.slice(0, displayedChars)
 
-  // v0.1.63 拼贴·题跋版：文字在下半屏独立面板（绝对不透明）
+  // 文字版心（无白底，直接在背景上渲染）
   const tx = layout.padding
   const ty = layout.textY
   const tw = layout.windowW - layout.padding * 2
   const th = layout.textH
-  const lineHeight = 24
-  const fontSize = 15
-  const maxW = tw - 24  // 文字面板内边距
+  const lineHeight = 26
+  const fontSize = 16
+  const maxW = tw - 40  // 左右各留 20px
 
-  // 1. 文字面板底（深墨色不透明 + 顶部暗金细线，强调"这是题字"）
-  ctx.save()
-  ctx.fillStyle = 'rgba(15,12,8,0.92)'
-  roundRect(ctx, tx, ty, tw, th, 6)
-  ctx.fill()
-  // 顶部暗金细线
-  ctx.strokeStyle = 'rgba(200,168,124,0.5)'
-  ctx.lineWidth = 1
-  ctx.beginPath()
-  ctx.moveTo(tx + 8, ty + 0.5)
-  ctx.lineTo(tx + tw - 8, ty + 0.5)
-  ctx.stroke()
-  // 左侧朱砂红指示条（强调题跋位置）
-  ctx.fillStyle = 'rgba(200,58,46,0.6)'
-  ctx.fillRect(tx + 1, ty + 6, 2, th - 12)
-  ctx.restore()
+  // 1. 卷首小印（顶部居中，朱砂暗色小字，v0.2.2 新增）
+  // 仅在叙事刚开始时显示（displayedChars 较小），让玩家知道"史官开始写了"
+  const showScrollHead = displayedChars < totalChars && displayedChars > 0 && scrollOffset === 0
+  if (showScrollHead) {
+    ctx.save()
+    ctx.fillStyle = 'rgba(192, 48, 48, 0.55)'  // 朱砂暗色
+    ctx.font = '10px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'top'
+    ctx.fillText('◇  史官手书  ◇', layout.windowW / 2, ty + 4)
+    ctx.restore()
+  }
 
-  // 2. 文字内容（v0.1.74：加 clip 裁剪，文字超出面板不外溢）
+  // 2. system 行（朱砂暗色 + 楷体小字）—— v0.1.80 D008 兼容
+  let mainText = text
+  let systemBlockH = 0
   ctx.save()
   ctx.beginPath()
   ctx.rect(tx, ty, tw, th)
-  ctx.clip()
+  ctx.clip()  // 裁剪防止文字超出版心
 
-  // v0.1.80 (D008): system 行淡灰色小字 + 正文用主色分开
-  let mainText = text
   if (systemLineCount > 0) {
     const allLines = text.split('\n')
     const sysLines = allLines.slice(0, systemLineCount).filter(Boolean)
     mainText = allLines.slice(systemLineCount).join('\n')
 
-    // 画 system 行（淡灰，13px 小字）
-    ctx.fillStyle = 'rgba(200,168,124,0.55)'  // 暗金 + 半透，淡墨色感
-    ctx.font = '13px "Source Han Serif SC", "Noto Serif SC", serif'
-    let sysY = ty + 8 + scrollOffset + lineHeight - 5  // 第一行 baseline
+    ctx.fillStyle = 'rgba(192, 48, 48, 0.7)'  // 朱砂暗色
+    ctx.font = '11px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+    let sysY = ty + 8 + scrollOffset + lineHeight - 6
     for (let i = 0; i < sysLines.length; i++) {
-      // 左侧加一个细"·"前缀作为视觉分隔
-      ctx.fillText('· ' + sysLines[i], tx + 14, sysY)
-      sysY += lineHeight
+      // 左侧加朱砂小点
+      ctx.fillStyle = 'rgba(192, 48, 48, 0.85)'
+      ctx.beginPath()
+      ctx.arc(tx + 24, sysY - 4, 1.5, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillStyle = 'rgba(192, 48, 48, 0.7)'
+      ctx.fillText(sysLines[i], tx + 32, sysY)
+      sysY += lineHeight - 4
     }
-    // system 行下方加一条暗金细线分隔
-    const sepY = ty + 8 + scrollOffset + sysLines.length * lineHeight + 2
-    ctx.strokeStyle = 'rgba(200,168,124,0.25)'
-    ctx.lineWidth = 1
+    systemBlockH = sysLines.length * (lineHeight - 4) + 4
+    // system 行下方细线分隔
+    const sepY = ty + 8 + scrollOffset + systemBlockH + 2
+    ctx.strokeStyle = 'rgba(200, 168, 124, 0.25)'
+    ctx.lineWidth = 0.5
     ctx.beginPath()
-    ctx.moveTo(tx + 14, sepY)
-    ctx.lineTo(tx + tw - 14, sepY)
+    ctx.moveTo(tx + 20, sepY)
+    ctx.lineTo(tx + tw - 20, sepY)
     ctx.stroke()
   }
 
-  const contentEndY = drawTextInRect(ctx, mainText, tx + 14, ty + 8 + scrollOffset + systemLineCount * lineHeight + (systemLineCount > 0 ? 8 : 0), maxW, lineHeight, fontSize)
+  // 3. 正文（暖米黄 + 楷体大字）—— v0.2.2 改：暖色 + 楷体
+  const mainStartY = ty + 8 + scrollOffset + systemBlockH + (systemBlockH > 0 ? 8 : 0)
+  ctx.fillStyle = 'rgba(245, 239, 224, 0.95)'  // 暖米黄（比 v0.1.62 的 e8ddd0 更亮）
+  ctx.font = '16px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+  const contentEndY = drawTextInRect(ctx, mainText, tx + 20, mainStartY, maxW, lineHeight, fontSize)
   ctx.restore()
 
-  // 3. 限制滚动
+  // 4. 限制滚动
   const contentH = contentEndY ? (contentEndY - ty - 8) : (text.split('\n').length * lineHeight)
   const maxScroll = Math.max(0, contentH - (th - 16))
   if (scrollOffset > 0) scrollOffset = 0
   if (scrollOffset < -maxScroll) scrollOffset = -maxScroll
 
-  // 4. 打字光标
+  // 5. 打字光标（暖金色小竖线）
   if (displayedChars < totalChars) {
     const blink = (Date.now() % 800) < 400
     if (blink) {
       const lines = text.split('\n')
       const lastLine = lines[lines.length - 1] || ''
-      const cursorX = tx + 14 + ctx.measureText(lastLine).width + 2
+      const cursorX = tx + 20 + ctx.measureText(lastLine).width + 2
       const cursorY = ty + 8 + (lines.length - 1) * lineHeight + scrollOffset
       layout._cursorBounds = { x: cursorX, y: cursorY, w: 2, h: fontSize }
-      ctx.fillStyle = 'rgba(200,168,124,0.7)'
+      ctx.fillStyle = 'rgba(232, 200, 130, 0.85)'  // 暖金色光标
       ctx.fillRect(cursorX, cursorY + 4, 2, fontSize)
     }
   }
 
-  // 5. 滚动区域（文字面板内）
+  // 6. 滚动区域
   layout._scrollArea = { x: tx, y: ty, w: tw, h: th }
 }
 
@@ -1055,6 +1108,7 @@ function drawScrollIndicator(ctx) {
 }
 
 // ─────── 选项按钮（竹简风格 v0.1.61：左侧朱砂红指示条） ───────
+// v0.2.2 — 选项按钮（朱砂印章按钮，无序号，楷体）
 function drawOptions(ctx) {
   if (!options || options.length === 0) return
 
@@ -1062,8 +1116,8 @@ function drawOptions(ctx) {
   const fadeIn = layout.optionFadeIn || 0
   if (fadeIn <= 0) return
 
-  const optX = layout.padding + 4
-  const optW = layout.windowW - (layout.padding + 4) * 2
+  const optX = layout.padding
+  const optW = layout.windowW - layout.padding * 2
   const optH = layout.optionH
   const optGap = layout.optionGap
   const baseY = layout.optionY
@@ -1074,119 +1128,97 @@ function drawOptions(ctx) {
     if (appearElapsed < 0) return
     const alpha = Math.min(1, appearElapsed / 300)
 
-    // 1. 竹简底（深木色 + 暗金描边，alpha 0.9 → 0.92 增强存在感）
     ctx.save()
-    ctx.fillStyle = 'rgba(30,26,20,' + (alpha * fadeIn * 0.92) + ')'
-    roundRect(ctx, optX, oy, optW, optH, 6)
+    ctx.globalAlpha = alpha * fadeIn
+
+    // 1. 朱砂印章按钮 — 半透深色填充 + 朱砂红描边（v0.2.2 改）
+    ctx.fillStyle = 'rgba(20, 16, 12, 0.7)'  // 半透深色（让背景透过来一点点）
+    roundRect(ctx, optX, oy, optW, optH, 4)
     ctx.fill()
-    ctx.strokeStyle = 'rgba(200,168,124,' + (alpha * fadeIn * 0.55) + ')'
-    ctx.lineWidth = 1
-    roundRect(ctx, optX, oy, optW, optH, 6)
+    // 朱砂红描边（粗一些，更"印章"）
+    ctx.strokeStyle = 'rgba(192, 48, 48, 0.75)'
+    ctx.lineWidth = 1.2
+    roundRect(ctx, optX, oy, optW, optH, 4)
     ctx.stroke()
-    ctx.restore()
+    // 内层朱砂细线（双重边框，更古朴）
+    ctx.strokeStyle = 'rgba(192, 48, 48, 0.3)'
+    ctx.lineWidth = 0.5
+    roundRect(ctx, optX + 3, oy + 3, optW - 6, optH - 6, 2)
+    ctx.stroke()
 
-    // 2. 左侧朱砂红指示条（4px 宽，48px 高，v0.1.61 新增）
-    ctx.save()
-    ctx.fillStyle = 'rgba(200,58,46,' + (alpha * fadeIn * 0.85) + ')'
-    ctx.fillRect(optX + 1, oy + 4, 3, optH - 8)
-    ctx.restore()
-
-    // 3. 竹简纹理竖线（5 条装饰）
-    ctx.save()
-    ctx.strokeStyle = 'rgba(160,130,90,' + (alpha * fadeIn * 0.06) + ')'
-    ctx.lineWidth = 1
-    const lineSpacing = optW / 6
-    for (let li = 1; li < 6; li++) {
-      ctx.beginPath()
-      ctx.moveTo(optX + li * lineSpacing, oy + 4)
-      ctx.lineTo(optX + li * lineSpacing, oy + optH - 4)
-      ctx.stroke()
-    }
-    ctx.restore()
-
-    // 4. 序号小点
-    ctx.fillStyle = 'rgba(200,168,124,' + (alpha * fadeIn * 0.6) + ')'
-    ctx.font = '10px ' + ui.fontFamily
-    ctx.textAlign = 'right'
+    // 2. 选项文字（暖米黄 + 楷体，v0.2.2 改：无序号）
+    ctx.fillStyle = 'rgba(245, 239, 224, 0.95)'
+    ctx.font = '15px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+    ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText('·' + (i + 1) + '·', optX + 20, oy + optH / 2)
+    ctx.fillText(opt.label, optX + optW / 2, oy + optH / 2)
 
-    // 选项文字
-    ctx.fillStyle = 'rgba(245,239,224,' + alpha + ')'
-    ctx.font = '14px ' + ui.fontFamily
-    ctx.textAlign = 'left'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(opt.label, optX + 30, oy + optH / 2)
-    ctx.textAlign = 'left'
-    ctx.textBaseline = 'alphabetic'
+    ctx.restore()
 
-    // 竹简右侧装饰小点
-    ctx.fillStyle = 'rgba(200,168,124,' + (alpha * fadeIn * 0.3) + ')'
-    ctx.beginPath()
-    ctx.arc(optX + optW - 10, oy + optH / 2, 3, 0, Math.PI * 2)
-    ctx.fill()
-
-    // 记录热区（扩大命中范围）
-    opt.bounds = { x: optX - 4, y: oy - 4, w: optW + 8, h: optH + 8 }
+    // 记录热区
+    opt.bounds = { x: optX, y: oy, w: optW, h: optH }
   })
 }
 
 // ─────── 自由输入按钮 ───────
+// v0.2.2 — 自由输入按钮（朱砂虚线框 + 楷体）
 function drawFreeInputButton(ctx) {
-  // v0.1.68: 打字中不画（fadeIn 拦截）
   const fadeIn = layout.optionFadeIn || 0
   if (fadeIn <= 0) return
   const freeY = layout.optionY + options.length * (layout.optionH + layout.optionGap) + 8
-  const freeH = 24  // v0.1.67: 28 → 24 缩 4px
-  const freeX = layout.padding + 4
-  const freeW = layout.windowW - (layout.padding + 4) * 2
+  const freeH = 26
+  const freeX = layout.padding
+  const freeW = layout.windowW - layout.padding * 2
 
   const appearElapsed = Date.now() - optionsAppearTime - options.length * 100
   if (appearElapsed < 0) return
   const alpha = Math.min(1, appearElapsed / 300)
 
-  // 竹简虚线框
   ctx.save()
-  ctx.fillStyle = 'rgba(40,36,30,' + (alpha * 0.6) + ')'
-  roundRect(ctx, freeX, freeY, freeW, freeH, 6)
+  ctx.globalAlpha = alpha
+  // 半透深色填充 + 朱砂虚线边框
+  ctx.fillStyle = 'rgba(20, 16, 12, 0.5)'
+  roundRect(ctx, freeX, freeY, freeW, freeH, 4)
   ctx.fill()
-  ctx.strokeStyle = 'rgba(160,130,90,' + (alpha * 0.2) + ')'
-  ctx.lineWidth = 1
-  ctx.setLineDash([4, 3])
-  roundRect(ctx, freeX, freeY, freeW, freeH, 6)
+  ctx.strokeStyle = 'rgba(192, 48, 48, 0.55)'
+  ctx.lineWidth = 0.8
+  ctx.setLineDash([5, 3])
+  roundRect(ctx, freeX, freeY, freeW, freeH, 4)
   ctx.stroke()
   ctx.setLineDash([])
   ctx.restore()
 
-  ctx.fillStyle = 'rgba(200,168,124,' + (alpha * 0.4) + ')'
-  ctx.font = '11px ' + ui.fontFamily
+  // 文字（朱砂暗色 + 楷体）
+  ctx.fillStyle = 'rgba(192, 48, 48, 0.75)'
+  ctx.font = '12px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText('✎ 键入自己所想...', freeX + freeW / 2, freeY + freeH / 2)
+  ctx.fillText('✎  键入自己所想...', freeX + freeW / 2, freeY + freeH / 2)
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
 
   layout.freeInputBounds = { x: freeX, y: freeY, w: freeW, h: freeH }
 }
 
-// ─────── 底部物品栏（v0.1.62：行李标签 + 可点击物品） ───────
+// v0.2.2 — 底部物品栏（药匣样式 + 暖色 + 楷体）
 function drawItemBar(ctx) {
   const barY = layout.itemBarY
   const items = currentItems || []
   const barH = layout.itemBarH
 
-  // 1. 底板（深墨色半透明 + 顶部暗金边）
+  // 1. 底板（暗木色 + 顶部暗金边 + 朱砂点装饰）
   ctx.save()
-  ctx.fillStyle = 'rgba(15,12,8,0.65)'
+  ctx.fillStyle = 'rgba(20, 16, 12, 0.75)'  // 比 v0.1.62 略深一档
   ctx.fillRect(0, barY, layout.windowW, barH)
-  ctx.strokeStyle = 'rgba(200,168,124,0.22)'
-  ctx.lineWidth = 1
+  // 顶部暗金线（更亮）
+  ctx.strokeStyle = 'rgba(200, 168, 124, 0.45)'
+  ctx.lineWidth = 0.8
   ctx.beginPath()
-  ctx.moveTo(layout.padding, barY)
-  ctx.lineTo(layout.windowW - layout.padding, barY)
+  ctx.moveTo(layout.padding, barY + 0.5)
+  ctx.lineTo(layout.windowW - layout.padding, barY + 0.5)
   ctx.stroke()
-  // 左下/右下 朱砂红小点（古卷风收尾装饰）
-  ctx.fillStyle = 'rgba(200,58,46,0.6)'
+  // 左下/右下 朱砂红小点
+  ctx.fillStyle = 'rgba(192, 48, 48, 0.7)'
   ctx.beginPath()
   ctx.arc(layout.padding + 4, barY + barH - 4, 2, 0, Math.PI * 2)
   ctx.fill()
@@ -1195,66 +1227,75 @@ function drawItemBar(ctx) {
   ctx.fill()
   ctx.restore()
 
-  // 2. 行李标签（左侧小字 + 箭头，提示可点击）
+  // 2. 行李标签（左侧，v0.2.2 改：楷体 + "⌜ 行李 ⌝"）
   ctx.save()
-  ctx.fillStyle = 'rgba(200,168,124,0.5)'
-  ctx.font = '10px ' + ui.fontFamily
+  ctx.fillStyle = 'rgba(232, 200, 130, 0.75)'  // 暖金色
+  ctx.font = '11px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
   ctx.textAlign = 'left'
-  ctx.textBaseline = 'middle'
-  ctx.fillText('⇧ 行李', layout.padding, barY + 8)
+  ctx.textBaseline = 'top'
+  ctx.fillText('⌜ 行李 ⌝', layout.padding, barY + 6)
   ctx.restore()
 
   if (items.length === 0) {
-    // 空状态提示
+    // 空状态
     ctx.save()
-    ctx.fillStyle = 'rgba(232,221,208,0.35)'
-    ctx.font = '11px ' + ui.fontFamily
+    ctx.fillStyle = 'rgba(245, 239, 224, 0.4)'
+    ctx.font = '12px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText('空囊而来', layout.windowW / 2, barY + barH / 2)
+    ctx.fillText('空囊而来', layout.windowW / 2, barY + barH / 2 + 4)
     ctx.restore()
     return
   }
 
-  // 3. 物品图标 + 文字标签
-  const iconSize = 28
-  const totalW = items.length * (iconSize + 18) - 18
-  const startX = (layout.windowW - totalW) / 2
+  // 3. 物品药匣（横排，右侧对齐）
+  const boxW = 56
+  const boxH = 32
+  const gap = 6
+  const totalW = items.length * (boxW + gap) - gap
+  const startX = layout.windowW - layout.padding - totalW
+  const boxY = barY + 22
 
   items.forEach((item, i) => {
-    const ix = startX + i * (iconSize + 18)
-    const iy = barY + 18  // 下移让位 "⇧ 行李" 标签
+    const bx = startX + i * (boxW + gap)
 
-    // 小圆底
-    ctx.fillStyle = 'rgba(255,255,255,0.06)'
-    ctx.beginPath()
-    ctx.arc(ix + iconSize / 2, iy + iconSize / 2, iconSize / 2, 0, Math.PI * 2)
+    ctx.save()
+    // 药匣底（暗木色 + 朱砂描边）
+    ctx.fillStyle = 'rgba(35, 28, 22, 0.85)'
+    roundRect(ctx, bx, boxY, boxW, boxH, 3)
     ctx.fill()
-    // 暗金描边（0.3 → 0.45 增强可点击感）
-    ctx.strokeStyle = 'rgba(200,168,124,0.45)'
-    ctx.lineWidth = 1
-    ctx.beginPath()
-    ctx.arc(ix + iconSize / 2, iy + iconSize / 2, iconSize / 2, 0, Math.PI * 2)
+    ctx.strokeStyle = 'rgba(192, 48, 48, 0.7)'
+    ctx.lineWidth = 0.8
+    roundRect(ctx, bx, boxY, boxW, boxH, 3)
     ctx.stroke()
+    // 内细线
+    ctx.strokeStyle = 'rgba(192, 48, 48, 0.3)'
+    ctx.lineWidth = 0.5
+    roundRect(ctx, bx + 2, boxY + 2, boxW - 4, boxH - 4, 2)
+    ctx.stroke()
+    ctx.restore()
 
-    // emoji 图标
-    ctx.fillStyle = COLORS.gold
-    ctx.font = '15px ' + ui.fontFamily
+    // emoji 图标（左侧，暖金色）
+    ctx.fillStyle = 'rgba(232, 200, 130, 0.95)'  // 暖金
+    ctx.font = '14px ' + ui.fontFamily
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(item.icon || '📦', ix + iconSize / 2, iy + iconSize / 2)
+    ctx.fillText(item.icon || '📦', bx + 11, boxY + boxH / 2)
 
-    // 文字标签（物品名）
-    ctx.fillStyle = 'rgba(232,221,208,0.7)'
-    ctx.font = '10px ' + ui.fontFamily
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'top'
-    ctx.fillText(item.name || '', ix + iconSize / 2, iy + iconSize + 2)
+    // 物品名（右侧，楷体）
+    ctx.fillStyle = 'rgba(245, 239, 224, 0.9)'
+    ctx.font = '10px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    const name = item.name || ''
+    const displayName = name.length > 4 ? name.slice(0, 4) : name
+    ctx.fillText(displayName, bx + 22, boxY + boxH / 2)
+
     ctx.textAlign = 'left'
     ctx.textBaseline = 'alphabetic'
 
-    // 记录触摸热区
-    item._bounds = { x: ix, y: iy, w: iconSize, h: iconSize + 14 }
+    // 触摸热区
+    item._bounds = { x: bx, y: boxY, w: boxW, h: boxH }
   })
 }
 
@@ -1367,27 +1408,49 @@ function drawJadeTablet(ctx) {
 }
 
 // ─────── 加载中 ───────
+// v0.2.2 — 加载提示（暖色小条 + 楷体）
 function drawLoading(ctx) {
-  // P2.10 不覆盖叙事，只显示半透明顶部提示
-  const barH = 44
-  const barY = layout.windowH - layout.itemBarH - barH - 10
+  const barH = 40
+  const barY = layout.windowH - layout.itemBarH - barH - 8
+  const elapsed = Date.now() - loadingStart
+
+  // 1. 半透暖色底（v0.2.2 改：去掉黑底）
   ctx.save()
-  ctx.fillStyle = 'rgba(0,0,0,0.7)'
-  roundRect(ctx, layout.padding, barY, layout.windowW - layout.padding * 2, barH, 8)
+  ctx.fillStyle = 'rgba(35, 28, 22, 0.85)'  // 暖木色
+  roundRect(ctx, layout.padding, barY, layout.windowW - layout.padding * 2, barH, 4)
   ctx.fill()
-  ctx.strokeStyle = 'rgba(212,168,83,0.3)'
-  ctx.lineWidth = 1
-  roundRect(ctx, layout.padding, barY, layout.windowW - layout.padding * 2, barH, 8)
+  // 暖金细描边
+  ctx.strokeStyle = 'rgba(232, 200, 130, 0.5)'
+  ctx.lineWidth = 0.8
+  roundRect(ctx, layout.padding, barY, layout.windowW - layout.padding * 2, barH, 4)
   ctx.stroke()
   ctx.restore()
 
-  ctx.fillStyle = COLORS.gold
-  ctx.font = '14px ' + ui.fontFamily
-  ctx.textAlign = 'center'
+  // 2. 左侧毛笔蘸墨动画（朱砂色随周期变化）
+  const cycle = (elapsed % 1600) / 1600
+  const penX = layout.padding + 18
+  const penY = barY + barH / 2
+  ctx.save()
+  ctx.strokeStyle = 'rgba(80, 50, 30, 0.7)'
+  ctx.lineWidth = 2
+  ctx.lineCap = 'round'
+  ctx.beginPath()
+  ctx.moveTo(penX, penY)
+  ctx.lineTo(penX + 14, penY - 6)
+  ctx.stroke()
+  ctx.fillStyle = 'rgba(192, 48, 48, ' + (0.5 + cycle * 0.5) + ')'
+  ctx.beginPath()
+  ctx.arc(penX + 16, penY - 7, 2.5, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+
+  // 3. 文字（楷体 + 暖色）
+  ctx.fillStyle = 'rgba(245, 239, 224, 0.9)'
+  ctx.font = '13px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+  ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
-  const dots = '.'.repeat(((Date.now() - loadingStart) / 500 % 4) | 0)
-  // v0.1.74 (D008): 异步轮询期间显示等待时长
-  ctx.fillText(loadingText + dots, layout.windowW / 2, barY + barH / 2)
+  ctx.fillText(loadingText, penX + 28, penY)
+
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
 }
@@ -1507,6 +1570,14 @@ function drawDebugPanel(ctx) {
   ctx.fillStyle = '#888'
   ctx.font = '11px sans-serif'
   ctx.fillText('最近 ' + debugLog.length + ' 轮', w - arrowSize - 24, closeBarH / 2)
+  // v0.2.3: 错误轮数显示（红色），让先生一眼看到哪些轮出过问题
+  const errCount = debugLog.filter(d => d.resultError).length
+  if (errCount > 0) {
+    ctx.fillStyle = '#ff6060'
+    ctx.font = 'bold 11px monospace'
+    ctx.textAlign = 'right'
+    ctx.fillText('❌ ' + errCount + ' 轮出错', w - arrowSize - 24, closeBarH / 2 + 16)
+  }
 
   // 内容区
   ctx.save()
@@ -1523,8 +1594,16 @@ function drawDebugPanel(ctx) {
   let allText = ''
   for (let i = 0; i < debugLog.length; i++) {
     const d = debugLog[i]
-    allText += `== 第 ${i + 1}/${debugLog.length} 轮 round=${d.round} ==\n`
-    allText += `[INPUT 玩家选项]: ${d.input || '(空)'}\n\n`
+    // v0.2.3: 错误轮次顶部加红色 ❌ 标记，方便先生一眼看出哪些轮出过错
+    const errMark = d.resultError ? '❌ [出错] ' : '✅ '
+    allText += `${errMark}== 第 ${i + 1}/${debugLog.length} 轮 round=${d.round} ==\n`
+    // v0.2.3: 状态摘要（让先生一眼看到上下文）
+    const stateStr = d.data && d.data.state ? `[朝代=${d.data.state.dynasty || '?'} 身份=${d.data.state.occupation || '?'} 年=${d.data.state.year || '?'} 月=${d.data.state.month || '?'} 历史=${(d.data.history || []).length}条]` : ''
+    allText += `${stateStr}\n`
+    allText += `[INPUT 玩家选项]: ${d.input || '(空)'}\n`
+    allText += `[is_retry]: ${d.data && d.data.is_retry ? 'true' : 'false'}, [action]: ${d.action || '?'}\n`
+    if (d.poll_attempts !== undefined) allText += `[poll_attempts]: ${d.poll_attempts}, [poll_elapsed_ms]: ${d.poll_elapsed_ms || 0}\n`
+    allText += '\n'
 
     if (d.messages_to_ai && d.messages_to_ai.length > 0) {
       allText += `[发给 AI 的 messages]:\n`
@@ -1545,7 +1624,8 @@ function drawDebugPanel(ctx) {
     }
 
     if (d.resultError) {
-      allText += `[ERROR]: ${d.resultError}\n\n`
+      // v0.2.3: 错误时用醒目的分隔符包裹，方便识别
+      allText += `\n╔════ ERROR ════╗\n${d.resultError}\n╚════════════════╝\n\n`
     }
 
     allText += '\n'

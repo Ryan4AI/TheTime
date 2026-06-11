@@ -24,6 +24,10 @@ const MAX_TOKENS = 2500
 const TEMPERATURE = 0.85
 const LLM_TIMEOUT_MS = 110000
 
+// v0.2.4 — worker main 改成"启动后立刻 return"
+// 关键变化：所有 LLM/DB 操作移到 backgroundTask()，main 只触发后立即 return
+// 这样 submit 的 await cloud.callFunction 不会等 30+ 秒（只等 1-2 秒 worker 启动）
+// 前端拿到的 submit 响应时间不变
 exports.main = async (event) => {
   const { request_id, payload } = event
 
@@ -31,9 +35,26 @@ exports.main = async (event) => {
     return { error: '缺少 request_id', code: 400 }
   }
   if (!payload || !payload.state) {
+    // v0.2.4: 缺 state 时也要写 narrate_result，前端能查到原因
+    await safeWriteResult(request_id, '', 'worker缺 payload.state')
     return { error: '缺少 payload.state', code: 400 }
   }
 
+  console.log('[ai_narrate_worker] 启动, request_id=', request_id)
+
+  // v0.2.4 关键修复：后台跑主逻辑，不 await
+  // 微信云函数支持：async main 返回后，后台 Promise 仍会继续执行直到云函数实例销毁
+  backgroundTask(request_id, payload).catch(e => {
+    console.error('[ai_narrate_worker] backgroundTask 异常:', e.message)
+    safeWriteResult(request_id, '', '[backgroundTask_crash] ' + e.message)
+  })
+
+  // 立即返回（不阻塞 submit）
+  return { success: true, status: 'started', elapsed_ms: 0 }
+}
+
+// v0.2.4 — 主逻辑移到 backgroundTask（与 main 分离）
+async function backgroundTask(request_id, payload) {
   const startTs = Date.now()
 
   try {
@@ -75,37 +96,74 @@ exports.main = async (event) => {
 
     // v0.1.76 新增：写独立的 narrate_result 集合（固定 schema，无动态字段问题）
     try {
-      await db.collection('narrate_result').add({
-        data: {
-          _id: request_id,
-          result_str: JSON.stringify(result),  // 存 JSON 字符串，parse 回用
-          error_str: '',
-          created_at: Date.now(),
-        },
-      })
+      // v0.2.4: 先检查 _id 是否已存在（submit超时写的 error 记录），避免覆盖
+      const existing = await db.collection('narrate_result').where({ _id: request_id }).get()
+      if (existing.data && existing.data.length > 0) {
+        console.log('[ai_narrate_worker] narrate_result 已存在（可能是 submit 超时写的），跳过 add, request_id=', request_id)
+      } else {
+        await db.collection('narrate_result').add({
+          data: {
+            _id: request_id,
+            result_str: JSON.stringify(result),  // 存 JSON 字符串，parse 回用
+            error_str: '',
+            created_at: Date.now(),
+          },
+        })
+      }
     } catch (e) {
       console.error('[ai_narrate_worker] 写 narrate_result 失败:', e.message)
-      // 不影响主流程
+      // v0.2.4: 写失败也不能让前端永久 NOT_FOUND，标记为 error
+      await safeWriteResult(request_id, '', '写narrate_result失败: ' + e.message)
     }
 
-    return { success: true, status: 'done', elapsed_ms: Date.now() - startTs }
+    console.log('[ai_narrate_worker] 完成, request_id=', request_id, ', elapsed_ms=', Date.now() - startTs)
   } catch (e) {
-    console.error('[ai_narrate_worker] 失败:', e.message)
+    console.error('[ai_narrate_worker] backgroundTask 失败:', e.message)
 
+    // v0.2.4: 主异常时也要写 narrate_result（之前是有 try/catch 但如果 add 失败会被吞掉）
+    await safeWriteResult(request_id, '', e.message || 'AI服务暂不可用')
+  }
+}
+
+// v0.2.4: 安全写 narrate_result（任何错误都不抛，外层有兜底）
+// 之前是 try { add() } catch { console.error } —— 如果 add 失败就被吞了，前端永久 NOT_FOUND
+// 现在改成两次尝试 + 详细日志
+async function safeWriteResult(request_id, result_str, error_str) {
+  try {
+    await db.collection('narrate_result').add({
+      data: {
+        _id: request_id,
+        result_str: result_str || '',
+        error_str: error_str || '',
+        created_at: Date.now(),
+      },
+    })
+  } catch (e1) {
+    console.error('[safeWriteResult] 第1次 add 失败:', e1.message, 'request_id=', request_id)
+    // 第2次尝试（可能是 CAP 一致性问题，重试一次）
     try {
       await db.collection('narrate_result').add({
         data: {
           _id: request_id,
-          result_str: '',
-          error_str: e.message || 'AI服务暂不可用',
+          result_str: result_str || '',
+          error_str: (error_str || '') + ' [retry_after_fail: ' + e1.message + ']',
           created_at: Date.now(),
         },
       })
-    } catch (writeErr) {
-      console.error('[ai_narrate_worker] 写 error 结果失败:', writeErr.message)
+    } catch (e2) {
+      console.error('[safeWriteResult] 第2次 add 失败:', e2.message, 'request_id=', request_id)
+      // 最后兜底：写 narrate_pending（前端不读 pending，但能查到日志）
+      try {
+        await db.collection('narrate_pending').where({ _id: request_id }).update({
+          data: {
+            error: '[safeWriteResult_failed] ' + (error_str || '') + ' | ' + e2.message,
+            finished_at: Date.now(),
+          },
+        })
+      } catch (e3) {
+        console.error('[safeWriteResult] 写 pending 也失败:', e3.message)
+      }
     }
-
-    return { success: false, error: e.message, elapsed_ms: Date.now() - startTs }
   }
 }
 

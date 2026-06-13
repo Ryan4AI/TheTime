@@ -320,10 +320,14 @@ function render(ctx) {
 // ─── Touch ───
 function onTouch(x, y, type) {
   if (type === 'end') {
-    if (hitTest(x, y, layout.btnX, layout.btnY1, layout.btnW, layout.btnH)) {
+    var now = Date.now()
+    var b1 = anims.btnStart.update(now)
+    var b2 = anims.btnLeaderboard.update(now)
+    
+    if (b1.opacity > 0 && hitTest(x, y, layout.btnX, layout.btnY1 + b1.y, layout.btnW, layout.btnH)) {
       return { scene: 'selection' }
     }
-    if (hitTest(x, y, layout.btnX, layout.btnY2, layout.btnW, layout.btnH)) {
+    if (b2.opacity > 0 && hitTest(x, y, layout.btnX, layout.btnY2 + b2.y, layout.btnW, layout.btnH)) {
       return { scene: 'leaderboard' }
     }
   }

@@ -226,6 +226,7 @@ function initLayout() {
 function callAI(userInput) {
   loading = true
   loadingStart = Date.now()
+  narrative = ''  // v0.2.5-AF: 清空上一轮叙事，让 loading 动画能显示（先生 20:33 反馈第二次选选项后 loading 不动画）
   errorMsg = ''
 
   const action = (narrativeHistory && narrativeHistory.length > 0) ? 'continue' : 'init'

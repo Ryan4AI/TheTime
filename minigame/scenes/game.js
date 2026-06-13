@@ -732,7 +732,9 @@ function adjustFluidLayout() {
 
   layout.sceneH = sceneH
   layout.sceneVisible = showScene
-  layout.textY = safeTop + topBarH + 4 + sceneH + 8
+  // v0.2.5-M（先生 2026-06-13 11:15 拍板·修"叠在一起"）：textY 加上 statusBarH
+  // 之前漏算 statusBarH 导致文字起点在顶栏下方，但状态栏（26 高）也画在那里 → 文字和状态栏重叠
+  layout.textY = safeTop + topBarH + (layout.statusBarH || 0) + 4 + sceneH + 8
   layout.textH = finalTextH
   // v0.1.67: 文字面板底部 + 6px 缓冲后再放选项（解决按钮紧贴文字面板的"下溢"感）
   layout.optionY = layout.textY + finalTextH + 6

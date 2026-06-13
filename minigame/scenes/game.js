@@ -933,23 +933,19 @@ function drawSealTopBar(ctx) {
   const sealCenterY = safeTop + topH / 2
   ui.drawSealStamp(ctx, sealCenterX, sealCenterY, 20, sealChar)
 
-  // 2. "穿越日记"主标题（朱砂印右侧，楷体大字，v0.2.2 新增）
-  // v0.2.5-AA（先生 2026-06-13 19:59 拍板）：字号从 17px 增大到 20px
+  // 2. v0.2.5-AD（先生 2026-06-13 20:29 拍板）：去掉"穿越日记"主标题，只保留副标题
   ctx.save()
-  ctx.fillStyle = 'rgba(232,221,208,0.95)'  // 暖米黄（宣纸色）
-  ctx.font = 'bold 22px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'middle'
-  ctx.fillText('穿越日记', sealCenterX + 36, sealCenterY - 7)
   // v0.2.5-L（先生 2026-06-13 11:14 拍板）：副标题把月份拼到年旁边
   // 之前月在状态栏第 4 段，状态栏改成 3 段后月合并到这里
   const seasonNamesTopBar = ['正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '冬月', '腊月']
   const monthStrTopBar = seasonNamesTopBar[(state.month || 1) - 1] || ''
   const eraStr = state.eraDisplay || (state.dynasty + ' ' + state.year + '年')
   const subInfo = eraStr + monthStrTopBar + '  ·  ' + state.name + state.age + '岁'
-  ctx.fillStyle = 'rgba(200,168,124,0.7)'
-  ctx.font = '11px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-  ctx.fillText(subInfo, sealCenterX + 36, sealCenterY + 9)
+  ctx.fillStyle = 'rgba(232,221,208,0.95)'  // 暖米黄（原主标题色）
+  ctx.font = '13px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily  // 字号稍大
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(subInfo, sealCenterX + 36, sealCenterY)
   ctx.restore()
 
   // 4. 暗金细线分隔（顶栏底部）

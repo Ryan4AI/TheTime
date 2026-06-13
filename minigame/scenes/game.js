@@ -1641,19 +1641,35 @@ function drawDebugPanel(ctx) {
   ctx.fillStyle = '#1a1a1a'
   ctx.fillRect(0, 0, w, closeBarH)
 
-  // v0.1.75 加"复制"按钮（紧贴右上角 ▲ 左边）
+  // v0.2.5-R（先生 2026-06-13 15:36 拍板）：两个复制按钮
+  //   - "全复制"（64px）：复制完整调试信息（system prompt + 对话 + 原始响应 + 分支 + 错误）
+  //   - "复制对话"（80px）：只复制 messages[1:]（跳过第一段 system prompt），先生反馈 system prompt 太长粘贴不下来
   const copyBtnW = 64
+  const dialogBtnW = 80
   const _ARROW_SIZE = 28  // 占位用，避免 const 重复声明
-  const copyBtnX = w - _ARROW_SIZE - 8 - copyBtnW - 4
+  // 按钮布局（右到左）：▲ → 复制对话(80) → 全复制(64) → [关闭条左侧]
+  const dialogBtnX = w - _ARROW_SIZE - 8 - dialogBtnW - 4
+  const copyBtnX = dialogBtnX - copyBtnW - 4
+
+  // 1. "全复制"按钮
   ctx.fillStyle = 'rgba(240,200,120,0.18)'
   ctx.fillRect(copyBtnX, 4, copyBtnW, closeBarH - 8)
   ctx.fillStyle = '#f0c878'
   ctx.font = 'bold 13px sans-serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText('复制', copyBtnX + copyBtnW / 2, closeBarH / 2 + 1)
-  // 标记按钮区域供触摸用
+  ctx.fillText('全复制', copyBtnX + copyBtnW / 2, closeBarH / 2 + 1)
   layout._copyBtn = { x: copyBtnX, y: 0, w: copyBtnW, h: closeBarH }
+
+  // 2. "复制对话"按钮（更高亮 — 这是先生最常用的）
+  ctx.fillStyle = 'rgba(240,200,120,0.32)'  // 比"全复制"更亮的填充
+  ctx.fillRect(dialogBtnX, 4, dialogBtnW, closeBarH - 8)
+  ctx.fillStyle = '#f0c878'
+  ctx.font = 'bold 13px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('复制对话', dialogBtnX + dialogBtnW / 2, closeBarH / 2 + 1)
+  layout._dialogBtn = { x: dialogBtnX, y: 0, w: dialogBtnW, h: closeBarH }
 
   ctx.fillStyle = '#f0c878'
   ctx.font = 'bold 14px sans-serif'
@@ -1892,9 +1908,10 @@ function handleTouch(x, y, type) {
       // v0.1.75 复制按钮（顶部条右）
       // v0.1.69 (D008): v10 prompt 单条 3000+ 字符 + history ×6 + AI 返回 = 单轮 txt 几万字符
       // wx.setClipboardData 实测 4-5 万字符以上容易失败 → 改为"只复制最新一轮"
+      // v0.2.5-R（先生 15:36 拍板）：加第二个按钮"复制对话"，只复制 messages[1:] 不含 system prompt
       if (type === 'end' && layout._copyBtn && y <= closeBarH
           && x >= layout._copyBtn.x && x <= layout._copyBtn.x + layout._copyBtn.w) {
-        // 拼接最近一轮 AI 输入输出为文本（D008: 单轮策略，避开剪贴板字符上限）
+        // "全复制"按钮：复制完整调试信息（包括 system prompt）
         if (debugLog.length === 0) {
           if (wx.showToast) wx.showToast({ title: '暂无调试数据', icon: 'none' })
           return null
@@ -1920,7 +1937,48 @@ function handleTouch(x, y, type) {
           wx.setClipboardData({
             data: txt,
             success: () => {
-              if (wx.showToast) wx.showToast({ title: '已复制 ' + txt.length + ' 字符', icon: 'none', duration: 1500 })
+              if (wx.showToast) wx.showToast({ title: '已复制 ' + txt.length + ' 字符（含 system prompt）', icon: 'none', duration: 1500 })
+            },
+            fail: (e) => {
+              if (wx.showToast) wx.showToast({ title: '复制失败：' + (e.errMsg || ''), icon: 'none' })
+            }
+          })
+        }
+        return null
+      }
+
+      // v0.2.5-R："复制对话"按钮 — 只复制 messages[1:] 跳过 system prompt（先生反馈太长粘贴不下来）
+      if (type === 'end' && layout._dialogBtn && y <= closeBarH
+          && x >= layout._dialogBtn.x && x <= layout._dialogBtn.x + layout._dialogBtn.w) {
+        if (debugLog.length === 0) {
+          if (wx.showToast) wx.showToast({ title: '暂无调试数据', icon: 'none' })
+          return null
+        }
+        const d = debugLog[debugLog.length - 1]
+        let txt = `== 最新一轮 round=${d.round} 对话（不含 system prompt）==\n`
+        txt += `[INPUT 玩家选项]: ${d.input || '(空)'}\n\n`
+        if (d.messages_to_ai && d.messages_to_ai.length > 1) {
+          txt += `[对话流]:\n`
+          // 跳过 messages[0]（system prompt），从 messages[1] 开始
+          d.messages_to_ai.slice(1).forEach((m, j) => {
+            txt += `  ── [${j + 1}] ${m.role} ──\n${m.content}\n\n`
+          })
+        } else {
+          txt += `[对话流]: (无)\n`
+        }
+        if (d.raw_response) txt += `[AI 原始返回]:\n${d.raw_response}\n\n`
+        if (d.all_branches && d.all_branches.length > 0) {
+          txt += `[AI 生成 ${d.all_branches.length} 个分支]:\n`
+          d.all_branches.forEach((b, j) => {
+            txt += `  分支${j + 1} p=${b.p}\n  ${b.content || ''}\n  options: ${JSON.stringify(b.options)}\n\n`
+          })
+        }
+        if (d.resultError) txt += `[ERROR]: ${d.resultError}\n`
+        if (typeof wx !== 'undefined' && wx.setClipboardData) {
+          wx.setClipboardData({
+            data: txt,
+            success: () => {
+              if (wx.showToast) wx.showToast({ title: '已复制 ' + txt.length + ' 字符（已跳 system prompt）', icon: 'none', duration: 1500 })
             },
             fail: (e) => {
               if (wx.showToast) wx.showToast({ title: '复制失败：' + (e.errMsg || ''), icon: 'none' })

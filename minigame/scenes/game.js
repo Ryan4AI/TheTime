@@ -951,12 +951,12 @@ function drawStatusBar(ctx) {
   ctx.stroke()
   ctx.restore()
 
-  // 2. 3 段信息：气血 / 金银 / 身份（v0.2.5-L：月合并到顶栏副标题）
+  // 2. 4 段信息：气血 / 金银 / 身份 / 城市（v0.2.5-N：先生 2026-06-13 11:17 拍板 — 加回城市）
   ctx.font = '11px ' + ui.fontFamily
   ctx.textBaseline = 'middle'
 
-  // 分段布局：气血 33% / 金银 33% / 身份 33%
-  const segW = w / 3
+  // 分段布局：气血 25% / 金银 25% / 身份 25% / 城市 25%
+  const segW = w / 4
   const cy = top + h / 2
 
   // 段 1：气血（health + 进度条）
@@ -990,7 +990,15 @@ function drawStatusBar(ctx) {
   ctx.fillText('身份', seg3X + 4, cy)
   ctx.fillStyle = 'rgba(245,239,224,0.85)'
   const occStr = state.occupation || '庶民'
-  ctx.fillText(occStr.length > 6 ? occStr.slice(0, 5) + '…' : occStr, seg3X + 36, cy)
+  ctx.fillText(occStr.length > 4 ? occStr.slice(0, 3) + '…' : occStr, seg3X + 32, cy)
+
+  // 段 4：城市（v0.2.5-N：状态栏加回城市信息）
+  const seg4X = padding + segW * 3
+  ctx.fillStyle = 'rgba(200,200,200,0.6)'
+  ctx.fillText('城', seg4X + 4, cy)
+  ctx.fillStyle = 'rgba(245,239,224,0.85)'
+  const cityStr = state.city || '?'
+  ctx.fillText(cityStr.length > 4 ? cityStr.slice(0, 3) + '…' : cityStr, seg4X + 28, cy)
 
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'

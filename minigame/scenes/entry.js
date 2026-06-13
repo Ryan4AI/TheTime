@@ -10,7 +10,7 @@ const {
 const { CharAnim, SlideFadeAnim, FadeAnim } = require('../engine/anim')
 
 const TITLE = '穿越日记'
-const SUBTITLE = '你的名字，能否刻入历史？'
+const SUBTITLE = '留名青史，或无名而亡'
 const BTN_START = '踏入长河'
 const FOOTER = 'AI演绎 · 历史真实数据'
 
@@ -321,6 +321,9 @@ function onTouch(x, y, type) {
   if (type === 'end') {
     if (hitTest(x, y, layout.btnX, layout.btnY1, layout.btnW, layout.btnH)) {
       return { scene: 'selection' }
+    }
+    if (hitTest(x, y, layout.btnX, layout.btnY2, layout.btnW, layout.btnH)) {
+      return { scene: 'leaderboard' }
     }
   }
   return null

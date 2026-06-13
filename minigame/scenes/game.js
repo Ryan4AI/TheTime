@@ -1065,7 +1065,10 @@ function drawNarrative(ctx) {
     ctx.font = '10px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
-    ctx.fillText('◇  史官手书  ◇', layout.windowW / 2, ty + 4)
+    // v0.2.5-O（先生 2026-06-13 11:38 拍板）：史官手书往上挪到 ty + 0 顶部居中
+    // 之前 ty+4 跟正文 mainStartY (ty+8) 只差 4px，10px 史官手书叠在 16px 正文第 1 行上面
+    // 正文改为 ty+24 起，给史官手书留 14px 高度（ty+0~ty+10）+ 14px 间距（ty+10~ty+24）
+    ctx.fillText('◇  史官手书  ◇', layout.windowW / 2, ty + 0)
     ctx.restore()
   }
 
@@ -1076,7 +1079,9 @@ function drawNarrative(ctx) {
   let mainText = text
 
   // 3. 正文（暖米黄 + 楷体大字）—— v0.2.2 改：暖色 + 楷体
-  const mainStartY = ty + 8 + scrollOffset
+  // v0.2.5-O（先生 11:38 拍板）：mainStartY 从 ty+8 改成 ty+24
+  // 给"史官手书"（ty+0~ty+10）留出独立区域，避免叠在正文第 1 行
+  const mainStartY = ty + 24 + scrollOffset
   ctx.fillStyle = 'rgba(245, 239, 224, 0.95)'  // 暖米黄（比 v0.1.62 的 e8ddd0 更亮）
   ctx.font = '16px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
   const contentEndY = drawTextInRect(ctx, mainText, tx + 20, mainStartY, maxW, lineHeight, fontSize)
@@ -1198,11 +1203,13 @@ function drawOptions(ctx) {
 
 // ─────── 自由输入按钮 ───────
 // v0.2.2 — 自由输入按钮（朱砂虚线框 + 楷体）
+// v0.2.5-O（先生 2026-06-13 11:38 拍板）：间距 8→14、按钮高度 26→32，加更明显的视觉区分
 function drawFreeInputButton(ctx) {
   const fadeIn = layout.optionFadeIn || 0
   if (fadeIn <= 0) return
-  let freeY = layout.optionY + options.length * (layout.optionH + layout.optionGap) + 8
-  const freeH = 26
+  let freeY = layout.optionY + options.length * (layout.optionH + layout.optionGap) + 14
+  // v0.2.5-O：与 initLayout.freeInputH=32 对齐（之前 26 是历史 bug，触摸热区会偏移）
+  const freeH = layout.freeInputH || 32
   const freeX = layout.padding
   const freeW = layout.windowW - layout.padding * 2
   // v0.2.5-D：限制 freeY 不超出物品栏（防止 3 选项 + 长 narrative 时 freeInput 按钮被切）
@@ -1215,8 +1222,8 @@ function drawFreeInputButton(ctx) {
 
   ctx.save()
   ctx.globalAlpha = alpha
-  // 半透深色填充 + 朱砂虚线边框
-  ctx.fillStyle = 'rgba(20, 16, 12, 0.5)'
+  // v0.2.5-O：加深填充色，让自由输入按钮和上面的选项按钮视觉上明显分隔
+  ctx.fillStyle = 'rgba(15, 10, 6, 0.7)'
   roundRect(ctx, freeX, freeY, freeW, freeH, 4)
   ctx.fill()
   ctx.strokeStyle = 'rgba(192, 48, 48, 0.55)'
@@ -1315,11 +1322,15 @@ function drawItemBar(ctx) {
     ctx.restore()
 
     // emoji 图标（左侧，暖金色）
+    // v0.2.5-O（先生 11:38 拍板）：图标居中位置从 bx+11 改成 bx+14，避开 box 左边缘
+    // 之前 emoji 14px 字号 + boxW=56 + bx+11 = 图标左边缘 bx+3（紧贴内细线 bx+2）
+    // 复合 emoji（4 字节）渲染时实际视觉宽度更大，可能溢出 box 右边框
+    // 修复：图标水平位置右移 3px（bx+14），字号 14→13 减小字号留更多空间
     ctx.fillStyle = 'rgba(232, 200, 130, 0.95)'  // 暖金
-    ctx.font = '14px ' + ui.fontFamily
+    ctx.font = '13px ' + ui.fontFamily
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(item.icon || '📦', bx + 11, boxY + boxH / 2)
+    ctx.fillText(item.icon || '📦', bx + 14, boxY + boxH / 2)
 
     // 物品名（右侧，楷体）—— v0.2.5-D：字号自适应 + 截断避免溢出 boxW
     ctx.fillStyle = 'rgba(245, 239, 224, 0.9)'

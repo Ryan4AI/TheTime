@@ -734,7 +734,10 @@ function render(ctx) {
     drawItemDetail(ctx)
   }
 
-  // 13. AI 调试浮窗（v0.1.61）—— 最高层级，最右上的小图标或全屏覆盖
+  // 13. v2 新增：榜单浮窗（最高层级）
+  drawLeaderboard(ctx)
+
+  // 14. AI 调试浮窗（v0.1.61）—— 最高层级，最右上的小图标或全屏覆盖
   drawDebugPanel(ctx)
 }
 
@@ -998,7 +1001,27 @@ function drawSealTopBar(ctx) {
   // 4. 暗金细线分隔（顶栏底部）
   ui.drawClassicalDivider(ctx, padding, safeTop + topH - 1, layout.windowW - padding * 2, 0.6)
 
-  // 5. 触摸区域
+  // 5. v2 新增：右侧"榜"按钮（朱砂色圆角矩形 + 暖金字）
+  const btnSize = 28
+  const btnX = layout.windowW - padding - btnSize - 4
+  const btnY = safeTop + (topH - btnSize) / 2
+  ctx.save()
+  ctx.fillStyle = 'rgba(192,48,48,0.7)'
+  roundRect(ctx, btnX, btnY, btnSize, btnSize, 6)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(200,168,124,0.6)'
+  ctx.lineWidth = 0.8
+  roundRect(ctx, btnX, btnY, btnSize, btnSize, 6)
+  ctx.stroke()
+  ctx.fillStyle = 'rgba(245,239,224,0.95)'
+  ctx.font = 'bold 13px ' + ui.fontFamily
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('榜', btnX + btnSize / 2, btnY + btnSize / 2)
+  ctx.restore()
+  layout._boardBtn = { x: btnX, y: btnY, w: btnSize, h: btnSize }
+
+  // 6. 触摸区域
   layout._sealArea = { x: 0, y: 0, w: layout.windowW, h: safeTop + topH }
 }
 
@@ -1099,6 +1122,13 @@ var attrNoticeTime = 0           // 属性变化提示开始时间
 var attrNoticeText = ''          // 属性变化文本（如"声望+50 医术+200"）
 var surpassNoticeTime = 0        // 超越提示开始时间
 var surpassNoticeText = ''       // 超越文本（如"你的医术已超越华佗！"）
+
+// v2 新增：榜单系统
+var showLeaderboard = false      // 是否显示榜单浮窗
+var currentBoardIndex = 0        // 当前选中榜单索引（0-9）
+var leaderboardData = null       // 榜单数据（从云函数获取）
+var leaderboardLoading = false   // 是否在加载榜单数据
+const BOARD_LIST = ['名医榜', '名将榜', '富商榜', '文豪榜', '能臣榜', '义士榜', '全能榜', '长寿榜', '旅行家榜', '颜值榜']
 
 // v0.2.2 — 叙事区（去白底卡片 + 文字直渲染 + 卷首小印 + 楷体）
 function drawNarrative(ctx) {
@@ -1698,6 +1728,203 @@ function drawSurpassNotice(ctx) {
   ctx.textBaseline = 'alphabetic'
 }
 
+// v2 新增：榜单浮窗
+function drawLeaderboard(ctx) {
+  if (!showLeaderboard) return
+
+  const w = layout.windowW
+  const h = layout.windowH
+
+  // 半透明遮罩
+  ctx.fillStyle = 'rgba(0,0,0,0.8)'
+  ctx.fillRect(0, 0, w, h)
+
+  // 面板
+  const pw = w - 20
+  const ph = h - 40
+  const px = 10
+  const py = 20
+
+  // 面板背景
+  ctx.save()
+  ctx.fillStyle = 'rgba(26,36,30,0.98)'
+  roundRect(ctx, px, py, pw, ph, 12)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(90,138,112,0.6)'
+  ctx.lineWidth = 1.5
+  roundRect(ctx, px, py, pw, ph, 12)
+  ctx.stroke()
+  ctx.restore()
+
+  // 标题
+  ctx.fillStyle = COLORS.jade
+  ctx.font = 'bold 16px ' + ui.fontFamily
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('历 史 名 人 榜', px + pw / 2, py + 24)
+
+  // Tab区域（2行5列）
+  const tabY = py + 48
+  const tabH = 28
+  const tabGap = 4
+  const tabColW = (pw - 40 - tabGap * 4) / 5
+  layout._boardTabs = []
+
+  for (let i = 0; i < BOARD_LIST.length; i++) {
+    const row = Math.floor(i / 5)
+    const col = i % 5
+    const tx = px + 20 + col * (tabColW + tabGap)
+    const ty = tabY + row * (tabH + tabGap)
+    const isSelected = (i === currentBoardIndex)
+
+    // Tab背景
+    ctx.fillStyle = isSelected ? 'rgba(192,48,48,0.8)' : 'rgba(200,168,124,0.15)'
+    roundRect(ctx, tx, ty, tabColW, tabH, 4)
+    ctx.fill()
+
+    // Tab文字
+    ctx.fillStyle = isSelected ? 'rgba(245,239,224,0.95)' : 'rgba(200,168,124,0.7)'
+    ctx.font = (isSelected ? 'bold ' : '') + '11px ' + ui.fontFamily
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(BOARD_LIST[i], tx + tabColW / 2, ty + tabH / 2)
+
+    layout._boardTabs.push({ x: tx, y: ty, w: tabColW, h: tabH, index: i })
+  }
+
+  // 内容区域
+  const contentY = tabY + (tabH + tabGap) * 2 + 12
+  const contentH = ph - 120
+  const contentX = px + 20
+  const contentW = pw - 40
+
+  // 分隔线
+  ctx.strokeStyle = 'rgba(90,138,112,0.2)'
+  ctx.lineWidth = 0.5
+  ctx.beginPath()
+  ctx.moveTo(contentX, contentY - 6)
+  ctx.lineTo(contentX + contentW, contentY - 6)
+  ctx.stroke()
+
+  if (leaderboardLoading) {
+    // 加载中
+    ctx.fillStyle = 'rgba(200,168,124,0.6)'
+    ctx.font = '14px ' + ui.fontFamily
+    ctx.textAlign = 'center'
+    ctx.fillText('加载中...', px + pw / 2, contentY + contentH / 2)
+  } else if (!leaderboardData || !leaderboardData[BOARD_LIST[currentBoardIndex]]) {
+    // 无数据
+    ctx.fillStyle = 'rgba(200,168,124,0.6)'
+    ctx.font = '14px ' + ui.fontFamily
+    ctx.textAlign = 'center'
+    ctx.fillText('暂无数据', px + pw / 2, contentY + contentH / 2)
+  } else {
+    // 显示人物列表
+    const chars = leaderboardData[BOARD_LIST[currentBoardIndex]]
+    const rowH = 32
+    const maxRows = Math.floor(contentH / rowH)
+
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+
+    for (let i = 0; i < Math.min(chars.length, maxRows); i++) {
+      const char = chars[i]
+      const ry = contentY + i * rowH
+
+      // 排名
+      ctx.fillStyle = char.排名 <= 3 ? 'rgba(192,48,48,0.9)' : 'rgba(200,168,124,0.6)'
+      ctx.font = (char.排名 <= 3 ? 'bold ' : '') + '12px ' + ui.fontFamily
+      ctx.fillText(char.排名, contentX, ry + rowH / 2)
+
+      // 姓名
+      ctx.fillStyle = 'rgba(245,239,224,0.9)'
+      ctx.font = '13px ' + ui.fontFamily
+      ctx.fillText(char.name, contentX + 36, ry + rowH / 2)
+
+      // 朝代
+      ctx.fillStyle = 'rgba(200,168,124,0.6)'
+      ctx.font = '11px ' + ui.fontFamily
+      ctx.fillText(char.dynasty, contentX + 90, ry + rowH / 2)
+
+      // 综合分
+      ctx.fillStyle = 'rgba(245,239,224,0.8)'
+      ctx.font = '12px ' + ui.fontFamily
+      ctx.textAlign = 'right'
+      ctx.fillText(char.综合分 + '分', contentX + contentW, ry + rowH / 2)
+      ctx.textAlign = 'left'
+
+      // 分隔线
+      if (i < chars.length - 1) {
+        ctx.strokeStyle = 'rgba(90,138,112,0.1)'
+        ctx.lineWidth = 0.3
+        ctx.beginPath()
+        ctx.moveTo(contentX, ry + rowH)
+        ctx.lineTo(contentX + contentW, ry + rowH)
+        ctx.stroke()
+      }
+    }
+
+    // 显示总数
+    if (chars.length > maxRows) {
+      ctx.fillStyle = 'rgba(200,168,124,0.5)'
+      ctx.font = '10px ' + ui.fontFamily
+      ctx.textAlign = 'center'
+      ctx.fillText('显示前 ' + maxRows + ' 人，共 ' + chars.length + ' 人', px + pw / 2, contentY + contentH - 8)
+    }
+  }
+
+  // 关闭按钮
+  const closeBtnSize = 32
+  const closeBtnX = px + pw - closeBtnSize - 8
+  const closeBtnY = py + 8
+  ctx.fillStyle = 'rgba(192,48,48,0.7)'
+  roundRect(ctx, closeBtnX, closeBtnY, closeBtnSize, closeBtnSize, 6)
+  ctx.fill()
+  ctx.fillStyle = 'rgba(245,239,224,0.9)'
+  ctx.font = 'bold 16px ' + ui.fontFamily
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('×', closeBtnX + closeBtnSize / 2, closeBtnY + closeBtnSize / 2)
+  layout._boardCloseBtn = { x: closeBtnX, y: closeBtnY, w: closeBtnSize, h: closeBtnSize }
+
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+}
+
+// v2 新增：获取榜单数据
+function fetchLeaderboardData() {
+  if (leaderboardData) return // 已加载
+  leaderboardLoading = true
+
+  wx.cloud.callFunction({
+    name: 'leaderboard_query',
+    data: { action: 'list' }
+  }).then(res => {
+    if (res.result && res.result.success) {
+      // 获取所有榜单详情
+      const promises = BOARD_LIST.map(name =>
+        wx.cloud.callFunction({
+          name: 'leaderboard_query',
+          data: { action: 'detail', board: name }
+        })
+      )
+      return Promise.all(promises)
+    }
+    throw new Error('获取榜单列表失败')
+  }).then(results => {
+    leaderboardData = {}
+    for (const r of results) {
+      if (r.result && r.result.success && r.result.data) {
+        leaderboardData[r.result.data.name] = r.result.data.characters || []
+      }
+    }
+    leaderboardLoading = false
+  }).catch(err => {
+    console.error('获取榜单数据失败:', err)
+    leaderboardLoading = false
+  })
+}
+
 // ─────── 加载中 ───────
 // v0.2.2 — 加载提示（暖色小条 + 楷体）
 // v0.2.5-D：Y 位置改为选项上方 30px（之前在 narrative 区域内重叠）
@@ -2067,6 +2294,38 @@ var touchStartPos = { x: 0, y: 0 }
 var longPressTriggered = false
 
 function handleTouch(x, y, type) {
+  // ── v2 新增：榜单浮窗触摸拦截 ──
+  if (showLeaderboard) {
+    if (type === 'end') {
+      // 关闭按钮
+      if (layout._boardCloseBtn && hitTest(x, y, layout._boardCloseBtn.x, layout._boardCloseBtn.y, layout._boardCloseBtn.w, layout._boardCloseBtn.h)) {
+        showLeaderboard = false
+        return null
+      }
+      // Tab 切换
+      if (layout._boardTabs) {
+        for (const tab of layout._boardTabs) {
+          if (hitTest(x, y, tab.x, tab.y, tab.w, tab.h)) {
+            if (tab.index !== currentBoardIndex) {
+              currentBoardIndex = tab.index
+              leaderboardData = null // 触发重新加载
+              fetchLeaderboardData()
+            }
+            return null
+          }
+        }
+      }
+    }
+    return null // 榜单浮窗打开时拦截所有触摸
+  }
+
+  // ── v2 新增：顶栏"榜"按钮 ──
+  if (type === 'end' && layout._boardBtn && hitTest(x, y, layout._boardBtn.x, layout._boardBtn.y, layout._boardBtn.w, layout._boardBtn.h)) {
+    showLeaderboard = true
+    fetchLeaderboardData()
+    return null
+  }
+
   // ── AI 调试浮窗触摸拦截（v0.1.61）──
   // 浮窗区域：右上角图标（折叠态）/ 全屏覆盖（展开态）
   if (debugLog.length > 0) {

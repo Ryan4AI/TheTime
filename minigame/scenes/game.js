@@ -148,11 +148,10 @@ function initLayout() {
   const topOffset = Math.max(safeTop, 0)
 
   // v0.1.71 重做：画区按"是否加载完成"动态伸缩
-  // 顶栏(52) → 文字面板(自适应 narrative 行数) → 选项(3×40+gap 4+输入 32 = 160) → 物品栏(64)
+  // 顶栏(52) → 状态栏(26) → 文字面板(自适应 narrative 行数) → 选项(3×40+gap 4+输入 32 = 160) → 物品栏(64)
   const topBarH = 52
-  // v0.2.5-D：v0.2.2 拍板"状态默认隐藏 + 长按呼出"，layout 算时根据 statusHidden 决定 statusBarH 是否占位
-  const baseStatusBarH = 26  // 状态条原始高度（展开时）
-  const statusBarH = statusHidden ? 0 : baseStatusBarH  // 默认隐藏时不占位
+  // v0.2.5-J（先生 2026-06-13 11:03 拍板）：状态栏常显，statusBarH 永远生效
+  const statusBarH = 26  // 状态条高度（气血/金银/身份/年月）
   const itemBarH = 64
   const optH = 40
   const optGap = 4
@@ -591,14 +590,11 @@ function handleAIResponse(result, action, userInput) {
   fetchBgImage(branch.content || '')
 
   // 6. 准备显示
-  // v0.1.80 (D008): system messages 拼到 narrative 顶部，淡灰色短行
-  let sysPrefix = ''
-  if (Array.isArray(system_messages) && system_messages.length > 0) {
-    sysPrefix = system_messages.map(sm => sm.content).join('\n') + '\n\n'
-  }
-  narrative = sysPrefix + (branch.content || '').slice(0, MAX_NARRATIVE_CHARS)
-  // v0.1.80 (D008): 记下哪些字符是 system 行（淡灰色显示，不计入叙事字数）
-  systemLineCount = sysPrefix ? sysPrefix.split('\n').filter(Boolean).length : 0
+  // v0.2.5-J（先生 2026-06-13 11:03 拍板·规则 3）：删掉 sysPrefix 拼接
+  // 系统状态变化不进 narrative 字符串（前端不显示 [system · XXX] 文字）
+  // system message 仍然进 narrativeHistory（给 LLM 看）
+  narrative = (branch.content || '').slice(0, MAX_NARRATIVE_CHARS)
+  systemLineCount = 0  // 前端不再渲染 system 行
   displayedChars = 0
   displayStartTime = Date.now()
   options = (branch.options || []).slice(0, 3).map(label => ({ label, key: label }))
@@ -635,7 +631,8 @@ function render(ctx) {
   // 2. 顶部朱砂印（古卷风顶栏）
   drawSealTopBar(ctx)
 
-  // 2.5 v0.1.82 状态条（v0.2.5-D：v0.2.2 拍板"状态默认隐藏 + 长按呼出"，改为按需渲染）
+  // 2.5 v0.1.82 状态条（v0.2.5-J：状态栏常显，layout.statusBarH 永远生效）
+  // 长按时玉牒浮窗（drawJadeTablet）会盖住状态条展示更详细信息
   if (!statusHidden || isLongPressing) {
     drawStatusBar(ctx)
   }
@@ -674,8 +671,8 @@ function render(ctx) {
     drawError(ctx)
   }
 
-  // 11. 长按状态：玉牒浮窗
-  if (!statusHidden || isLongPressing) {
+  // 11. 长按状态：玉牒浮窗（v0.2.5-J：只有长按时才显示，不再依赖 statusHidden）
+  if (isLongPressing) {
     drawJadeTablet(ctx)
   }
 
@@ -1030,7 +1027,7 @@ var scrollOffset = 0
 var scrollTouchStartY = 0
 
 // ─── 古卷风状态 ───
-var statusHidden = true          // 状态栏默认隐藏
+var statusHidden = false         // v0.2.5-J（先生 2026-06-13 11:03 拍板）：状态栏常显（玩家能直接看到气血/金银/身份/年月）
 var longPressStart = 0           // 长按计时
 var isLongPressing = false       // 是否在长按中
 var sealAnimProgress = 0         // 印章动画进度（0-1）
@@ -1070,51 +1067,19 @@ function drawNarrative(ctx) {
   }
 
   // 2. system 行（朱砂暗色 + 楷体小字）—— v0.1.80 D008 兼容
+  // v0.2.5-J（先生 2026-06-13 11:03 拍板·规则 3）：删掉 system 行渲染
+  // 状态变化仅作 LLM 叙事脉络，玩家端不需要看
+  // 同时删掉 ctx.clip()（规则 2 自动滚屏）—— 文字超出时由 scrollOffset 平移
   let mainText = text
-  let systemBlockH = 0
-  ctx.save()
-  ctx.beginPath()
-  ctx.rect(tx, ty, tw, th)
-  ctx.clip()  // 裁剪防止文字超出版心
-
-  if (systemLineCount > 0) {
-    const allLines = text.split('\n')
-    const sysLines = allLines.slice(0, systemLineCount).filter(Boolean)
-    mainText = allLines.slice(systemLineCount).join('\n')
-
-    ctx.fillStyle = 'rgba(192, 48, 48, 0.7)'  // 朱砂暗色
-    ctx.font = '11px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-    let sysY = ty + 8 + scrollOffset + lineHeight - 6
-    for (let i = 0; i < sysLines.length; i++) {
-      // 左侧加朱砂小点
-      ctx.fillStyle = 'rgba(192, 48, 48, 0.85)'
-      ctx.beginPath()
-      ctx.arc(tx + 24, sysY - 4, 1.5, 0, Math.PI * 2)
-      ctx.fill()
-      ctx.fillStyle = 'rgba(192, 48, 48, 0.7)'
-      ctx.fillText(sysLines[i], tx + 32, sysY)
-      sysY += lineHeight - 4
-    }
-    systemBlockH = sysLines.length * (lineHeight - 4) + 4
-    // system 行下方细线分隔
-    const sepY = ty + 8 + scrollOffset + systemBlockH + 2
-    ctx.strokeStyle = 'rgba(200, 168, 124, 0.25)'
-    ctx.lineWidth = 0.5
-    ctx.beginPath()
-    ctx.moveTo(tx + 20, sepY)
-    ctx.lineTo(tx + tw - 20, sepY)
-    ctx.stroke()
-  }
 
   // 3. 正文（暖米黄 + 楷体大字）—— v0.2.2 改：暖色 + 楷体
-  const mainStartY = ty + 8 + scrollOffset + systemBlockH + (systemBlockH > 0 ? 8 : 0)
+  const mainStartY = ty + 8 + scrollOffset
   ctx.fillStyle = 'rgba(245, 239, 224, 0.95)'  // 暖米黄（比 v0.1.62 的 e8ddd0 更亮）
   ctx.font = '16px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
   const contentEndY = drawTextInRect(ctx, mainText, tx + 20, mainStartY, maxW, lineHeight, fontSize)
-  ctx.restore()
 
-  // 4. 限制滚动
-  const contentH = contentEndY ? (contentEndY - ty - 8) : (text.split('\n').length * lineHeight)
+  // 4. 限制滚动 —— v0.2.5-J（规则 2）：文字超 th 时自动滚屏（scrollOffset 平移）
+  const contentH = contentEndY ? (contentEndY - mainStartY) : (text.split('\n').length * lineHeight)
   const maxScroll = Math.max(0, contentH - (th - 16))
   if (scrollOffset > 0) scrollOffset = 0
   if (scrollOffset < -maxScroll) scrollOffset = -maxScroll
@@ -1134,19 +1099,22 @@ function drawNarrative(ctx) {
     }
   }
 
-  // 6. 滚动区域
+  // 6. 滚动区域 + 内容高度（供触摸滑动 + drawScrollIndicator 用）
   layout._scrollArea = { x: tx, y: ty, w: tw, h: th }
+  layout._contentH = contentH  // v0.2.5-J：暴露真实内容高度，避免滚动指示器用错
 }
 
 // ─────── 滚动指示器 ───────
+// v0.2.5-J：用 layout._contentH（drawNarrative 算的真实高度）替代硬编码 26 × 行数
 function drawScrollIndicator(ctx) {
   const yes = layout._scrollArea || {}
-  const contentH = narrative ? narrative.split('\n').length * 26 : 0
+  const contentH = layout._contentH || (narrative ? narrative.split('\n').length * 26 : 0)
   const viewH = yes.h || 200
   if (contentH <= viewH + 20) return
 
   const barX = layout.windowW - 6
-  const barY = layout.topBarH + 8
+  // v0.2.5-J：barY 起点改成 statusBarH 下方（状态栏常显后画滚动条位置要重新算）
+  const barY = (layout.safeTop || 0) + layout.topBarH + (layout.statusBarH || 0) + 8
   const barH = viewH - 16
   const thumbH = Math.max(14, barH * (viewH / contentH))
   const maxOff = Math.max(1, contentH - viewH)

@@ -922,9 +922,10 @@ function drawSealTopBar(ctx) {
   ui.drawSealStamp(ctx, sealCenterX, sealCenterY, 20, sealChar)
 
   // 2. "穿越日记"主标题（朱砂印右侧，楷体大字，v0.2.2 新增）
+  // v0.2.5-AA（先生 2026-06-13 19:59 拍板）：字号从 17px 增大到 20px
   ctx.save()
   ctx.fillStyle = 'rgba(232,221,208,0.95)'  // 暖米黄（宣纸色）
-  ctx.font = 'bold 17px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+  ctx.font = 'bold 20px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
   ctx.fillText('穿越日记', sealCenterX + 36, sealCenterY - 7)
@@ -970,54 +971,37 @@ function drawStatusBar(ctx) {
   ctx.stroke()
   ctx.restore()
 
-  // 2. 4 段信息：气血 / 金银 / 身份 / 城市（v0.2.5-N：先生 2026-06-13 11:17 拍板 — 加回城市）
+  // 2. 3 段信息：金银 / 身份 / 城市（v0.2.5-AA：去掉气血，先生说数值不准）
   ctx.font = '11px ' + ui.fontFamily
   ctx.textBaseline = 'middle'
 
-  // 分段布局：气血 25% / 金银 25% / 身份 25% / 城市 25%
-  const segW = w / 4
+  // 分段布局：金银 33% / 身份 33% / 城市 33%
+  const segW = w / 3
   const cy = top + h / 2
 
-  // 段 1：气血（health + 进度条）
-  const seg1X = padding + 4
+  // 段 1：金银
+  const seg1X = padding
   ctx.textAlign = 'left'
-  ctx.fillStyle = 'rgba(200,168,124,0.7)'  // v0.2.5-X：统一用暗金
-  ctx.fillText('气血', seg1X, cy)
-  const hpBarX = seg1X + 32
-  const hpBarW = segW - 36
-  const hpBarH = 8
-  const hpBarY = cy - hpBarH / 2
-  ctx.fillStyle = 'rgba(255,255,255,0.08)'
-  roundRect(ctx, hpBarX, hpBarY, hpBarW, hpBarH, 4)
-  ctx.fill()
-  const hpRatio = Math.max(0, Math.min(1, (state.health || 0) / 100))
-  const hpColor = hpRatio > 0.6 ? 'rgba(90,138,112,0.85)' : (hpRatio > 0.3 ? 'rgba(200,168,124,0.85)' : 'rgba(200,58,46,0.85)')
-  ctx.fillStyle = hpColor
-  roundRect(ctx, hpBarX, hpBarY, hpBarW * hpRatio, hpBarH, 4)
-  ctx.fill()
+  ctx.fillStyle = 'rgba(200,200,200,0.6)'
+  ctx.fillText('金银', seg1X + 4, cy)
+  ctx.fillStyle = 'rgba(245,239,224,0.85)'
+  ctx.fillText((state.coin || 0) + '文', seg1X + 36, cy)
 
-  // 段 2：金银
+  // 段 2：身份（职业）
   const seg2X = padding + segW
   ctx.fillStyle = 'rgba(200,200,200,0.6)'
-  ctx.fillText('金银', seg2X + 4, cy)
-  ctx.fillStyle = 'rgba(245,239,224,0.85)'
-  ctx.fillText((state.coin || 0) + '文', seg2X + 36, cy)
-
-  // 段 3：身份（职业）
-  const seg3X = padding + segW * 2
-  ctx.fillStyle = 'rgba(200,200,200,0.6)'
-  ctx.fillText('身份', seg3X + 4, cy)
+  ctx.fillText('身份', seg2X + 4, cy)
   ctx.fillStyle = 'rgba(245,239,224,0.85)'
   const occStr = state.occupation || '庶民'
-  ctx.fillText(occStr.length > 4 ? occStr.slice(0, 3) + '…' : occStr, seg3X + 32, cy)
+  ctx.fillText(occStr.length > 4 ? occStr.slice(0, 3) + '…' : occStr, seg2X + 32, cy)
 
-  // 段 4：城市（v0.2.5-N：状态栏加回城市信息）
-  const seg4X = padding + segW * 3
+  // 段 3：城市
+  const seg3X = padding + segW * 2
   ctx.fillStyle = 'rgba(200,200,200,0.6)'
-  ctx.fillText('城', seg4X + 4, cy)
+  ctx.fillText('城', seg3X + 4, cy)
   ctx.fillStyle = 'rgba(245,239,224,0.85)'
   const cityStr = state.city || '?'
-  ctx.fillText(cityStr.length > 4 ? cityStr.slice(0, 3) + '…' : cityStr, seg4X + 28, cy)
+  ctx.fillText(cityStr.length > 4 ? cityStr.slice(0, 3) + '…' : cityStr, seg3X + 28, cy)
 
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
@@ -1520,33 +1504,9 @@ function drawJadeTablet(ctx) {
     ctx.fillText(f.value, px + 86, fy)
   })
 
-  // 健康条（题：气血）
-  const healthY = py + 72 + fields.length * 30 + 8
-  ctx.fillStyle = 'rgba(200,200,200,0.5)'
-  ctx.font = '13px ' + ui.fontFamily
-  ctx.fillText('气  血', px + 28, healthY)
-
-  const hpBarX = px + 86
-  const hpBarY = healthY - 6
-  const hpBarW = pw - 86 - 28
-  const hpBarH = 12
-  ctx.fillStyle = 'rgba(255,255,255,0.08)'
-  roundRect(ctx, hpBarX, hpBarY, hpBarW, hpBarH, 6)
-  ctx.fill()
-  const hpRatio = Math.max(0, Math.min(1, state.health / 100))
-  const hpColor = hpRatio > 0.6 ? '#5a8a70' : (hpRatio > 0.3 ? '#c8a87c' : '#c83a2e')
-  ctx.fillStyle = hpColor
-  roundRect(ctx, hpBarX, hpBarY, hpBarW * hpRatio, hpBarH, 6)
-  ctx.fill()
-  ctx.fillStyle = 'rgba(255,255,255,0.6)'
-  ctx.font = '10px ' + ui.fontFamily
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText(state.health, hpBarX + hpBarW * hpRatio - 4, hpBarY + hpBarH / 2)
-
-  // 物品列表
+  // 物品列表（v0.2.5-AA：去掉健康条，直接从字段列表下方开始）
   if (state.items && state.items.length > 0) {
-    const itemY = healthY + 28
+    const itemY = py + 72 + fields.length * 30 + 16
     ctx.fillStyle = 'rgba(200,200,200,0.5)'
     ctx.font = '13px ' + ui.fontFamily
     ctx.textAlign = 'left'

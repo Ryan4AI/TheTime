@@ -1134,22 +1134,11 @@ function drawNarrative(ctx) {
   if (scrollOffset > 0) scrollOffset = 0
   if (scrollOffset < -maxScroll) scrollOffset = -maxScroll
 
-  // 5. 打字光标（暖金色小竖线）
-  // v0.2.5-D：闪烁周期 800ms 改 500ms（TYPEWRITE_SPEED 25ms / 字符，光标周期 800ms 太慢，跟不上打字节奏）
-  if (displayedChars < totalChars) {
-    const blink = (Date.now() % 500) < 250
-    if (blink) {
-      const lines = text.split('\n')
-      const lastLine = lines[lines.length - 1] || ''
-      const cursorX = tx + 20 + ctx.measureText(lastLine).width + 2
-      const cursorY = ty + 8 + (lines.length - 1) * lineHeight + scrollOffset
-      layout._cursorBounds = { x: cursorX, y: cursorY, w: 2, h: fontSize }
-      ctx.fillStyle = 'rgba(232, 200, 130, 0.85)'  // 暖金色光标
-      ctx.fillRect(cursorX, cursorY + 4, 2, fontSize)
-    }
-  }
+  // v0.2.5-S（先生 2026-06-13 15:56 拍板）：去掉打字光标
+  // 之前 v0.1.61 加的暖金色小竖线 + 闪烁动画，先生觉得多余
+  // 打字机效果本身（逐字显示）已经足够表达"正在写"的节奏，不需要额外光标
 
-  // 6. 滚动区域 + 内容高度（供触摸滑动 + drawScrollIndicator 用）
+  // 5. 滚动区域 + 内容高度（供触摸滑动 + drawScrollIndicator 用）
   layout._scrollArea = { x: tx, y: ty, w: tw, h: th }
   layout._contentH = contentH  // v0.2.5-J：暴露真实内容高度，避免滚动指示器用错
 }

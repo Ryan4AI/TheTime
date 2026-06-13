@@ -152,11 +152,13 @@ function initLayout() {
   const topBarH = 52
   // v0.2.5-J（先生 2026-06-13 11:03 拍板）：状态栏常显，statusBarH 永远生效
   const statusBarH = 26  // 状态条高度（气血/金银/身份/年月）
+  // v0.2.5-Q（先生 2026-06-13 15:33 拍板）：自由输入从选项区移到画区右上角图标
+  // 选项区只剩 3 个选项，optBlockH 不再算 freeInputH
   const itemBarH = 64
   const optH = 40
   const optGap = 4
-  const freeInputH = 32
-  const optBlockH = 3 * optH + 2 * optGap + freeInputH + 12  // 3 选项 + 自由输入 + 间隔
+  const freeInputH = 30  // 图标尺寸（圆形）
+  const optBlockH = 3 * optH + 2 * optGap + 8  // 3 选项 + 间隔（无自由输入）
 
   // 画区：只在图片加载完成时占 130 高（按宽 3:2）；否则让位给文字
   const sceneW = windowWidth - 14 * 2
@@ -695,9 +697,10 @@ function adjustFluidLayout() {
 
   const topBarH = layout.topBarH
   const itemBarH = layout.itemBarH       // 钉死底部 64px
-  // v0.1.67: 进一步缩小（按钮 38→36、间距 4→3、自由输入 28→24）
-  // 从 152 减到 145，节省 7px 给叙事区
-  const optBlockH = 145
+  // v0.2.5-Q（先生 15:33 拍板）：自由输入移到画区图标，optBlockH 只需算 3 个选项
+  // 之前 145 = 3×40 + 2×4 + 32(freeInput) + 12，现在改成 3×40 + 2×4 + 8 = 136
+  // 节省 9px 给叙事区
+  const optBlockH = 136
   const safeTop = layout.safeTop || 0
   const availableH = layout.windowH - safeTop - topBarH - itemBarH
 
@@ -1108,21 +1111,9 @@ function drawNarrative(ctx) {
   const fontSize = 16
   const maxW = tw - 40  // 左右各留 20px
 
-  // 1. 卷首小印（顶部居中，朱砂暗色小字，v0.2.2 新增）
-  // 仅在叙事刚开始时显示（displayedChars 较小），让玩家知道"史官开始写了"
-  const showScrollHead = displayedChars < totalChars && displayedChars > 0 && scrollOffset === 0
-  if (showScrollHead) {
-    ctx.save()
-    ctx.fillStyle = 'rgba(192, 48, 48, 0.55)'  // 朱砂暗色
-    ctx.font = '10px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'top'
-    // v0.2.5-O（先生 2026-06-13 11:38 拍板）：史官手书往上挪到 ty + 0 顶部居中
-    // 之前 ty+4 跟正文 mainStartY (ty+8) 只差 4px，10px 史官手书叠在 16px 正文第 1 行上面
-    // 正文改为 ty+24 起，给史官手书留 14px 高度（ty+0~ty+10）+ 14px 间距（ty+10~ty+24）
-    ctx.fillText('◇  史官手书  ◇', layout.windowW / 2, ty + 0)
-    ctx.restore()
-  }
+  // v0.2.5-Q（先生 2026-06-13 15:33 拍板）：去掉"史官手书"卷首小印
+  // 之前 v0.2.2 拍板加卷首小印、v0.2.5-O 修位置都白做，先生现在直接不要了
+  // 删掉后正文 mainStartY 从 ty+24 改回 ty+8（v0.2.5-O 之前的位置），恢复文字顶部 16px 空间
 
   // 2. system 行（朱砂暗色 + 楷体小字）—— v0.1.80 D008 兼容
   // v0.2.5-J（先生 2026-06-13 11:03 拍板·规则 3）：删掉 system 行渲染
@@ -1131,9 +1122,8 @@ function drawNarrative(ctx) {
   let mainText = text
 
   // 3. 正文（暖米黄 + 楷体大字）—— v0.2.2 改：暖色 + 楷体
-  // v0.2.5-O（先生 11:38 拍板）：mainStartY 从 ty+8 改成 ty+24
-  // 给"史官手书"（ty+0~ty+10）留出独立区域，避免叠在正文第 1 行
-  const mainStartY = ty + 24 + scrollOffset
+  // v0.2.5-Q（先生 15:33 拍板）：史官手书去掉后，mainStartY 恢复 ty+8
+  const mainStartY = ty + 8 + scrollOffset
   ctx.fillStyle = 'rgba(245, 239, 224, 0.95)'  // 暖米黄（比 v0.1.62 的 e8ddd0 更亮）
   ctx.font = '16px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
   const contentEndY = drawTextInRect(ctx, mainText, tx + 20, mainStartY, maxW, lineHeight, fontSize)
@@ -1254,48 +1244,47 @@ function drawOptions(ctx) {
 }
 
 // ─────── 自由输入按钮 ───────
-// v0.2.2 — 自由输入按钮（朱砂虚线框 + 楷体）
-// v0.2.5-O（先生 2026-06-13 11:38 拍板）：间距 8→14、按钮高度 26→32，加更明显的视觉区分
+// v0.2.5-Q（先生 2026-06-13 15:33 拍板）：从选项区底部移到画区右上角小图标
+// 之前在选项按钮下面（v0.2.5-O 间距 14px / 高度 32 / 加深填充）先生仍觉得叠一起
+// 现在改成独立小图标（30×30 圆形），位置在画区右上角，与选项按钮完全分离
+// 图未加载时也显示（layout.sceneX/sceneY/sceneW 总是有值，sceneVisible 只控制流式布局占位）
 function drawFreeInputButton(ctx) {
   const fadeIn = layout.optionFadeIn || 0
   if (fadeIn <= 0) return
-  let freeY = layout.optionY + options.length * (layout.optionH + layout.optionGap) + 14
-  // v0.2.5-O：与 initLayout.freeInputH=32 对齐（之前 26 是历史 bug，触摸热区会偏移）
-  const freeH = layout.freeInputH || 32
-  const freeX = layout.padding
-  const freeW = layout.windowW - layout.padding * 2
-  // v0.2.5-D：限制 freeY 不超出物品栏（防止 3 选项 + 长 narrative 时 freeInput 按钮被切）
-  const maxFreeY = layout.itemBarY - freeH - 8
-  if (freeY > maxFreeY) freeY = maxFreeY
-
-  const appearElapsed = Date.now() - optionsAppearTime - options.length * 100
+  // v0.2.5-Q：图未加载时不显示 ✎（loading 提示已显示"史官正在落笔"，避免悬空位置感）
+  if (!layout.sceneVisible) return
+  const appearElapsed = Date.now() - optionsAppearTime
   if (appearElapsed < 0) return
   const alpha = Math.min(1, appearElapsed / 300)
 
+  const iconSize = 30
+  const iconX = layout.sceneX + layout.sceneW - iconSize - 8  // 画区右边内缩 8px
+  const iconY = layout.sceneY + 8  // 画区顶部下移 8px
+
   ctx.save()
   ctx.globalAlpha = alpha
-  // v0.2.5-O：加深填充色，让自由输入按钮和上面的选项按钮视觉上明显分隔
-  ctx.fillStyle = 'rgba(15, 10, 6, 0.7)'
-  roundRect(ctx, freeX, freeY, freeW, freeH, 4)
+  // 半透深色底圆 + 朱砂红描边
+  ctx.fillStyle = 'rgba(20, 16, 12, 0.75)'
+  ctx.beginPath()
+  ctx.arc(iconX + iconSize / 2, iconY + iconSize / 2, iconSize / 2, 0, Math.PI * 2)
   ctx.fill()
-  ctx.strokeStyle = 'rgba(192, 48, 48, 0.55)'
-  ctx.lineWidth = 0.8
-  ctx.setLineDash([5, 3])
-  roundRect(ctx, freeX, freeY, freeW, freeH, 4)
+  ctx.strokeStyle = 'rgba(192, 48, 46, 0.85)'
+  ctx.lineWidth = 1.2
+  ctx.beginPath()
+  ctx.arc(iconX + iconSize / 2, iconY + iconSize / 2, iconSize / 2, 0, Math.PI * 2)
   ctx.stroke()
-  ctx.setLineDash([])
   ctx.restore()
 
-  // 文字（朱砂暗色 + 楷体）
-  ctx.fillStyle = 'rgba(192, 48, 48, 0.75)'
-  ctx.font = '12px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+  // ✎ 图标（暖金）
+  ctx.fillStyle = 'rgba(232, 200, 130, 0.95)'
+  ctx.font = '16px ' + ui.fontFamily
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText('✎  键入自己所想...', freeX + freeW / 2, freeY + freeH / 2)
+  ctx.fillText('✎', iconX + iconSize / 2, iconY + iconSize / 2 + 1)
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
 
-  layout.freeInputBounds = { x: freeX, y: freeY, w: freeW, h: freeH }
+  layout.freeInputBounds = { x: iconX, y: iconY, w: iconSize, h: iconSize }
 }
 
 // v0.2.2 — 底部物品栏（药匣样式 + 暖色 + 楷体）

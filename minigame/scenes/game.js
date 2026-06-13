@@ -937,7 +937,7 @@ function drawSealTopBar(ctx) {
   // v0.2.5-AA（先生 2026-06-13 19:59 拍板）：字号从 17px 增大到 20px
   ctx.save()
   ctx.fillStyle = 'rgba(232,221,208,0.95)'  // 暖米黄（宣纸色）
-  ctx.font = 'bold 20px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+  ctx.font = 'bold 22px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
   ctx.fillText('穿越日记', sealCenterX + 36, sealCenterY - 7)

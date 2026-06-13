@@ -35,6 +35,18 @@ var itemDetail = null        // 物品详情浮窗（点击物品后弹出）
 var bgImage = null           // 当前背景图（云函数返回 URL）
 var bgImageLoading = false   // 是否在加载
 
+// ─── 统一色彩常量（v0.2.5-X 审美统一）───
+// 之前版本散落在各处的颜色字面量，现在统一收口到 C 对象
+const C = {
+  paper: 'rgba(245,239,224,0.95)',      // 暖米黄/宣纸色（叙事文字）
+  gold: 'rgba(200,168,124,0.7)',         // 暗金（边框、装饰）
+  goldDim: 'rgba(200,168,124,0.25)',     // 淡金（分隔线、次要装饰）
+  vermillion: 'rgba(192,48,48,0.75)',    // 朱砂红（印章、按钮描边）
+  dark: 'rgba(20,16,12,0.6)',            // 暗色（半透背景填充）
+  darkSolid: 'rgba(30,25,20,0.95)',      // 深暗色（面板背景）
+  bg: 'rgba(15,12,10,1)',                // 纯暗背景
+}
+
 // ─────── AI 调试浮窗（v0.1.61）────
 var debugLog = []            // 最近 N 轮完整 input/result
 var debugOpen = false        // 浮窗展开/折叠

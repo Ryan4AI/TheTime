@@ -10,6 +10,19 @@
 const ui = require('../engine/ui')
 const { COLORS, getSystemInfo, drawBackground, drawText, drawCenteredText, drawTextInRect, hitTest, roundRect } = ui
 
+// v0.2.5-X（先生 2026-06-13 17:26 拍板）：统一色彩系统 — 只保留 3 种色调
+// 暖米黄（文字）、暗金（辅助）、朱砂红（仅选项描边）
+const C = {
+  paper:     'rgba(245,239,224,0.95)',  // 暖米黄 — 正文、数值
+  paperDim:  'rgba(245,239,224,0.6)',   // 暖米黄淡 — 次要文字
+  gold:      'rgba(200,168,124,0.7)',   // 暗金 — 辅助、标签、分隔线
+  goldDim:   'rgba(200,168,124,0.3)',   // 暗金淡 — 装饰线
+  vermillion:'rgba(192,48,48,0.75)',     // 朱砂红 — 仅选项描边
+  dark:      'rgba(20,16,12,0.7)',      // 深色 — 按钮底色
+  darkSolid: 'rgba(20,16,12,0.85)',     // 深色实 — 药匣
+  bg:        'rgba(15,12,8,0.95)',      // 背景色 — 图未加载时
+}
+
 // ─────── 状态 ───────
 var state = null
 var layout = null
@@ -874,14 +887,6 @@ function drawBgImage(ctx) {
   ctx.stroke()
   ctx.restore()
 
-  // 5. 左上"画"字朱砂小印（强调"这是画"）
-  ctx.save()
-  ctx.fillStyle = 'rgba(200,58,46,0.5)'
-  ctx.font = '10px ' + ui.fontFamily
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'top'
-  ctx.fillText('画 · ' + (state.dynasty || ''), sx + 10, sy + 10)
-  ctx.restore()
 }
 
 // ─────── 顶部朱砂印 + 纪代（古卷风 v0.1.61） ───────
@@ -919,28 +924,18 @@ function drawSealTopBar(ctx) {
   // 之前 v0.2.5-Q 在画区右上角先生仍觉得"和选项按钮叠一起"（画区离选项区近）
   // 现在挪到顶栏右侧 —— 顶栏不是按钮区，✎ 与选项按钮完全分离
   // 顺便删掉 v0.2.2 版本号水印（玩家端没意义，腾位置给 ✎）
-  const freeIconSize = 26
-  const freeIconX = layout.windowW - padding - freeIconSize - 2
-  const freeIconY = safeTop + (topH - freeIconSize) / 2
-  // 半透深色底圆 + 朱砂红描边
-  ctx.fillStyle = 'rgba(20, 16, 12, 0.7)'
-  ctx.beginPath()
-  ctx.arc(freeIconX + freeIconSize / 2, freeIconY + freeIconSize / 2, freeIconSize / 2, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.strokeStyle = 'rgba(192, 48, 46, 0.85)'
-  ctx.lineWidth = 1.2
-  ctx.beginPath()
-  ctx.arc(freeIconX + freeIconSize / 2, freeIconY + freeIconSize / 2, freeIconSize / 2, 0, Math.PI * 2)
-  ctx.stroke()
-  // ✎ 图标（暖金）
-  ctx.fillStyle = 'rgba(232, 200, 130, 0.95)'
-  ctx.font = '15px ' + ui.fontFamily
-  ctx.textAlign = 'center'
+  // v0.2.5-X：简化 ✎ 图标，去掉圆形背景和朱砂红描边
+  const freeIconX = layout.windowW - padding - 16
+  const freeIconY = safeTop + topH / 2
+  ctx.fillStyle = C.gold
+  ctx.font = '18px ' + ui.fontFamily
+  ctx.textAlign = 'right'
   ctx.textBaseline = 'middle'
-  ctx.fillText('✎', freeIconX + freeIconSize / 2, freeIconY + freeIconSize / 2 + 1)
+  ctx.fillText('✎', freeIconX, freeIconY)
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
-  layout._topFreeIcon = { x: freeIconX, y: freeIconY, w: freeIconSize, h: freeIconSize }
+  // 触摸区域（扩大一点便于点击）
+  layout._topFreeIcon = { x: freeIconX - 24, y: safeTop, w: 28, h: topH }
 
   // 4. 暗金细线分隔（顶栏底部）
   ui.drawClassicalDivider(ctx, padding, safeTop + topH - 1, layout.windowW - padding * 2, 0.6)
@@ -951,19 +946,18 @@ function drawSealTopBar(ctx) {
 
 // ─────── 月份变化提示 ───────
 function drawStatusBar(ctx) {
-  // v0.1.82 (D008 显示): 常显状态条（health / coin /身份 /年月）
   const padding = layout.padding
-  const top = layout.safeTop + layout.topBarH
+  const top = layout.safeTop + layout.topBarH + 4  // v0.2.5-X：加 4px 间距
   const h = layout.statusBarH
   const w = layout.windowW - padding * 2
 
-  // 1. 底色（暗木色半透）
+  // 1. 底色
   ctx.save()
-  ctx.fillStyle = 'rgba(20,16,12,0.6)'
+  ctx.fillStyle = C.dark
   ctx.fillRect(padding, top, w, h)
 
-  // 上下细线
-  ctx.strokeStyle = 'rgba(200,168,124,0.25)'
+  // 上下细线（暗金淡）
+  ctx.strokeStyle = C.goldDim
   ctx.lineWidth = 0.5
   ctx.beginPath()
   ctx.moveTo(padding, top + 0.5)
@@ -984,7 +978,7 @@ function drawStatusBar(ctx) {
   // 段 1：气血（health + 进度条）
   const seg1X = padding + 4
   ctx.textAlign = 'left'
-  ctx.fillStyle = 'rgba(200,200,200,0.6)'
+  ctx.fillStyle = C.gold
   ctx.fillText('气血', seg1X, cy)
   const hpBarX = seg1X + 32
   const hpBarW = segW - 36
@@ -994,31 +988,31 @@ function drawStatusBar(ctx) {
   roundRect(ctx, hpBarX, hpBarY, hpBarW, hpBarH, 4)
   ctx.fill()
   const hpRatio = Math.max(0, Math.min(1, (state.health || 0) / 100))
-  const hpColor = hpRatio > 0.6 ? 'rgba(90,138,112,0.85)' : (hpRatio > 0.3 ? 'rgba(200,168,124,0.85)' : 'rgba(200,58,46,0.85)')
+  const hpColor = hpRatio > 0.6 ? 'rgba(90,138,112,0.85)' : (hpRatio > 0.3 ? C.gold : 'rgba(200,58,46,0.85)')
   ctx.fillStyle = hpColor
   roundRect(ctx, hpBarX, hpBarY, hpBarW * hpRatio, hpBarH, 4)
   ctx.fill()
 
   // 段 2：金银
   const seg2X = padding + segW
-  ctx.fillStyle = 'rgba(200,200,200,0.6)'
+  ctx.fillStyle = C.gold
   ctx.fillText('金银', seg2X + 4, cy)
-  ctx.fillStyle = 'rgba(245,239,224,0.85)'
+  ctx.fillStyle = C.paper
   ctx.fillText((state.coin || 0) + '文', seg2X + 36, cy)
 
   // 段 3：身份（职业）
   const seg3X = padding + segW * 2
-  ctx.fillStyle = 'rgba(200,200,200,0.6)'
+  ctx.fillStyle = C.gold
   ctx.fillText('身份', seg3X + 4, cy)
-  ctx.fillStyle = 'rgba(245,239,224,0.85)'
+  ctx.fillStyle = C.paper
   const occStr = state.occupation || '庶民'
   ctx.fillText(occStr.length > 4 ? occStr.slice(0, 3) + '…' : occStr, seg3X + 32, cy)
 
   // 段 4：城市（v0.2.5-N：状态栏加回城市信息）
   const seg4X = padding + segW * 3
-  ctx.fillStyle = 'rgba(200,200,200,0.6)'
+  ctx.fillStyle = C.gold
   ctx.fillText('城', seg4X + 4, cy)
-  ctx.fillStyle = 'rgba(245,239,224,0.85)'
+  ctx.fillStyle = C.paper
   const cityStr = state.city || '?'
   ctx.fillText(cityStr.length > 4 ? cityStr.slice(0, 3) + '…' : cityStr, seg4X + 28, cy)
 
@@ -1149,7 +1143,7 @@ function drawNarrative(ctx) {
   ctx.beginPath()
   ctx.rect(tx, ty, tw, th)
   ctx.clip()
-  ctx.fillStyle = 'rgba(245, 239, 224, 0.95)'  // 暖米黄（比 v0.1.62 的 e8ddd0 更亮）
+  ctx.fillStyle = C.paper
   ctx.font = '16px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
   const contentEndY = drawTextInRect(ctx, mainText, tx + 20, mainStartY, maxW, lineHeight, fontSize)
   ctx.restore()  // v0.2.5-U：解除 clip（后续滚动指示器/触摸区域不受限制）
@@ -1232,26 +1226,20 @@ function drawOptions(ctx) {
     ctx.save()
     ctx.globalAlpha = alpha * fadeIn
 
-    // 1. 朱砂印章按钮 — 半透深色填充 + 朱砂红描边（v0.2.2 改）
-    ctx.fillStyle = 'rgba(20, 16, 12, 0.7)'  // 半透深色（让背景透过来一点点）
+    // v0.2.5-X：简化选项按钮 — 单层边框，去掉内层双线
+    ctx.fillStyle = C.dark
     roundRect(ctx, optX, oy, optW, optH, 4)
     ctx.fill()
-    // 朱砂红描边（粗一些，更"印章"）
-    ctx.strokeStyle = 'rgba(192, 48, 48, 0.75)'
-    ctx.lineWidth = 1.2
+    // 朱砂红描边（唯一使用朱砂红的地方）
+    ctx.strokeStyle = C.vermillion
+    ctx.lineWidth = 0.8
     roundRect(ctx, optX, oy, optW, optH, 4)
     ctx.stroke()
-    // 内层朱砂细线（双重边框，更古朴）
-    ctx.strokeStyle = 'rgba(192, 48, 48, 0.3)'
-    ctx.lineWidth = 0.5
-    roundRect(ctx, optX + 3, oy + 3, optW - 6, optH - 6, 2)
-    ctx.stroke()
 
-    // 2. 选项文字（暖米黄 + 楷体，v0.2.2 改：无序号）
-    // v0.2.5-D：字号自适应 — 文字宽度超 optW * 0.9 时按比例缩小字号（避免溢出）
-    const optMaxW = optW * 0.9
+    // 2. 选项文字 — v0.2.5-X：左对齐，留左边距
+    const optMaxW = optW * 0.85  // 留右边距
     let optFontSize = 15
-    ctx.fillStyle = 'rgba(245, 239, 224, 0.95)'
+    ctx.fillStyle = C.paper
     ctx.font = optFontSize + 'px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
     let labelW = ctx.measureText(opt.label).width
     // 缩字号：每缩 1px 测一次，最小 11px
@@ -1260,9 +1248,9 @@ function drawOptions(ctx) {
       ctx.font = optFontSize + 'px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
       labelW = ctx.measureText(opt.label).width
     }
-    ctx.textAlign = 'center'
+    ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
-    ctx.fillText(opt.label, optX + optW / 2, oy + optH / 2)
+    ctx.fillText(opt.label, optX + 12, oy + optH / 2)  // 左边距 12px
 
     ctx.restore()
 
@@ -1282,46 +1270,37 @@ function drawFreeInputButton(ctx) {
   // 这里什么都不画，但函数保留作为渲染流水线的一部分
 }
 
-// v0.2.2 — 底部物品栏（药匣样式 + 暖色 + 楷体）
+// v0.2.2 — 底部物品栏（v0.2.5-X 审美统一）
 function drawItemBar(ctx) {
   const barY = layout.itemBarY
   const items = currentItems || []
   const barH = layout.itemBarH
 
-  // 1. 底板（暗木色 + 顶部暗金边 + 朱砂点装饰）
+  // 1. 底板（暗色 + 顶部暗金线，无朱砂点）
   ctx.save()
-  ctx.fillStyle = 'rgba(20, 16, 12, 0.75)'  // 比 v0.1.62 略深一档
+  ctx.fillStyle = C.dark
   ctx.fillRect(0, barY, layout.windowW, barH)
-  // 顶部暗金线（更亮）
-  ctx.strokeStyle = 'rgba(200, 168, 124, 0.45)'
-  ctx.lineWidth = 0.8
+  ctx.strokeStyle = C.goldDim
+  ctx.lineWidth = 0.5
   ctx.beginPath()
   ctx.moveTo(layout.padding, barY + 0.5)
   ctx.lineTo(layout.windowW - layout.padding, barY + 0.5)
   ctx.stroke()
-  // 左下/右下 朱砂红小点
-  ctx.fillStyle = 'rgba(192, 48, 48, 0.7)'
-  ctx.beginPath()
-  ctx.arc(layout.padding + 4, barY + barH - 4, 2, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.beginPath()
-  ctx.arc(layout.windowW - layout.padding - 4, barY + barH - 4, 2, 0, Math.PI * 2)
-  ctx.fill()
   ctx.restore()
 
-  // 2. 行李标签（左侧，v0.2.2 改：楷体 + "⌜ 行李 ⌝"）
+  // 2. 行李标签（左侧，简单 "行李" 不用特殊符号）
   ctx.save()
-  ctx.fillStyle = 'rgba(232, 200, 130, 0.75)'  // 暖金色
+  ctx.fillStyle = C.gold
   ctx.font = '11px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
   ctx.textAlign = 'left'
   ctx.textBaseline = 'top'
-  ctx.fillText('⌜ 行李 ⌝', layout.padding, barY + 6)
+  ctx.fillText('行李', layout.padding, barY + 6)
   ctx.restore()
 
   if (items.length === 0) {
     // 空状态
     ctx.save()
-    ctx.fillStyle = 'rgba(245, 239, 224, 0.4)'
+    ctx.fillStyle = C.paperDim
     ctx.font = '12px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
@@ -1330,7 +1309,7 @@ function drawItemBar(ctx) {
     return
   }
 
-  // 3. 物品药匣（横排，右侧对齐）
+  // 3. 物品药匣（横排，右侧对齐，单层暗金描边）
   const boxW = 56
   const boxH = 32
   const gap = 6
@@ -1342,18 +1321,13 @@ function drawItemBar(ctx) {
     const bx = startX + i * (boxW + gap)
 
     ctx.save()
-    // 药匣底（暗木色 + 朱砂描边）
-    ctx.fillStyle = 'rgba(35, 28, 22, 0.85)'
+    // 药匣底（暗色 + 单层暗金描边）
+    ctx.fillStyle = C.darkSolid
     roundRect(ctx, bx, boxY, boxW, boxH, 3)
     ctx.fill()
-    ctx.strokeStyle = 'rgba(192, 48, 48, 0.7)'
-    ctx.lineWidth = 0.8
+    ctx.strokeStyle = C.gold
+    ctx.lineWidth = 0.6
     roundRect(ctx, bx, boxY, boxW, boxH, 3)
-    ctx.stroke()
-    // 内细线
-    ctx.strokeStyle = 'rgba(192, 48, 48, 0.3)'
-    ctx.lineWidth = 0.5
-    roundRect(ctx, bx + 2, boxY + 2, boxW - 4, boxH - 4, 2)
     ctx.stroke()
     ctx.restore()
 
@@ -1362,14 +1336,14 @@ function drawItemBar(ctx) {
     // 之前 emoji 14px 字号 + boxW=56 + bx+11 = 图标左边缘 bx+3（紧贴内细线 bx+2）
     // 复合 emoji（4 字节）渲染时实际视觉宽度更大，可能溢出 box 右边框
     // 修复：图标水平位置右移 3px（bx+14），字号 14→13 减小字号留更多空间
-    ctx.fillStyle = 'rgba(232, 200, 130, 0.95)'  // 暖金
+    ctx.fillStyle = C.gold  // v0.2.5-X：统一用暗金
     ctx.font = '13px ' + ui.fontFamily
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(item.icon || '📦', bx + 14, boxY + boxH / 2)
 
     // 物品名（右侧，楷体）—— v0.2.5-D：字号自适应 + 截断避免溢出 boxW
-    ctx.fillStyle = 'rgba(245, 239, 224, 0.9)'
+    ctx.fillStyle = C.paper  // v0.2.5-X：统一用暖米黄
     const name = item.name || ''
     const nameMaxW = boxW - 24  // bx+22 起算，到 boxW 右边界留 2px
     let nameFontSize = 10
@@ -1455,16 +1429,16 @@ function drawJadeTablet(ctx) {
   ctx.textAlign = 'left'
   fields.forEach((f, i) => {
     const fy = py + 72 + i * 30
-    ctx.fillStyle = 'rgba(200,200,200,0.5)'
+    ctx.fillStyle = C.gold  // v0.2.5-X：统一用暗金
     ctx.font = '13px ' + ui.fontFamily
     ctx.fillText(f.label, px + 28, fy)
-    ctx.fillStyle = 'rgba(245,239,224,0.85)'
+    ctx.fillStyle = C.paper
     ctx.fillText(f.value, px + 86, fy)
   })
 
   // 健康条（题：气血）
   const healthY = py + 72 + fields.length * 30 + 8
-  ctx.fillStyle = 'rgba(200,200,200,0.5)'
+  ctx.fillStyle = C.gold
   ctx.font = '13px ' + ui.fontFamily
   ctx.fillText('气  血', px + 28, healthY)
 
@@ -1489,18 +1463,18 @@ function drawJadeTablet(ctx) {
   // 物品列表
   if (state.items && state.items.length > 0) {
     const itemY = healthY + 28
-    ctx.fillStyle = 'rgba(200,200,200,0.5)'
+    ctx.fillStyle = C.gold
     ctx.font = '13px ' + ui.fontFamily
     ctx.textAlign = 'left'
     ctx.fillText('行  李', px + 28, itemY)
-    ctx.fillStyle = 'rgba(245,239,224,0.7)'
+    ctx.fillStyle = C.paperDim
     ctx.font = '11px ' + ui.fontFamily
     const itemStr = state.items.map(i => i.icon + i.name).join('  ')
     ctx.fillText(itemStr, px + 86, itemY, pw - 86 - 28)
   }
 
   // 底部提示
-  ctx.fillStyle = 'rgba(200,200,200,0.3)'
+  ctx.fillStyle = C.goldDim
   ctx.font = '10px ' + ui.fontFamily
   ctx.textAlign = 'center'
   ctx.textBaseline = 'bottom'

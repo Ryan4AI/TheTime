@@ -1557,15 +1557,16 @@ function drawDebugPanel(ctx) {
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText('DBG', iconX + iconSize / 2, iconY + iconSize / 2 + 1)
-    // 调试轮数小角标
-    if (debugLog.length > 0) {
+    // v0.2.5-K（先生 2026-06-13 11:08 拍板）：角标只在当前轮出错时显示红点
+    const lastRoundBadge = debugLog[debugLog.length - 1]
+    if (lastRoundBadge && lastRoundBadge.resultError) {
       ctx.fillStyle = '#e04040'
       ctx.beginPath()
       ctx.arc(iconX + iconSize - 6, iconY + 6, 8, 0, Math.PI * 2)
       ctx.fill()
       ctx.fillStyle = '#fff'
       ctx.font = 'bold 10px sans-serif'
-      ctx.fillText(String(debugLog.length), iconX + iconSize - 6, iconY + 7)
+      ctx.fillText('!', iconX + iconSize - 6, iconY + 7)
     }
     ctx.textAlign = 'left'
     ctx.textBaseline = 'alphabetic'
@@ -1622,14 +1623,15 @@ function drawDebugPanel(ctx) {
   ctx.textAlign = 'right'
   ctx.fillStyle = '#888'
   ctx.font = '11px sans-serif'
-  ctx.fillText('最近 ' + debugLog.length + ' 轮', w - arrowSize - 24, closeBarH / 2)
-  // v0.2.3: 错误轮数显示（红色），让先生一眼看到哪些轮出过问题
-  const errCount = debugLog.filter(d => d.resultError).length
-  if (errCount > 0) {
+  // v0.2.5-K（先生 2026-06-13 11:08 拍板）：只显示最近一轮
+  ctx.fillText('最近 1 轮', w - arrowSize - 24, closeBarH / 2)
+  // v0.2.5-K：错误轮数角标只在当前轮出错时显示（之前会统计所有保留轮次的错误数）
+  const lastRound = debugLog[debugLog.length - 1]
+  if (lastRound && lastRound.resultError) {
     ctx.fillStyle = '#ff6060'
     ctx.font = 'bold 11px monospace'
     ctx.textAlign = 'right'
-    ctx.fillText('❌ ' + errCount + ' 轮出错', w - arrowSize - 24, closeBarH / 2 + 16)
+    ctx.fillText('❌ 出错', w - arrowSize - 24, closeBarH / 2 + 16)
   }
 
   // 内容区
@@ -1643,9 +1645,11 @@ function drawDebugPanel(ctx) {
   ctx.textBaseline = 'top'
   ctx.fillStyle = '#c0c0c0'
 
-  // 拼接所有轮次的完整文本（v0.1.70 精简：只留 AI 原始输入/输出）
+  // 拼接所有轮次的完整文本（v0.2.5-K：先生 2026-06-13 11:08 拍板 — 只显示最近一轮）
+  // 之前显示最近 3 轮先生嫌太乱，单轮调试最直观
   let allText = ''
-  for (let i = 0; i < debugLog.length; i++) {
+  const startIdx = Math.max(0, debugLog.length - 1)  // 只看最后一轮
+  for (let i = startIdx; i < debugLog.length; i++) {
     const d = debugLog[i]
     // v0.2.3: 错误轮次顶部加红色 ❌ 标记，方便先生一眼看出哪些轮出过错
     const errMark = d.resultError ? '❌ [出错] ' : '✅ '

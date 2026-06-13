@@ -694,12 +694,13 @@ function adjustFluidLayout() {
 
   const topBarH = layout.topBarH
   const itemBarH = layout.itemBarH       // 钉死底部 64px
-  // v0.2.5-Q（先生 15:33 拍板）：自由输入移到画区图标，optBlockH 只需算 3 个选项
-  // 之前 145 = 3×40 + 2×4 + 32(freeInput) + 12，现在改成 3×40 + 2×4 + 8 = 136
-  // 节省 9px 给叙事区
-  const optBlockH = 136
   const safeTop = layout.safeTop || 0
   const availableH = layout.windowH - safeTop - topBarH - itemBarH
+  // v0.2.5-U（先生 2026-06-13 15:57 拍板·修"下溢到物品栏"）：optBlockH 按实际 optionH=36 / optionGap=3 算
+  // 之前 v0.2.5-Q 改的 136 是基于 initLayout.optH=40（3×40+2×4+8=136）
+  // 但实际渲染用 optionH=36，选项区只占 3×36+2×3+6=120，多算 16px 导致选项底部超过物品栏
+  // 修复：optBlockH = 3×36+2×3+8 = 122（精确匹配实际选项区高度）
+  const optBlockH = 3 * 36 + 2 * 3 + 8  // = 122
 
   const typingDone = narrative && displayedChars >= narrative.length
   const optReserveH = typingDone ? optBlockH : 0
@@ -1130,22 +1131,42 @@ function drawNarrative(ctx) {
   // 之前 v0.2.2 拍板加卷首小印、v0.2.5-O 修位置都白做，先生现在直接不要了
   // 删掉后正文 mainStartY 从 ty+24 改回 ty+8（v0.2.5-O 之前的位置），恢复文字顶部 16px 空间
 
-  // 2. system 行（朱砂暗色 + 楷体小字）—— v0.1.80 D008 兼容
-  // v0.2.5-J（先生 2026-06-13 11:03 拍板·规则 3）：删掉 system 行渲染
-  // 状态变化仅作 LLM 叙事脉络，玩家端不需要看
-  // 同时删掉 ctx.clip()（规则 2 自动滚屏）—— 文字超出时由 scrollOffset 平移
+  // v0.2.5-U（先生 2026-06-13 15:57 拍板·修"下溢到物品栏"）：恢复 ctx.clip()
+  // v0.2.5-J 删 ctx.clip() 当时先生同意"自动滚屏"，但实际是手动滚屏（scrollOffset 只在触摸时调整）
+  // 结果：打字过程中文字超出 th 时不被裁剪，画到选项/物品栏位置
+  // 修复：恢复 clip 限定文字画在 [ty, ty+th] 范围内；超出的部分靠 scrollOffset 滚动看（v0.2.5-J 保留机制）
   let mainText = text
 
   // 3. 正文（暖米黄 + 楷体大字）—— v0.2.2 改：暖色 + 楷体
   // v0.2.5-Q（先生 15:33 拍板）：史官手书去掉后，mainStartY 恢复 ty+8
   const mainStartY = ty + 8 + scrollOffset
+
+  // v0.2.5-U：clip 限定文字画在叙事区内（不会下溢到选项/物品栏）
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(tx, ty, tw, th)
+  ctx.clip()
   ctx.fillStyle = 'rgba(245, 239, 224, 0.95)'  // 暖米黄（比 v0.1.62 的 e8ddd0 更亮）
   ctx.font = '16px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
   const contentEndY = drawTextInRect(ctx, mainText, tx + 20, mainStartY, maxW, lineHeight, fontSize)
+  ctx.restore()  // v0.2.5-U：解除 clip（后续滚动指示器/触摸区域不受限制）
 
-  // 4. 限制滚动 —— v0.2.5-J（规则 2）：文字超 th 时自动滚屏（scrollOffset 平移）
+  // 4. 限制滚动 —— v0.2.5-J（规则 2）+ v0.2.5-U（先生 15:57 拍板）：文字超 th 时自动滚屏
   const contentH = contentEndY ? (contentEndY - mainStartY) : (text.split('\n').length * lineHeight)
   const maxScroll = Math.max(0, contentH - (th - 16))
+
+  // v0.2.5-U：打字过程中自动滚屏，让光标保持在 th 底部可见
+  // 之前 v0.2.5-J 只靠玩家手动滑动，超出部分看不到；现在打字时光标位置自动滚动
+  if (displayedChars < totalChars && contentH > th - 16) {
+    const lines = text.split('\n')
+    const cursorLineIndex = lines.length - 1
+    // 光标绝对 Y 位置（不含 scrollOffset）
+    const cursorAbsY = ty + 8 + cursorLineIndex * lineHeight
+    const visibleBottomY = ty + th - 16
+    if (cursorAbsY > visibleBottomY) {
+      scrollOffset = -(cursorAbsY - visibleBottomY)
+    }
+  }
   if (scrollOffset > 0) scrollOffset = 0
   if (scrollOffset < -maxScroll) scrollOffset = -maxScroll
 

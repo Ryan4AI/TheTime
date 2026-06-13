@@ -1038,7 +1038,59 @@ const SEAL_SIZE = 30             // 朱砂印尺寸
 
 // v0.2.2 — 叙事区（去白底卡片 + 文字直渲染 + 卷首小印 + 楷体）
 function drawNarrative(ctx) {
-  if (!narrative) return
+  // v0.2.5-P（先生 2026-06-13 11:49 拍板）：loading=true 且 narrative="" 时显示"史官正在落笔..."
+  // 之前 v0.2.5-D 删了 drawLoading 调用，注释说"由 narrative 区显示"，但代码里没实现
+  // 结果：玩家点选项后叙事区一片空白，等 30+ 秒才有反应，体感很差
+  // 修复：loading 分支画 loadingText + 毛笔蘸墨动画（复用 drawLoading 里的动画逻辑）
+  if (!narrative) {
+    if (loading) {
+      const tx = layout.padding
+      const ty = layout.textY
+      const tw = layout.windowW - layout.padding * 2
+      const barH = 40
+      const barY = ty + 30  // 叙事区偏上位置
+      const elapsed = Date.now() - loadingStart
+
+      // 1. 半透暖色底
+      ctx.save()
+      ctx.fillStyle = 'rgba(35, 28, 22, 0.6)'
+      roundRect(ctx, tx, barY, tw, barH, 4)
+      ctx.fill()
+      ctx.strokeStyle = 'rgba(232, 200, 130, 0.4)'
+      ctx.lineWidth = 0.8
+      roundRect(ctx, tx, barY, tw, barH, 4)
+      ctx.stroke()
+      ctx.restore()
+
+      // 2. 左侧毛笔蘸墨动画（朱砂色随周期变化）
+      const cycle = (elapsed % 1600) / 1600
+      const penX = tx + 18
+      const penY = barY + barH / 2
+      ctx.save()
+      ctx.strokeStyle = 'rgba(80, 50, 30, 0.7)'
+      ctx.lineWidth = 2
+      ctx.lineCap = 'round'
+      ctx.beginPath()
+      ctx.moveTo(penX, penY)
+      ctx.lineTo(penX + 14, penY - 6)
+      ctx.stroke()
+      ctx.fillStyle = 'rgba(192, 48, 48, ' + (0.5 + cycle * 0.5) + ')'
+      ctx.beginPath()
+      ctx.arc(penX + 16, penY - 7, 2.5, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.restore()
+
+      // 3. 文字（楷体 + 暖色）
+      ctx.fillStyle = 'rgba(245, 239, 224, 0.9)'
+      ctx.font = '13px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(loadingText, penX + 28, penY)
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'alphabetic'
+    }
+    return
+  }
 
   const elapsed = Date.now() - displayStartTime
   const totalChars = narrative.length

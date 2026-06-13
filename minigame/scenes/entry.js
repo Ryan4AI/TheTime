@@ -301,7 +301,7 @@ function render(ctx) {
       { fontSize: l.btnS, opacity: b1.opacity })
   }
   if (b2.opacity > 0) {
-    drawButton(ctx, l.btnX, l.btnY2 + b2.y, l.btnW, l.btnH, BTN_RECORDS,
+    drawButton(ctx, l.btnX, l.btnY2 + b2.y, l.btnW, l.btnH, BTN_LEADERBOARD,
       { fontSize: l.btnS, opacity: b2.opacity })
   }
 

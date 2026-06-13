@@ -696,14 +696,38 @@ function adjustFluidLayout() {
   const itemBarH = layout.itemBarH       // 钉死底部 64px
   const safeTop = layout.safeTop || 0
   const availableH = layout.windowH - safeTop - topBarH - itemBarH
-  // v0.2.5-V（先生 2026-06-13 16:51 拍板·修"选项区还是越过物品栏"）：
-  // optBlockH 公式重算：optionY = windowH - 35 - optReserveH
-  //                      option 3 底部 = optionY + 114 = windowH + 79 - optReserveH
-  //                      物品栏顶部 = windowH - 64
-  // 要不越过：optReserveH ≥ 143
-  // v0.2.5-Q 改的 136 和 v0.2.5-U 改的 122 都不够，都会越过
-  // 修复：optBlockH = 155（留 12px 缓冲）
-  const optBlockH = 155
+  // v0.2.5-Z（先生 2026-06-13 19:47 拍板·方案C：缩字号+换行）：
+  // 优先缩字号(15→12)，放不下就换行，按钮高度动态：单行36px/双行52px
+  const optH_single = 36
+  const optH_double = 52
+  const optGap = 3
+  const freeH = 32
+  const freeGap = 6
+
+  // 估算每个选项行数
+  // 按钮文字区域宽度 = 按钮宽度 - 24px（左右各留12px）
+  // 单行字号15px下，中文字符宽度约15px
+  const optW = layout.windowW - layout.padding * 2
+  const textMaxW = optW - 24
+  const charWidthSingle = 14  // 15px字号下中文宽度估算（略小于字号）
+  const maxCharsSingleLine = Math.floor(textMaxW / charWidthSingle)
+
+  let optBlockH = 0
+  if (options && options.length > 0) {
+    options.forEach((opt, i) => {
+      const len = (opt.label || '').length
+      const lines = len > maxCharsSingleLine ? 2 : 1
+      opt._lines = lines  // 存到 option 上，drawOptions 用
+      opt._h = lines === 1 ? optH_single : optH_double
+      optBlockH += opt._h
+      if (i > 0) optBlockH += optGap
+    })
+  } else {
+    // 没选项时按 3 个单行预留
+    optBlockH = 3 * optH_single + 2 * optGap
+  }
+  // 加自由输入按钮高度 + 底缓冲
+  optBlockH += freeGap + freeH + 8
 
   const typingDone = narrative && displayedChars >= narrative.length
   const optReserveH = typingDone ? optBlockH : 0
@@ -1181,71 +1205,92 @@ function drawScrollIndicator(ctx) {
   ctx.restore()
 }
 
-// ─────── 选项按钮（竹简风格 v0.1.61：左侧朱砂红指示条） ───────
-// v0.2.2 — 选项按钮（朱砂印章按钮，无序号，楷体）
+// ─────── 选项按钮（v0.2.5-Z 方案C：缩字号+自动换行） ───────
+// 按钮高度动态：单行 36px / 双行 52px（由 adjustFluidLayout 计算存入 opt._h）
+// 文字策略：先缩字号(15→12)，还不够就换行显示
 function drawOptions(ctx) {
   if (!options || options.length === 0) return
 
-  // v0.1.68: 打字中不画选项（optionFadeIn=0），打字完成后淡入（1）
   const fadeIn = layout.optionFadeIn || 0
   if (fadeIn <= 0) return
 
   const optX = layout.padding
   const optW = layout.windowW - layout.padding * 2
-  const optH = layout.optionH
-  const optGap = layout.optionGap
+  const optGap = layout.optionGap || 3
   const baseY = layout.optionY
 
+  // 文字区域宽度（左右各留 12px padding）
+  const textMaxW = optW - 24
+  const fontBase = '"STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+
+  // 累计 Y 位置（每个选项高度可能不同）
+  let curY = baseY
+
   options.forEach((opt, i) => {
-    const oy = baseY + i * (optH + optGap)
+    const optH = opt._h || 36  // 动态高度
+    const lines = opt._lines || 1
     const appearElapsed = Date.now() - optionsAppearTime - i * 100
-    if (appearElapsed < 0) return
+    if (appearElapsed < 0) { curY += optH + optGap; return }
     const alpha = Math.min(1, appearElapsed / 300)
 
     ctx.save()
     ctx.globalAlpha = alpha * fadeIn
 
-    // 1. 朱砂印章按钮 — 半透深色填充 + 朱砂红描边（v0.2.2 改）
-    ctx.fillStyle = 'rgba(20, 16, 12, 0.7)'  // 半透深色（让背景透过来一点点）
-    roundRect(ctx, optX, oy, optW, optH, 4)
+    // 1. 按钮底板（暗色 + 朱砂红单层描边）
+    ctx.fillStyle = C.dark
+    roundRect(ctx, optX, curY, optW, optH, 4)
     ctx.fill()
-    // 朱砂红描边（粗一些，更"印章"）
-    ctx.strokeStyle = 'rgba(192, 48, 48, 0.75)'
-    ctx.lineWidth = 1.2
-    roundRect(ctx, optX, oy, optW, optH, 4)
-    ctx.stroke()
-    // 内层朱砂细线（双重边框，更古朴）
-    ctx.strokeStyle = 'rgba(192, 48, 48, 0.3)'
-    ctx.lineWidth = 0.5
-    roundRect(ctx, optX + 3, oy + 3, optW - 6, optH - 6, 2)
+    ctx.strokeStyle = C.vermillion
+    ctx.lineWidth = 0.8
+    roundRect(ctx, optX, curY, optW, optH, 4)
     ctx.stroke()
 
-    // 2. 选项文字（暖米黄 + 楷体，v0.2.2 改：无序号）
-    // v0.2.5-D：字号自适应 — 文字宽度超 optW * 0.9 时按比例缩小字号（避免溢出）
-    const optMaxW = optW * 0.9
-    let optFontSize = 15
-    ctx.fillStyle = 'rgba(245, 239, 224, 0.95)'
-    ctx.font = optFontSize + 'px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-    let labelW = ctx.measureText(opt.label).width
-    // 缩字号：每缩 1px 测一次，最小 11px
-    while (labelW > optMaxW && optFontSize > 11) {
-      optFontSize--
-      ctx.font = optFontSize + 'px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-      labelW = ctx.measureText(opt.label).width
+    // 2. 文字渲染
+    ctx.fillStyle = C.paper
+    const textCenterY = curY + optH / 2
+
+    if (lines === 1) {
+      // 单行：缩字号适配
+      let fontSize = 15
+      ctx.font = fontSize + 'px ' + fontBase
+      let labelW = ctx.measureText(opt.label).width
+      while (labelW > textMaxW && fontSize > 12) {
+        fontSize--
+        ctx.font = fontSize + 'px ' + fontBase
+        labelW = ctx.measureText(opt.label).width
+      }
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(opt.label, optX + optW / 2, textCenterY)
+    } else {
+      // 双行：换行显示
+      // 先缩字号到 12px
+      const fontSize = 12
+      ctx.font = fontSize + 'px ' + fontBase
+      const charW = fontSize  // 中文字符宽度约等于字号
+      const maxCharsPerLine = Math.floor(textMaxW / charW)
+      // 按最大字符数分行
+      const label = opt.label || ''
+      const line1 = label.slice(0, maxCharsPerLine)
+      const line2 = label.slice(maxCharsPerLine)
+      const lineGap = 4  // 行间距
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(line1, optX + optW / 2, textCenterY - lineGap)
+      ctx.fillText(line2, optX + optW / 2, textCenterY + fontSize + lineGap)
     }
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(opt.label, optX + optW / 2, oy + optH / 2)
 
     ctx.restore()
 
-    // 记录热区
-    opt.bounds = { x: optX, y: oy, w: optW, h: optH }
+    // 记录热区（用于触摸检测）
+    opt.bounds = { x: optX, y: curY, w: optW, h: optH }
+    curY += optH + optGap
   })
 }
 
 // ─────── 自由输入按钮 ───────
 // v0.2.5-Y（先生 2026-06-13 18:25 拍板）：✎ 从顶栏移回选项区下方
+// v0.2.5-Z：位置改为基于选项区实际底部（动态高度）
 // 虚线边框 + 暗金文字，和选项按钮同宽但更矮（32px），视觉上区分
 function drawFreeInputButton(ctx) {
   if (!options || options.length === 0) return
@@ -1254,13 +1299,18 @@ function drawFreeInputButton(ctx) {
 
   const optX = layout.padding
   const optW = layout.windowW - layout.padding * 2
-  const optH = layout.optionH || 36
-  const optGap = layout.optionGap || 3
   const freeH = 32
   const freeGap = 6
-  // 位置：3 个选项按钮下方
+  // 位置：选项区最后一个按钮下方
   const baseY = layout.optionY
-  const freeY = baseY + 3 * (optH + optGap) + freeGap
+  let optBottom = baseY
+  if (options.length > 0) {
+    const lastOpt = options[options.length - 1]
+    if (lastOpt && lastOpt.bounds) {
+      optBottom = lastOpt.bounds.y + lastOpt.bounds.h
+    }
+  }
+  const freeY = optBottom + freeGap
 
   ctx.save()
   ctx.globalAlpha = fadeIn

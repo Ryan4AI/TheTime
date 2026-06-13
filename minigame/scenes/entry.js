@@ -12,7 +12,7 @@ const { CharAnim, SlideFadeAnim, FadeAnim } = require('../engine/anim')
 const TITLE = '穿越日记'
 const SUBTITLE = '留名青史，或无名而亡'
 const BTN_START = '踏入长河'
-const BTN_LEADERBOARD = '名人录'
+const BTN_LEADERBOARD = '群英录'
 const FOOTER = 'AI演绎 · 历史真实数据'
 
 let layout = {}
@@ -294,15 +294,15 @@ function render(ctx) {
     ctx.restore()
   }
 
-  // 9. Buttons
+  // 9. Buttons (static position for hit test consistency)
   var b1 = anims.btnStart.update(now)
   var b2 = anims.btnLeaderboard.update(now)
   if (b1.opacity > 0) {
-    drawPrimaryButton(ctx, l.btnX, l.btnY1 + b1.y, l.btnW, l.btnH, BTN_START,
+    drawPrimaryButton(ctx, l.btnX, l.btnY1, l.btnW, l.btnH, BTN_START,
       { fontSize: l.btnS, opacity: b1.opacity })
   }
   if (b2.opacity > 0) {
-    drawButton(ctx, l.btnX, l.btnY2 + b2.y, l.btnW, l.btnH, BTN_LEADERBOARD,
+    drawButton(ctx, l.btnX, l.btnY2, l.btnW, l.btnH, BTN_LEADERBOARD,
       { fontSize: l.btnS, opacity: b2.opacity })
   }
 
@@ -320,14 +320,11 @@ function render(ctx) {
 // ─── Touch ───
 function onTouch(x, y, type) {
   if (type === 'end') {
-    var now = Date.now()
-    var b1 = anims.btnStart.update(now)
-    var b2 = anims.btnLeaderboard.update(now)
-    
-    if (b1.opacity > 0 && hitTest(x, y, layout.btnX, layout.btnY1 + b1.y, layout.btnW, layout.btnH)) {
+    // Use static positions for hit testing (more forgiving, works even during animation)
+    if (hitTest(x, y, layout.btnX, layout.btnY1, layout.btnW, layout.btnH)) {
       return { scene: 'selection' }
     }
-    if (b2.opacity > 0 && hitTest(x, y, layout.btnX, layout.btnY2 + b2.y, layout.btnW, layout.btnH)) {
+    if (hitTest(x, y, layout.btnX, layout.btnY2, layout.btnW, layout.btnH)) {
       return { scene: 'leaderboard' }
     }
   }

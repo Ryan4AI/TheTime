@@ -12,7 +12,7 @@ const { CharAnim, SlideFadeAnim, FadeAnim } = require('../engine/anim')
 const TITLE = '穿越日记'
 const SUBTITLE = '留名青史，或无名而亡'
 const BTN_START = '踏入长河'
-const BTN_LEADERBOARD = '千秋榜'
+const BTN_LEADERBOARD = '名人录'
 const FOOTER = 'AI演绎 · 历史真实数据'
 
 let layout = {}

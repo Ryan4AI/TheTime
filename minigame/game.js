@@ -50,7 +50,7 @@ function switchScene(name, params) {
 }
 
 // Register scenes
-var sceneNames = ['entry', 'selection', 'intro', 'identity', 'game', 'death', 'records']
+var sceneNames = ['entry', 'selection', 'intro', 'identity', 'game', 'death', 'leaderboard']
 for (var si = 0; si < sceneNames.length; si++) {
   try {
     scenes[sceneNames[si]] = require('./scenes/' + sceneNames[si])

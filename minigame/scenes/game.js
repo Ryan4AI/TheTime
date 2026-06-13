@@ -819,35 +819,38 @@ function drawBgImage(ctx) {
   const sw = layout.windowW - layout.padding * 2
   const sh = layout.sceneH
 
+  // v0.2.5-I（先生 2026-06-13 10:43 拍板·方案 A）：
+  // 图没加载好时只画纯暗色背景，不画任何 UI 组件（卷轴框/边框/暗金线/朱砂印）
+  // 等图加载完成才统一画 UI —— 避免"空卷轴框"显得突兀
+  // 加载提示由 narrative 区的"史官正在落笔…"承担，不在这里重复
+  if (!bgImgEl || !bgImgEl.complete || bgImgEl.width === 0) {
+    ctx.save()
+    ctx.fillStyle = 'rgba(15,12,8,0.95)'
+    ctx.fillRect(sx, sy, sw, sh)
+    ctx.restore()
+    return  // ← 直接返回，跳过所有 UI 组件绘制
+  }
+
   // 1. 卷轴底框（深木色，模拟画轴卷起感）
   ctx.save()
   ctx.fillStyle = 'rgba(20,16,10,0.85)'
   ctx.fillRect(sx - 4, sy - 4, sw + 8, sh + 8)
   ctx.restore()
 
-  if (!bgImgEl || !bgImgEl.complete || bgImgEl.width === 0) {
-    // v0.2.5-D：去掉"画在生成中"占位文字（先生反馈 6-12 凌晨：与 narrative "史官正在落笔" 重复且常重叠）
-    // 占位只显示纯暗色背景，不画任何文字
-    ctx.save()
-    ctx.fillStyle = 'rgba(15,12,8,0.9)'
-    ctx.fillRect(sx, sy, sw, sh)
-    ctx.restore()
-  } else {
-    // 2. 画主体（cover 模式，1.0 透明度 = 主体）
-    ctx.save()
-    ctx.beginPath()
-    ctx.rect(sx, sy, sw, sh)
-    ctx.clip()  // 限制在卷轴框内
-    const imgW = bgImgEl.width
-    const imgH = bgImgEl.height
-    const scale = Math.max(sw / imgW, sh / imgH)
-    const drawW = imgW * scale
-    const drawH = imgH * scale
-    const drawX = sx + (sw - drawW) / 2
-    const drawY = sy + (sh - drawH) / 2
-    ctx.drawImage(bgImgEl, drawX, drawY, drawW, drawH)
-    ctx.restore()
-  }
+  // 2. 画主体（cover 模式，1.0 透明度 = 主体）
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(sx, sy, sw, sh)
+  ctx.clip()  // 限制在卷轴框内
+  const imgW = bgImgEl.width
+  const imgH = bgImgEl.height
+  const scale = Math.max(sw / imgW, sh / imgH)
+  const drawW = imgW * scale
+  const drawH = imgH * scale
+  const drawX = sx + (sw - drawW) / 2
+  const drawY = sy + (sh - drawH) / 2
+  ctx.drawImage(bgImgEl, drawX, drawY, drawW, drawH)
+  ctx.restore()
 
   // 3. 卷轴边框（暗金）
   ctx.save()

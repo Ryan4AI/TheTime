@@ -696,11 +696,14 @@ function adjustFluidLayout() {
   const itemBarH = layout.itemBarH       // 钉死底部 64px
   const safeTop = layout.safeTop || 0
   const availableH = layout.windowH - safeTop - topBarH - itemBarH
-  // v0.2.5-U（先生 2026-06-13 15:57 拍板·修"下溢到物品栏"）：optBlockH 按实际 optionH=36 / optionGap=3 算
-  // 之前 v0.2.5-Q 改的 136 是基于 initLayout.optH=40（3×40+2×4+8=136）
-  // 但实际渲染用 optionH=36，选项区只占 3×36+2×3+6=120，多算 16px 导致选项底部超过物品栏
-  // 修复：optBlockH = 3×36+2×3+8 = 122（精确匹配实际选项区高度）
-  const optBlockH = 3 * 36 + 2 * 3 + 8  // = 122
+  // v0.2.5-V（先生 2026-06-13 16:51 拍板·修"选项区还是越过物品栏"）：
+  // optBlockH 公式重算：optionY = windowH - 35 - optReserveH
+  //                      option 3 底部 = optionY + 114 = windowH + 79 - optReserveH
+  //                      物品栏顶部 = windowH - 64
+  // 要不越过：optReserveH ≥ 143
+  // v0.2.5-Q 改的 136 和 v0.2.5-U 改的 122 都不够，都会越过
+  // 修复：optBlockH = 155（留 12px 缓冲）
+  const optBlockH = 155
 
   const typingDone = narrative && displayedChars >= narrative.length
   const optReserveH = typingDone ? optBlockH : 0

@@ -42,9 +42,13 @@ const db = cloud.database()
 const _ = db.command
 const https = require('https')
 
-const MM_API_KEY = process.env.MM_API_KEY || 'sk-cp-c5wSwWsnIcUkewTEe9JhETRKZNyJ1OBnphm_4B1HdOV0LMNh9vP80kJFBKZV5jpCtp22_xyBUtF0zRAwgWaxU4YECc_LL8GPzEj6GVOHmMiovcfwylDgCDM'
-const MM_BASE_URL = 'https://api.minimaxi.com/v1'
-const MM_MODEL = 'MiniMax-M2.7-highspeed'
+// v0.2.5-W（先生 2026-06-13 17:11 拍板）：换用阿里百炼 qwen3.7-max
+// 之前用 MiniMax-M2.7-highspeed，现在切换到阿里百炼
+// API key 从 OpenClaw 配置的 qwen-token-plan 复用
+const MM_API_KEY = process.env.DASHSCOPE_API_KEY || 'sk-b830b692b5c846e6a6808e9af9451f45'
+const MM_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+const MM_MODEL = 'qwen3.7-max'
+const MM_FALLBACK_MODEL = 'qwen3.7-plus'  // fallback 模型
 const MAX_TOKENS = 2500
 const TEMPERATURE = 0.85
 const LLM_TIMEOUT_MS = 110000
@@ -424,7 +428,7 @@ async function callAI(state, input, history, monthEvent, isRetry) {
     const status = e.statusCode || 0
     if (status === 400 || status === 429 || (status >= 500 && status < 600)) {
       console.error('[ai_narrate_worker] 主模型失败，回退 M2:', status, e.message)
-      response = await callLLM(messages, 'MiniMax-M2')
+      response = await callLLM(messages, MM_FALLBACK_MODEL)
     } else {
       throw e
     }

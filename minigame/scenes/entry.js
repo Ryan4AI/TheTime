@@ -295,7 +295,7 @@ function render(ctx) {
 
   // 9. Buttons
   var b1 = anims.btnStart.update(now)
-  var b2 = anims.btnRecords.update(now)
+  var b2 = anims.btnLeaderboard.update(now)
   if (b1.opacity > 0) {
     drawPrimaryButton(ctx, l.btnX, l.btnY1 + b1.y, l.btnW, l.btnH, BTN_START,
       { fontSize: l.btnS, opacity: b1.opacity })

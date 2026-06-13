@@ -915,33 +915,6 @@ function drawSealTopBar(ctx) {
   ctx.fillText(subInfo, sealCenterX + 36, sealCenterY + 9)
   ctx.restore()
 
-  // 3. v0.2.5-T（先生 2026-06-13 15:56 拍板）：自由输入 ✎ 图标放顶栏右侧
-  // 之前 v0.2.5-Q 在画区右上角先生仍觉得"和选项按钮叠一起"（画区离选项区近）
-  // 现在挪到顶栏右侧 —— 顶栏不是按钮区，✎ 与选项按钮完全分离
-  // 顺便删掉 v0.2.2 版本号水印（玩家端没意义，腾位置给 ✎）
-  const freeIconSize = 26
-  const freeIconX = layout.windowW - padding - freeIconSize - 2
-  const freeIconY = safeTop + (topH - freeIconSize) / 2
-  // 半透深色底圆 + 朱砂红描边
-  ctx.fillStyle = 'rgba(20, 16, 12, 0.7)'
-  ctx.beginPath()
-  ctx.arc(freeIconX + freeIconSize / 2, freeIconY + freeIconSize / 2, freeIconSize / 2, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.strokeStyle = 'rgba(192, 48, 46, 0.85)'
-  ctx.lineWidth = 1.2
-  ctx.beginPath()
-  ctx.arc(freeIconX + freeIconSize / 2, freeIconY + freeIconSize / 2, freeIconSize / 2, 0, Math.PI * 2)
-  ctx.stroke()
-  // ✎ 图标（暖金）
-  ctx.fillStyle = 'rgba(232, 200, 130, 0.95)'
-  ctx.font = '15px ' + ui.fontFamily
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText('✎', freeIconX + freeIconSize / 2, freeIconY + freeIconSize / 2 + 1)
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'alphabetic'
-  layout._topFreeIcon = { x: freeIconX, y: freeIconY, w: freeIconSize, h: freeIconSize }
-
   // 4. 暗金细线分隔（顶栏底部）
   ui.drawClassicalDivider(ctx, padding, safeTop + topH - 1, layout.windowW - padding * 2, 0.6)
 

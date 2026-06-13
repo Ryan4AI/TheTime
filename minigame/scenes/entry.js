@@ -83,7 +83,7 @@ function init() {
     subtitle: new SlideFadeAnim(6, 300, 600),
     divider: new SlideFadeAnim(1, 400, 900),
     btnStart: new SlideFadeAnim(8, 400, 1000),
-    btnRecords: new SlideFadeAnim(8, 300, 1200),
+    btnLeaderboard: new SlideFadeAnim(8, 300, 1200),
     footer: new SlideFadeAnim(3, 200, 1400),
   }
 

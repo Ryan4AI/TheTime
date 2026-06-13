@@ -898,9 +898,12 @@ function drawSealTopBar(ctx) {
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
   ctx.fillText('穿越日记', sealCenterX + 36, sealCenterY - 7)
-  // 副标题：纪年 + 姓名（小字，暗金）
+  // v0.2.5-L（先生 2026-06-13 11:14 拍板）：副标题把月份拼到年旁边
+  // 之前月在状态栏第 4 段，状态栏改成 3 段后月合并到这里
+  const seasonNamesTopBar = ['正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '冬月', '腊月']
+  const monthStrTopBar = seasonNamesTopBar[(state.month || 1) - 1] || ''
   const eraStr = state.eraDisplay || (state.dynasty + ' ' + state.year + '年')
-  const subInfo = eraStr + '  ·  ' + state.name + state.age + '岁'
+  const subInfo = eraStr + monthStrTopBar + '  ·  ' + state.name + state.age + '岁'
   ctx.fillStyle = 'rgba(200,168,124,0.7)'
   ctx.font = '11px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
   ctx.fillText(subInfo, sealCenterX + 36, sealCenterY + 9)
@@ -946,15 +949,12 @@ function drawStatusBar(ctx) {
   ctx.stroke()
   ctx.restore()
 
-  // 2. 4 段信息：气血 / 金银 / 身份 / 年月
-  const seasonNames = ['正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '冬月', '腊月']
-  const monthStr = seasonNames[(state.month || 1) - 1] || ''
-
+  // 2. 3 段信息：气血 / 金银 / 身份（v0.2.5-L：月合并到顶栏副标题）
   ctx.font = '11px ' + ui.fontFamily
   ctx.textBaseline = 'middle'
 
-  // 分段布局：气血 25% / 金银 25% / 身份 30% / 年月 20%
-  const segW = w / 4
+  // 分段布局：气血 33% / 金银 33% / 身份 33%
+  const segW = w / 3
   const cy = top + h / 2
 
   // 段 1：气血（health + 进度条）
@@ -989,13 +989,6 @@ function drawStatusBar(ctx) {
   ctx.fillStyle = 'rgba(245,239,224,0.85)'
   const occStr = state.occupation || '庶民'
   ctx.fillText(occStr.length > 6 ? occStr.slice(0, 5) + '…' : occStr, seg3X + 36, cy)
-
-  // 段 4：月份（v0.2.5-D：去掉年信息，年已在 narrative 顶部"天授元年"显示，避免冗余）
-  const seg4X = padding + segW * 3
-  ctx.fillStyle = 'rgba(200,200,200,0.6)'
-  ctx.fillText('月', seg4X + 4, cy)
-  ctx.fillStyle = 'rgba(245,239,224,0.85)'
-  ctx.fillText(monthStr, seg4X + 30, cy)
 
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'

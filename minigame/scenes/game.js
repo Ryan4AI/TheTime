@@ -694,6 +694,10 @@ function render(ctx) {
     drawMonthNotice(ctx)
   }
 
+  // v2 新增：属性变化提示 + 超越提示
+  drawAttributeNotice(ctx)
+  drawSurpassNotice(ctx)
+
   // 4. 叙事文字（题跋·下半屏，v0.1.63 改版）
   drawNarrative(ctx)
 
@@ -1089,6 +1093,12 @@ var longPressStart = 0           // 长按计时
 var isLongPressing = false       // 是否在长按中
 var sealAnimProgress = 0         // 印章动画进度（0-1）
 const SEAL_SIZE = 30             // 朱砂印尺寸
+
+// v2 新增：属性变化提示
+var attrNoticeTime = 0           // 属性变化提示开始时间
+var attrNoticeText = ''          // 属性变化文本（如"声望+50 医术+200"）
+var surpassNoticeTime = 0        // 超越提示开始时间
+var surpassNoticeText = ''       // 超越文本（如"你的医术已超越华佗！"）
 
 // v0.2.2 — 叙事区（去白底卡片 + 文字直渲染 + 卷首小印 + 楷体）
 function drawNarrative(ctx) {
@@ -1503,9 +1513,9 @@ function drawJadeTablet(ctx) {
   ctx.fillStyle = 'rgba(0,0,0,0.65)'
   ctx.fillRect(0, 0, w, h)
 
-  // 玉牒面板（居中矩形，仿玉色）
-  const pw = Math.min(280, w - 40)
-  const ph = 260
+  // v2 扩展：玉牒面板加大（加9属性 + 庇护）
+  const pw = Math.min(300, w - 30)
+  const ph = Math.min(h * 0.75, 420)
   const px = (w - pw) / 2
   const py = (h - ph) / 2
 
@@ -1524,48 +1534,110 @@ function drawJadeTablet(ctx) {
   ctx.font = '16px ' + ui.fontFamily
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText('玉  牒', px + pw / 2, py + 30)
+  ctx.fillText('玉  牒', px + pw / 2, py + 28)
 
   // 分隔线
+  let curY = py + 48
   ctx.strokeStyle = 'rgba(90,138,112,0.2)'
   ctx.lineWidth = 1
   ctx.beginPath()
-  ctx.moveTo(px + 24, py + 52)
-  ctx.lineTo(px + pw - 24, py + 52)
+  ctx.moveTo(px + 20, curY)
+  ctx.lineTo(px + pw - 20, curY)
   ctx.stroke()
 
-  // 内容行
+  // 基本信息（紧凑布局）
   const seasonNames = ['正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '冬月', '腊月']
   const monthStr = seasonNames[(state.month || 1) - 1] || ''
-  const fields = [
-    { label: '姓  名', value: state.name },
-    { label: '年  岁', value: state.age + '岁' },
-    { label: '身  份', value: state.occupation || '庶民' },
-    { label: '年  月', value: (state.year || '?') + '年 ' + (monthStr || '') },
-    { label: '金银', value: state.coin + '文' },
-  ]
-
   ctx.textAlign = 'left'
-  fields.forEach((f, i) => {
-    const fy = py + 72 + i * 30
-    ctx.fillStyle = 'rgba(200,200,200,0.5)'
-    ctx.font = '13px ' + ui.fontFamily
-    ctx.fillText(f.label, px + 28, fy)
-    ctx.fillStyle = 'rgba(245,239,224,0.85)'
-    ctx.fillText(f.value, px + 86, fy)
-  })
+  ctx.font = '12px ' + ui.fontFamily
+  
+  curY += 22
+  // Row 1: 姓名 + 年岁
+  ctx.fillStyle = 'rgba(200,200,200,0.5)'
+  ctx.fillText('姓名', px + 20, curY)
+  ctx.fillStyle = 'rgba(245,239,224,0.85)'
+  ctx.fillText(state.name, px + 60, curY)
+  ctx.fillStyle = 'rgba(200,200,200,0.5)'
+  ctx.fillText('年岁', px + pw/2 + 10, curY)
+  ctx.fillStyle = 'rgba(245,239,224,0.85)'
+  ctx.fillText(state.age + '岁', px + pw/2 + 50, curY)
+  
+  curY += 24
+  // Row 2: 身份 + 金银
+  ctx.fillStyle = 'rgba(200,200,200,0.5)'
+  ctx.fillText('身份', px + 20, curY)
+  ctx.fillStyle = 'rgba(245,239,224,0.85)'
+  const occStr = state.occupation || '庶民'
+  ctx.fillText(occStr.length > 5 ? occStr.slice(0, 4) + '…' : occStr, px + 60, curY)
+  ctx.fillStyle = 'rgba(200,200,200,0.5)'
+  ctx.fillText('金银', px + pw/2 + 10, curY)
+  ctx.fillStyle = 'rgba(245,239,224,0.85)'
+  ctx.fillText(state.coin + '文', px + pw/2 + 50, curY)
+  
+  curY += 24
+  // Row 3: 年月 + 庇护
+  ctx.fillStyle = 'rgba(200,200,200,0.5)'
+  ctx.fillText('年月', px + 20, curY)
+  ctx.fillStyle = 'rgba(245,239,224,0.85)'
+  ctx.fillText((state.year || '?') + '年 ' + monthStr, px + 60, curY)
+  ctx.fillStyle = 'rgba(200,168,124,0.6)'
+  ctx.fillText('庇护', px + pw/2 + 10, curY)
+  ctx.fillStyle = 'rgba(245,239,224,0.85)'
+  ctx.fillText((state['历史庇护'] || 0) + '层', px + pw/2 + 50, curY)
 
-  // 物品列表（v0.2.5-AA：去掉健康条，直接从字段列表下方开始）
+  // 分隔线
+  curY += 20
+  ctx.strokeStyle = 'rgba(90,138,112,0.15)'
+  ctx.beginPath()
+  ctx.moveTo(px + 20, curY)
+  ctx.lineTo(px + pw - 20, curY)
+  ctx.stroke()
+
+  // 9属性（3列布局）
+  curY += 18
+  const ATTRS = [
+    { name: '声望', val: state['声望'] || 0 },
+    { name: '财富', val: state['财富'] || 0 },
+    { name: '学识', val: state['学识'] || 0 },
+    { name: '颜值', val: state['颜值'] || 0 },
+    { name: '医术', val: state['医术'] || 0 },
+    { name: '战功', val: state['战功'] || 0 },
+    { name: '文采', val: state['文采'] || 0 },
+    { name: '政绩', val: state['政绩'] || 0 },
+    { name: '义行', val: state['义行'] || 0 },
+  ]
+  
+  ctx.font = '11px ' + ui.fontFamily
+  const colW = (pw - 40) / 3
+  for (let i = 0; i < ATTRS.length; i++) {
+    const col = i % 3
+    const row = Math.floor(i / 3)
+    const ax = px + 20 + col * colW
+    const ay = curY + row * 24
+    ctx.fillStyle = 'rgba(200,168,124,0.5)'
+    ctx.fillText(ATTRS[i].name, ax, ay)
+    ctx.fillStyle = 'rgba(245,239,224,0.75)'
+    ctx.fillText(String(ATTRS[i].val), ax + 32, ay)
+  }
+
+  // 分隔线
+  curY += Math.ceil(ATTRS.length / 3) * 24 + 12
+  ctx.strokeStyle = 'rgba(90,138,112,0.15)'
+  ctx.beginPath()
+  ctx.moveTo(px + 20, curY)
+  ctx.lineTo(px + pw - 20, curY)
+  ctx.stroke()
+
+  // 物品列表
   if (state.items && state.items.length > 0) {
-    const itemY = py + 72 + fields.length * 30 + 16
+    curY += 18
     ctx.fillStyle = 'rgba(200,200,200,0.5)'
-    ctx.font = '13px ' + ui.fontFamily
-    ctx.textAlign = 'left'
-    ctx.fillText('行  李', px + 28, itemY)
+    ctx.font = '12px ' + ui.fontFamily
+    ctx.fillText('行李', px + 20, curY)
     ctx.fillStyle = 'rgba(245,239,224,0.7)'
     ctx.font = '11px ' + ui.fontFamily
-    const itemStr = state.items.map(i => i.icon + i.name).join('  ')
-    ctx.fillText(itemStr, px + 86, itemY, pw - 86 - 28)
+    const itemStr = state.items.map(i => (i.icon || '') + i.name).join('  ')
+    ctx.fillText(itemStr, px + 60, curY, pw - 80)
   }
 
   // 底部提示
@@ -1574,6 +1646,54 @@ function drawJadeTablet(ctx) {
   ctx.textAlign = 'center'
   ctx.textBaseline = 'bottom'
   ctx.fillText('轻点关闭', px + pw / 2, py + ph - 12)
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+}
+
+// v2 新增：属性变化提示（3秒显示，类似 drawMonthNotice）
+function drawAttributeNotice(ctx) {
+  if (!attrNoticeTime || Date.now() - attrNoticeTime > 3000) return
+  if (!attrNoticeText) return
+
+  const alpha = Math.min(1, (3000 - (Date.now() - attrNoticeTime)) / 500) * 0.9
+  const y = layout.topBarH + layout.statusBarH + 12
+
+  // 背景条（暗木色半透）
+  ctx.save()
+  ctx.fillStyle = 'rgba(20,16,12,' + (alpha * 0.7) + ')'
+  ctx.fillRect(layout.padding, y - 4, layout.windowW - layout.padding * 2, 22)
+  ctx.restore()
+
+  // 属性变化文字（暖金色）
+  ctx.fillStyle = 'rgba(200,168,124,' + alpha + ')'
+  ctx.font = '11px ' + ui.fontFamily
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(attrNoticeText, layout.windowW / 2, y + 7)
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+}
+
+// v2 新增：超越历史人物提示（5秒显示，朱砂色）
+function drawSurpassNotice(ctx) {
+  if (!surpassNoticeTime || Date.now() - surpassNoticeTime > 5000) return
+  if (!surpassNoticeText) return
+
+  const alpha = Math.min(1, (5000 - (Date.now() - surpassNoticeTime)) / 800) * 0.95
+  const y = layout.topBarH + layout.statusBarH + 38
+
+  // 背景条（朱砂色半透）
+  ctx.save()
+  ctx.fillStyle = 'rgba(192,48,48,' + (alpha * 0.3) + ')'
+  ctx.fillRect(layout.padding, y - 4, layout.windowW - layout.padding * 2, 24)
+  ctx.restore()
+
+  // 超越文字（朱砂色）
+  ctx.fillStyle = 'rgba(192,48,48,' + alpha + ')'
+  ctx.font = 'bold 12px ' + ui.fontFamily
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('🏆 ' + surpassNoticeText, layout.windowW / 2, y + 8)
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
 }

@@ -687,6 +687,7 @@ function render(ctx) {
   // 长按时玉牒浮窗（drawJadeTablet）会盖住状态条展示更详细信息
   if (!statusHidden || isLongPressing) {
     drawStatusBar(ctx)
+    drawDangerIndicator(ctx)  // v2: 死神危险度提示
   }
 
   // 3. 月份变化提示（如有）
@@ -1083,6 +1084,52 @@ function drawStatusBar(ctx) {
 
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
+}
+
+// v2 新增：死神危险度视觉提示
+function drawDangerIndicator(ctx) {
+  // 计算综合属性
+  var attrs = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
+  var total = 0
+  for (var i = 0; i < attrs.length; i++) total += (state[attrs[i]] || 0)
+  var avg = Math.floor(total / attrs.length)
+
+  // 危险等级
+  var level = 0  // 0=安全, 1=潜伏, 2=逼近, 3=紧迫
+  if (avg < 1000) level = 3
+  else if (avg < 3000) level = 2
+  else if (avg < 5000) level = 1
+
+  if (level === 0) return  // 安全时不显示
+
+  // 位置：状态栏右侧
+  var padding = layout.padding
+  var top = layout.safeTop + layout.topBarH
+  var h = layout.statusBarH
+  var cy = top + h / 2
+
+  var labels = ['', '危·微', '危·近', '危·急']
+  var colors = [
+    '',
+    'rgba(200,200,200,0.5)',  // 潜伏：灰色
+    'rgba(200,168,124,0.7)',  // 逼近：暗金
+    'rgba(192,48,48,0.85)',   // 紧迫：朱砂红
+  ]
+
+  // 闪烁效果（紧迫时）
+  var alpha = 1
+  if (level === 3) {
+    alpha = 0.6 + 0.4 * Math.sin(Date.now() * 0.005)
+  }
+
+  ctx.save()
+  ctx.globalAlpha = alpha
+  ctx.fillStyle = colors[level]
+  ctx.font = 'bold 10px ' + ui.fontFamily
+  ctx.textAlign = 'right'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(labels[level], layout.windowW - padding - 4, cy)
+  ctx.restore()
 }
 
 // v0.2.2 — 月份变化提示（加大字号 + 朱砂色 + 楷体）
@@ -1894,33 +1941,40 @@ function drawLeaderboard(ctx) {
 // v2 新增：获取榜单数据
 function fetchLeaderboardData() {
   if (leaderboardData) return // 已加载
+  // wx.cloud 可用性检查
+  if (typeof wx === 'undefined' || !wx.cloud || !wx.cloud.callFunction) {
+    console.warn('[leaderboard] wx.cloud 不可用')
+    leaderboardLoading = false
+    return
+  }
   leaderboardLoading = true
 
   wx.cloud.callFunction({
     name: 'leaderboard_query',
     data: { action: 'list' }
-  }).then(res => {
+  }).then(function(res) {
     if (res.result && res.result.success) {
       // 获取所有榜单详情
-      const promises = BOARD_LIST.map(name =>
-        wx.cloud.callFunction({
+      var promises = BOARD_LIST.map(function(name) {
+        return wx.cloud.callFunction({
           name: 'leaderboard_query',
           data: { action: 'detail', board: name }
         })
-      )
+      })
       return Promise.all(promises)
     }
     throw new Error('获取榜单列表失败')
-  }).then(results => {
+  }).then(function(results) {
     leaderboardData = {}
-    for (const r of results) {
+    for (var i = 0; i < results.length; i++) {
+      var r = results[i]
       if (r.result && r.result.success && r.result.data) {
         leaderboardData[r.result.data.name] = r.result.data.characters || []
       }
     }
     leaderboardLoading = false
-  }).catch(err => {
-    console.error('获取榜单数据失败:', err)
+  }).catch(function(err) {
+    console.error('[leaderboard] 获取失败:', err)
     leaderboardLoading = false
   })
 }

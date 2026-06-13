@@ -289,7 +289,7 @@ function render(ctx) {
     var btnX = Math.floor(l.cx - l.btnW / 2)
     var descText = selectionCount > 0
       ? '已选 ' + selectionCount + ' / 3 件'
-      : '未选物品, 空手上路'
+      : '空手上路'
 
     roundRect(ctx, btnX, l.btnY, l.btnW, l.btnH, 18)
     ctx.fillStyle = 'rgba(200,168,124,0.06)'
@@ -323,3 +323,4 @@ function render(ctx) {
 }
 
 module.exports = { init, render, onTouch }
+dule.exports = { init, render, onTouch }

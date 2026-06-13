@@ -302,11 +302,11 @@ function render(ctx) {
   var iOp = anims.info.update(now)
   if (iOp > 0) {
     var infoLines = [
-      { label: '年 龄', value: (typeof IDENTITY.age === 'number' ? IDENTITY.age : '?') + '岁' },
-      { label: '性 别', value: IDENTITY.gender + (IDENTITY.marital ? '·' + IDENTITY.marital : '') },
-      { label: '身 份', value: IDENTITY.age < 12 ? '孩童' : (IDENTITY.occupation || '—') },
-      { label: '阶 层', value: IDENTITY.socialClass || '—' },
-      { label: '居 所', value: IDENTITY.residence },
+      { label: '年龄', value: (typeof IDENTITY.age === 'number' ? IDENTITY.age : '?') + '岁' },
+      { label: '性别', value: IDENTITY.gender + (IDENTITY.marital ? '·' + IDENTITY.marital : '') },
+      { label: '身份', value: IDENTITY.age < 12 ? '孩童' : (IDENTITY.occupation || '—') },
+      { label: '阶层', value: IDENTITY.socialClass || '—' },
+      { label: '居所', value: IDENTITY.residence },
     ]
 
     for (var ii = 0; ii < infoLines.length; ii++) {
@@ -319,7 +319,7 @@ function render(ctx) {
         opacity: iOp * 0.6,
       })
       // 值（标签右侧）
-      drawText(ctx, infoLines[ii].value, l.cardX + 100, iy, {
+      drawText(ctx, infoLines[ii].value, l.cardX + 90, iy, {
         fontSize: l.infoS,
         color: COLORS.paperWarm,
         align: 'left', baseline: 'middle',
@@ -336,6 +336,61 @@ function render(ctx) {
         align: 'left', baseline: 'middle',
         opacity: iOp,
       })
+    }
+
+    // v2: 属性展示区
+    var attrOp = anims.info.update(now)  // 复用info动画
+    if (attrOp > 0) {
+      var attrs = [
+        { name: '声望', val: IDENTITY['声望'] || 0 },
+        { name: '财富', val: IDENTITY['财富'] || 0 },
+        { name: '学识', val: IDENTITY['学识'] || 0 },
+        { name: '颜值', val: IDENTITY['颜值'] || 0 },
+      ]
+
+      // 属性标题分隔线
+      var attrLineY = l.attrY - 8
+      ctx.save()
+      ctx.globalAlpha = attrOp * 0.2
+      ctx.strokeStyle = COLORS.gold
+      ctx.lineWidth = 0.5
+      ctx.beginPath()
+      ctx.moveTo(l.cardX + 20, attrLineY)
+      ctx.lineTo(l.cardX + l.cardW - 20, attrLineY)
+      ctx.stroke()
+      ctx.restore()
+
+      // 属性标题
+      drawText(ctx, '初始属性', l.cardX + l.cardW / 2, l.attrY - 2, {
+        fontSize: l.attrS - 1,
+        color: COLORS.gold,
+        align: 'center', baseline: 'middle',
+        opacity: attrOp * 0.6,
+      })
+
+      // 属性4列布局
+      var attrStartY = l.attrY + l.attrRowH
+      for (var ai = 0; ai < attrs.length; ai++) {
+        var col = ai % 4
+        var row = Math.floor(ai / 4)
+        var ax = l.cardX + 30 + col * l.attrColW
+        var ay = attrStartY + row * l.attrRowH
+
+        // 属性名
+        drawText(ctx, attrs[ai].name, ax, ay, {
+          fontSize: l.attrS,
+          color: COLORS.paperDarker,
+          align: 'left', baseline: 'middle',
+          opacity: attrOp * 0.6,
+        })
+        // 属性值
+        drawText(ctx, String(attrs[ai].val), ax + 36, ay, {
+          fontSize: l.attrS,
+          color: COLORS.paperWarm,
+          align: 'left', baseline: 'middle',
+          opacity: attrOp,
+        })
+      }
     }
   }
 

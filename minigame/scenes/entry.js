@@ -10,10 +10,9 @@ const {
 const { CharAnim, SlideFadeAnim, FadeAnim } = require('../engine/anim')
 
 const TITLE = '穿越日记'
-const SUBTITLE = '历史的河流，等你踏入'
-const BTN_START = '开始旅程'
-const BTN_RECORDS = '过往记录'
-const FOOTER = '本游戏内容由AI根据历史真实数据模拟生成'
+const SUBTITLE = '你的名字，能否刻入历史？'
+const BTN_START = '踏入长河'
+const FOOTER = 'AI演绎 · 历史真实数据'
 
 let layout = {}
 let anims = null
@@ -322,9 +321,6 @@ function onTouch(x, y, type) {
   if (type === 'end') {
     if (hitTest(x, y, layout.btnX, layout.btnY1, layout.btnW, layout.btnH)) {
       return { scene: 'selection' }
-    }
-    if (hitTest(x, y, layout.btnX, layout.btnY2, layout.btnW, layout.btnH)) {
-      return { scene: 'records' }
     }
   }
   return null

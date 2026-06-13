@@ -6,18 +6,18 @@
 
 ---
 
-## 状态快照（最新一次 cron 运行 · 2026-06-13 09:01 · 第 12 次）
+## 状态快照（最新一次 cron 运行 · 2026-06-13 21:01 · 第 13 次）
 
 | 维度 | 状态 | 备注 |
 |------|------|------|
-| Git 工作树 | **脏** ⚠️ 6 modified（先生 06-13 01:29 凌晨改）| 1 项 PMO 自身（PROJECT.md）+ 先生 2 modified + 4 个 D（ai_narrate/ 老云函数清理）|
-| 远端 main | `aecbd28`（本地已同步） | 本地 ahead **0 个 commit**（先生 06-13 01:29 改动在工作树，未 commit） |
-| 本地 main | `aecbd28`（先生 02:41 "Update prompt"，06-12 晚档）| HEAD 仍是 06-12 02:41，先生凌晨 01:29 改 worker/game.js 未 commit |
-| 云函数部署 | **16 个**（目录 16；线上 12） | 16 = 12 线上 + dump_result / get_fate_pool / add_era_fields / gen_image |
-| 数据库 | **5 表健康** ✅ | era_meta **115** / era_cities **167** / era_age_dist **3000**（触上限）/ social_structure **619** / event **197**。与 06-09 数据一致，无新涨 |
-| 场景文件 | 5 个主 + 2 个 .bak 备份 | 备份是先生的历史快照（game.js.bak.20260603/0604）|
-| 上次 PMO cron | 2026-06-12 21:01（第 11 次） | 本次是 2026-06-13 09:01（早档），距上次 12 小时 |
-| 先生凌晨活跃 | **01:29** 修改 worker index.js + game.js | v0.2.5-G（retry不push hint）+ v0.2.5-B/C/D 多处 UI 修复（status bar 隐藏 / poll 24 次 / drawLoading 改 Y / 物品字号自适应 等 7+ 处）|
+| Git 工作树 | **干净** ✅ | 06-09 以来首次完全干净——先生白天 25 commit 全部落地 |
+| 远端 main | `aecbd28`（未变） | 本地 ahead **25 commit**（v0.2.5-H ~ v0.2.5-AF，今日 10:36-20:34） |
+| 本地 main | `2d130b4`（v0.2.5-AF，先生 20:34 commit）| 今日 UI 打磨日：25 commit，全部 game.js / worker 视觉交互修复 |
+| 云函数目录 | **16 个**（不变） | 与 06-09 一致 |
+| 数据库 | **推断 5 表健康**（tcb CLI nosql execute 已完全不可用） | 上次实测 06-13 09:01：era_meta **115** / era_cities **167** / era_age_dist **3000** / social_structure **619** / event **197**。今日纯 UI 工作，数据应不变 |
+| 场景文件 | 5 个主 + 2 个 .bak 备份 | game.js **2242 行**（+415 vs 早档 1827 行）/ worker **787 行** |
+| 上次 PMO cron | 2026-06-13 09:01（第 12 次） | 本次是 2026-06-13 21:01（晚档），距上次 12 小时 |
+| 今日先生活跃 | **10:36 ~ 20:34**（约 10 小时密集 commit） | v0.2.5-H → v0.2.5-AF，25 个 commit，全部 UI 修复 |
 
 ### 🚨 严重错误自我纠正（第 10 次 09:01 越权）
 
@@ -729,3 +729,24 @@
   - 4 个 D 标记（ai_narrate/ 老云函数清理——先生自己在做）
 - **A 类修复**：0 项（先生凌晨改动是 UI 修复实质工作 + 1 个 untracked 备份 `backups/game.js.bak-v0.2.5-B-pre` 不能擅删）
 - **PMO 教训（再次）**：tcb CLI 的 `CommandType: "COUNT"` 已 panic（可能云开发后端更新），用 `QUERY` + 限 limit 是稳定路径——后续 cron 都用这套
+
+### 2026-06-13 21:01 · 第 13 次（周六晚）— **v0.2.5 UI 打磨日（25 commit）**
+
+- **先生白天 10 小时密集 UI 打磨**：v0.2.5-H → v0.2.5-AF，25 个 commit（10:36 → 20:34）
+  - v0.2.5-H~J：状态栏常显 / 剧情自动滚屏 / system 行隐藏 / 图未加载不画 UI / JSON 失败 DBG 兜底
+  - v0.2.5-K~L：DBG 只显示最近一轮 / 月合并到顶栏副标题
+  - v0.2.5-M~V：修状态栏与剧情重叠 / 状态栏加回城市 / 修 UI 叠层 bug / 恢复 loading 动效 / 自由输入图标移右上角 / 去打字光标 / 自由输入图标挪顶栏 / 修叙事下溢 / optBlockH 重算
+  - v0.2.5-X~AF：剧情页 UI 审美统一 / ✎ 按钮移回选项区 / 删 ✎ 图标代码 / 选项文字自动换行 / 去气血展示+顶栏字号 20px / 修 C 变量未定义 / 顶栏字号 22px / 去"穿越日记"主标题 / 顶栏双行排版 / 修第二次选选项后 loading 不显示
+- **工作树干净** ✅（06-09 以来首次完全干净）
+- **本地 ahead origin 25 commit**（origin 仍在 aecbd28）
+- **game.js 2242 行**（+415 vs 早档）、**worker 787 行**
+- **DB 查询**：tcb CLI 3.3.3 nosql execute 完全不可用（COUNT panic、QUERY 各种参数格式均报错）。上次实测数据（06-13 09:01）仍有效：5 表健康，4 天未涨
+- **design.md §七**：未变（今日 25 commit 全是 UI 修复，不涉及 §七 新功能项）
+- **§七 升级建议累计 6 项**（仍未被先生同步）：状态追踪 / 死亡判定 / game.js AI 集成 / D008 全套 / v0.2.4 NOT_FOUND / v0.2.5 worker+game.js
+- **A 类修复**：0 项（工作树干净，无临时文件）
+- **需先生决策**：
+  1. 25 commit 何时 push？（建议分批：UI 打磨一批 / 未来功能一批）
+  2. design.md §七 同步（6 项应升级 ✅）
+  3. message 集合写入是否优先推进？
+  4. `gen_image` 部署（已过 11 天未动）
+  5. v0.2.5def system 消息合并是否需落到 worker？

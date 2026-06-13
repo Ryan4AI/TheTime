@@ -40,6 +40,13 @@
       "memorySize": 128,
       "installDependency": true,
       "handler": "index.main"
+    },
+    {
+      "name": "import_leaderboards",
+      "timeout": 60,
+      "memorySize": 256,
+      "installDependency": true,
+      "handler": "index.main"
     }
   ]
 }

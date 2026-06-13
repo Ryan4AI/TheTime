@@ -63,6 +63,30 @@ function calcLayout() {
 }
 
 function init(items, identity) {
+  // v2 新增：根据出身阶层初始化属性
+  if (identity) {
+    const sc = identity.socialClass || identity.social_class || '庶人'
+    // 声望：贵族500 / 平民100 / 贱籍50
+    if (sc.includes('贵') || sc.includes('皇') || sc.includes('官')) identity['声望'] = 500
+    else if (sc.includes('贱') || sc.includes('奴')) identity['声望'] = 50
+    else identity['声望'] = 100
+    // 财富：贵族3000 / 平民500 / 贱籍50
+    if (sc.includes('贵') || sc.includes('皇') || sc.includes('官')) identity['财富'] = 3000
+    else if (sc.includes('贱') || sc.includes('奴')) identity['财富'] = 50
+    else identity['财富'] = 500
+    // 学识：识字300 / 不识字50
+    identity['学识'] = identity.canRead ? 300 : 50
+    // 颜值：随机 3000-7000
+    identity['颜值'] = 3000 + Math.floor(Math.random() * 4000)
+    // 专属属性初始0
+    identity['医术'] = 0
+    identity['战功'] = 0
+    identity['文采'] = 0
+    identity['政绩'] = 0
+    identity['义行'] = 0
+    identity['历史庇护'] = 0
+  }
+
   // 统一云函数(e.g. generate_identity)和本地引擎的身份数据格式
   if (identity && identity.city) {
     // 云函数格式 → 身份卡格式

@@ -110,6 +110,17 @@ module.exports = {
       round: 0,
       health: 100,
       coin: 1000,
+      // v2 新增：9属性
+      '声望': id['声望'] || 0,
+      '财富': id['财富'] || 0,
+      '学识': id['学识'] || 0,
+      '颜值': id['颜值'] || 0,
+      '医术': 0,
+      '战功': 0,
+      '文采': 0,
+      '政绩': 0,
+      '义行': 0,
+      '历史庇护': 0,
       items: items.map(i => ({ ...i })),
       legacy: '',
       alive: true,
@@ -255,6 +266,17 @@ function callAI(userInput) {
     round: state.round,
     health: state.health,
     coin: state.coin,
+    // v2 新增：9属性 + 历史庇护
+    '声望': state['声望'] || 0,
+    '财富': state['财富'] || 0,
+    '学识': state['学识'] || 0,
+    '颜值': state['颜值'] || 0,
+    '医术': state['医术'] || 0,
+    '战功': state['战功'] || 0,
+    '文采': state['文采'] || 0,
+    '政绩': state['政绩'] || 0,
+    '义行': state['义行'] || 0,
+    '历史庇护': state['历史庇护'] || 0,
     items: state.items.map(i => ({ id: i.id, name: i.name, desc: i.desc })),
     legacy: state.legacy,
     alive: state.alive,
@@ -538,6 +560,21 @@ function handleAIResponse(result, action, userInput) {
   const patch = branch.patch || {}
   if (patch.coin !== undefined) state.coin = Math.max(0, state.coin + (patch.coin || 0))
   if (patch.health !== undefined) state.health = Math.max(0, Math.min(100, state.health + (patch.health || 0)))
+
+  // v2 新增：9属性 patch
+  const V2_ATTRS = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
+  for (const attr of V2_ATTRS) {
+    if (patch[attr] !== undefined && typeof patch[attr] === 'number') {
+      state[attr] = Math.max(0, Math.min(10000, (state[attr] || 0) + patch[attr]))
+    }
+  }
+
+  // v2: 超越历史人物日志
+  if (patch.surpassed && Array.isArray(patch.surpassed)) {
+    for (const s of patch.surpassed) {
+      console.log(`[surpassed] ${s.board}: 超越 ${s.name}（第${s.rank}位）`)
+    }
+  }
 
   // 物品状态变化 — v10（D-1 改造）
   // 改：AI 用物品中文名（"茶包"）当 key，不再用 id

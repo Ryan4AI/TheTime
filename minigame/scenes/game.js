@@ -657,10 +657,7 @@ function render(ctx) {
     drawOptions(ctx)
   }
 
-  // 7. 自由输入按钮
-  if (Date.now() >= optionsAppearTime && options.length > 0) {
-    drawFreeInputButton(ctx)
-  }
+  // 7. 自由输入按钮 — v0.2.5-T 挪到顶栏右侧（drawSealTopBar 画），不在这里画
 
   // 8. 底部物品栏（极简）
   drawItemBar(ctx)
@@ -914,14 +911,32 @@ function drawSealTopBar(ctx) {
   ctx.fillText(subInfo, sealCenterX + 36, sealCenterY + 9)
   ctx.restore()
 
-  // 3. 版本号水印（右下角小字，方便先生验证新版本）
-  ctx.save()
-  ctx.fillStyle = 'rgba(200,168,124,0.45)'
-  ctx.font = '9px monospace'
-  ctx.textAlign = 'right'
+  // 3. v0.2.5-T（先生 2026-06-13 15:56 拍板）：自由输入 ✎ 图标放顶栏右侧
+  // 之前 v0.2.5-Q 在画区右上角先生仍觉得"和选项按钮叠一起"（画区离选项区近）
+  // 现在挪到顶栏右侧 —— 顶栏不是按钮区，✎ 与选项按钮完全分离
+  // 顺便删掉 v0.2.2 版本号水印（玩家端没意义，腾位置给 ✎）
+  const freeIconSize = 26
+  const freeIconX = layout.windowW - padding - freeIconSize - 2
+  const freeIconY = safeTop + (topH - freeIconSize) / 2
+  // 半透深色底圆 + 朱砂红描边
+  ctx.fillStyle = 'rgba(20, 16, 12, 0.7)'
+  ctx.beginPath()
+  ctx.arc(freeIconX + freeIconSize / 2, freeIconY + freeIconSize / 2, freeIconSize / 2, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(192, 48, 46, 0.85)'
+  ctx.lineWidth = 1.2
+  ctx.beginPath()
+  ctx.arc(freeIconX + freeIconSize / 2, freeIconY + freeIconSize / 2, freeIconSize / 2, 0, Math.PI * 2)
+  ctx.stroke()
+  // ✎ 图标（暖金）
+  ctx.fillStyle = 'rgba(232, 200, 130, 0.95)'
+  ctx.font = '15px ' + ui.fontFamily
+  ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText('v0.2.2', layout.windowW - padding - 4, sealCenterY)
-  ctx.restore()
+  ctx.fillText('✎', freeIconX + freeIconSize / 2, freeIconY + freeIconSize / 2 + 1)
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+  layout._topFreeIcon = { x: freeIconX, y: freeIconY, w: freeIconSize, h: freeIconSize }
 
   // 4. 暗金细线分隔（顶栏底部）
   ui.drawClassicalDivider(ctx, padding, safeTop + topH - 1, layout.windowW - padding * 2, 0.6)
@@ -1233,47 +1248,14 @@ function drawOptions(ctx) {
 }
 
 // ─────── 自由输入按钮 ───────
-// v0.2.5-Q（先生 2026-06-13 15:33 拍板）：从选项区底部移到画区右上角小图标
-// 之前在选项按钮下面（v0.2.5-O 间距 14px / 高度 32 / 加深填充）先生仍觉得叠一起
-// 现在改成独立小图标（30×30 圆形），位置在画区右上角，与选项按钮完全分离
-// 图未加载时也显示（layout.sceneX/sceneY/sceneW 总是有值，sceneVisible 只控制流式布局占位）
+// v0.2.5-T（先生 2026-06-13 15:56 拍板）：✎ 图标完全挪到顶栏右侧（drawSealTopBar 画）
+// 之前 v0.2.5-Q 在画区右上角先生仍觉得"和选项按钮叠一起"（画区离选项区近，视觉上是同一组）
+// 现在 ✎ 放顶栏 —— 顶栏是信息显示区（不是按钮区），✎ 与选项按钮完全分离
+// 本函数不再画图标（顶栏已画），只保留 layout._topFreeIcon 的引用方便触摸逻辑用
 function drawFreeInputButton(ctx) {
-  const fadeIn = layout.optionFadeIn || 0
-  if (fadeIn <= 0) return
-  // v0.2.5-Q：图未加载时不显示 ✎（loading 提示已显示"史官正在落笔"，避免悬空位置感）
-  if (!layout.sceneVisible) return
-  const appearElapsed = Date.now() - optionsAppearTime
-  if (appearElapsed < 0) return
-  const alpha = Math.min(1, appearElapsed / 300)
-
-  const iconSize = 30
-  const iconX = layout.sceneX + layout.sceneW - iconSize - 8  // 画区右边内缩 8px
-  const iconY = layout.sceneY + 8  // 画区顶部下移 8px
-
-  ctx.save()
-  ctx.globalAlpha = alpha
-  // 半透深色底圆 + 朱砂红描边
-  ctx.fillStyle = 'rgba(20, 16, 12, 0.75)'
-  ctx.beginPath()
-  ctx.arc(iconX + iconSize / 2, iconY + iconSize / 2, iconSize / 2, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.strokeStyle = 'rgba(192, 48, 46, 0.85)'
-  ctx.lineWidth = 1.2
-  ctx.beginPath()
-  ctx.arc(iconX + iconSize / 2, iconY + iconSize / 2, iconSize / 2, 0, Math.PI * 2)
-  ctx.stroke()
-  ctx.restore()
-
-  // ✎ 图标（暖金）
-  ctx.fillStyle = 'rgba(232, 200, 130, 0.95)'
-  ctx.font = '16px ' + ui.fontFamily
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText('✎', iconX + iconSize / 2, iconY + iconSize / 2 + 1)
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'alphabetic'
-
-  layout.freeInputBounds = { x: iconX, y: iconY, w: iconSize, h: iconSize }
+  // ✎ 图标现在由 drawSealTopBar 画（顶栏右侧），选项区只画 3 个选项
+  // 触摸逻辑（onTouch）通过 layout._topFreeIcon 命中检测
+  // 这里什么都不画，但函数保留作为渲染流水线的一部分
 }
 
 // v0.2.2 — 底部物品栏（药匣样式 + 暖色 + 楷体）
@@ -2097,8 +2079,8 @@ function handleTouch(x, y, type) {
     }
   }
 
-  // 检查自由输入
-  if (layout.freeInputBounds && hitTest(x, y, layout.freeInputBounds.x, layout.freeInputBounds.y, layout.freeInputBounds.w, layout.freeInputBounds.h)) {
+  // 检查自由输入（v0.2.5-T：✎ 图标挪到顶栏右侧，bounds 用 layout._topFreeIcon）
+  if (layout._topFreeIcon && hitTest(x, y, layout._topFreeIcon.x, layout._topFreeIcon.y, layout._topFreeIcon.w, layout._topFreeIcon.h)) {
     handleFreeInput()
     return null
   }

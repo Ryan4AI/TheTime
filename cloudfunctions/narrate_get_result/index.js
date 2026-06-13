@@ -4,10 +4,16 @@
  * v0.1.76 — 读独立的 narrate_result 集合（固定 schema）
  * 读 narrate_result（不在 narrate_pending）
  *
+ * v0.2.5-H（先生 2026-06-13 拍板）：result_str 优先于 error_str
+ * worker v0.2.5-H 在 JSON 解析失败时，会把 fakeResult（含 raw_response）写进 result_str
+ * 同时 error_str 也写了"AI输出无法解析..."
+ * 但 status=error 时前端忽略 result_str 走 [WORKER_ERROR] 分支，看不到 raw_response
+ * 改：result_str 存在就优先返回 done + result，前端能渲染 debug 信息
+ *
  * 输入：{ request_id: "narrate_xxx" }
  * 输出：
  *   - { status: 'done', result: {...} }
- *   - { status: 'error', error: '...' }
+ *   - { status: 'error', error: '...' }（仅 result_str 也为空时才返回 error）
  *   - { status: 'not_found' }
  */
 
@@ -27,14 +33,17 @@ exports.main = async (event) => {
     const record = res.data && res.data[0]
     if (!record) return { status: 'not_found' }
 
-    if (record.error_str) {
-      return { status: 'error', error: record.error_str }
-    }
-
+    // v0.2.5-H：result_str 优先（即使 error_str 也有内容）
+    // 让前端 status=done 能拿到 fakeResult，渲染 raw_response
     if (record.result_str) {
       let result
       try { result = JSON.parse(record.result_str) } catch (e) { result = record.result_str }
-      return { status: 'done', result }
+      // 如果 result 含 error 字段，也带 error 字段返回，前端 [RESPONSE_ERROR] 识别
+      return { status: 'done', result, error: record.error_str || null }
+    }
+
+    if (record.error_str) {
+      return { status: 'error', error: record.error_str }
     }
 
     return { status: 'not_found' }

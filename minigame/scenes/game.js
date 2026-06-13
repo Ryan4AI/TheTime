@@ -2,6 +2,11 @@
 // AI 驱动叙事：调用 ai_narrate 云函数 → 显示叙事 + 选项 → 玩家选择 → 循环
 // 模式：init() / render(ctx) / onTouch(x,y,type) — 与项目其他场景保持一致
 
+// v0.2.5-H（先生 2026-06-13 10:30 拍板）：三条规则
+//   规则 1：重试保持输入给AI的内容不变（worker v0.2.5-G）
+//   规则 2：状态变化插入system message → 再插入玩家user message（line 534-543）
+//   规则 3：即使出错，DBG也要返回AI原始输出（worker fakeResult + frontend RESPONSE_ERROR 分支填 raw_response）
+
 const ui = require('../engine/ui')
 const { COLORS, getSystemInfo, drawBackground, drawText, drawCenteredText, drawTextInRect, hitTest, roundRect } = ui
 
@@ -145,7 +150,9 @@ function initLayout() {
   // v0.1.71 重做：画区按"是否加载完成"动态伸缩
   // 顶栏(52) → 文字面板(自适应 narrative 行数) → 选项(3×40+gap 4+输入 32 = 160) → 物品栏(64)
   const topBarH = 52
-  const statusBarH = 26  // v0.1.82 (D008 显示): 状态条（health/coin/身份）常显
+  // v0.2.5-D：v0.2.2 拍板"状态默认隐藏 + 长按呼出"，layout 算时根据 statusHidden 决定 statusBarH 是否占位
+  const baseStatusBarH = 26  // 状态条原始高度（展开时）
+  const statusBarH = statusHidden ? 0 : baseStatusBarH  // 默认隐藏时不占位
   const itemBarH = 64
   const optH = 40
   const optGap = 4
@@ -210,7 +217,14 @@ function callAI(userInput) {
 
   const action = (narrativeHistory && narrativeHistory.length > 0) ? 'continue' : 'init'
   const isRetry = userInput === '__retry__'
-  const realInput = isRetry ? '' : userInput
+  // v0.2.5-B（D005 改进）：retry 时云函数收到的 input = 上轮真 input（不是 __retry__ 占位符）
+  // narrativeHistory 仍然不入（line 526 判断 isRetry 不 push）—— D005 不污染叙事流的承诺不变
+  // 从 narrativeHistory 倒数第一条 user 拿上轮真 input；空时用 userInput 兜底
+  let realInput = userInput
+  if (isRetry) {
+    const lastUserMsg = (narrativeHistory || []).filter(m => m.role === 'user').slice(-1)[0]
+    realInput = (lastUserMsg && lastUserMsg.content) || userInput
+  }
 
   const stateData = {
     life_number: state.life_number,
@@ -337,6 +351,13 @@ function pollNarrateResult(requestId, action, userInput, attempt) {
         if (pollResult.status === 'done') {
           // ── 成功：处理 result ──
           const result = pollResult.result || {}
+          // v0.2.5-H（先生 2026-06-13 拍板）：即使 done 也带 error 字段
+          // worker v0.2.5-H 在 JSON 解析失败时写 fakeResult（success:false + error + debug）
+          // narrate_get_result 返回 done + result + error
+          // 我们要把 result.error 塞进 result.error，方便 handleAIResponse 识别 [RESPONSE_ERROR]
+          if (pollResult.error && !result.error) {
+            result.error = pollResult.error
+          }
           // 调试记录
           if (debugLog.length > 0) {
             const last = debugLog[debugLog.length - 1]
@@ -365,8 +386,10 @@ function pollNarrateResult(requestId, action, userInput, attempt) {
           optionsAppearTime = Date.now() + 300
         } else if (pollResult.status === 'not_found') {
           // v0.1.75: request_id 还没写入（CAP 滞后）或真不存在
-          // 前 3 次轮询遇到 not_found 视为"还在创建"，继续等
-          if (attempt < 3) {
+          // v0.2.5-C: 改 3 → 24 次（120 秒）—— 配合 v0.2.5 prompt + LLM 实际跑 30-40 秒
+          // v0.1.75 的 3 次（15 秒）只够等 10 秒 LLM 响应，现在 LLM 跑 37 秒，3 次放弃太激进
+          // 24 次（120 秒）给 LLM 留 80 秒缓冲；超过 2 分钟基本就是 worker 真挂了
+          if (attempt < 24) {
             loadingText = `史官正在落笔…（已等 ${(attempt + 1) * 5} 秒）`
             pollNarrateResult(requestId, action, userInput, attempt + 1)
           } else {
@@ -413,13 +436,26 @@ function pollNarrateResult(requestId, action, userInput, attempt) {
 // ─────── 处理 AI 返回 ───────
 function handleAIResponse(result, action, userInput) {
   loading = false
+  // v0.2.5-D: 每轮重置 system 行计数（v0.1.80 D008 system 进 narrativeHistory 但渲染层没 reset）
+  // 之前会一直累计，导致 system 行越积越多
+  systemLineCount = 0
 
   if (!result || result.error) {
     // 显式错误：玩家看得懂的史官风格
     // v0.2.3: 把错误填进 debugLog
+    // v0.2.5-H（先生 2026-06-13 拍板）：即使 result.error 也要保留 debug 信息
+    // worker v0.2.5-H 写的 fakeResult 是 success:false + error + debug 三件套
+    // 我们让 raw_response/system_prompt/messages 都能进 DBG，让先生排查 AI 到底吐了什么
     if (debugLog.length > 0) {
       const last = debugLog[debugLog.length - 1]
       last.resultError = `[RESPONSE_ERROR] ${(result && result.error) || 'AI服务暂不可用'}, ts=${Date.now()}, elapsed_ms=${Date.now() - last.ts}`
+      // v0.2.5-H: 错误时也把 raw_response 填进 debugLog
+      if (result && result.debug) {
+        if (result.debug.raw_response) last.raw_response = result.debug.raw_response
+        if (result.debug.system_prompt) last.system_prompt = result.debug.system_prompt
+        if (result.debug.user_prompt) last.user_prompt = result.debug.user_prompt
+        if (result.debug.messages) last.messages_to_ai = result.debug.messages
+      }
     }
     errorMsg = `史官落笔卡壳了——${(result && result.error) || 'AI服务暂不可用'}。点此重试。`
     options = [{ label: '重试', key: '__retry__' }]
@@ -430,9 +466,26 @@ function handleAIResponse(result, action, userInput) {
   const { branch, state: newState, month_changed, event, system_messages } = result
   if (!branch || !branch.content) {
     // v0.2.3: 分支内容为空
+    // v0.2.5-H（先生 2026-06-13 拍板）：即使为空也要把 raw_response 填进 debugLog
+    // 这样先生 DBG 浮窗能看到 AI 到底吐了什么（特别是 JSON 解析失败时关键排查信息）
     if (debugLog.length > 0) {
       const last = debugLog[debugLog.length - 1]
       last.resultError = `[EMPTY_BRANCH] branch=${!!branch}, content=${!!(branch && branch.content)}, ts=${Date.now()}, elapsed_ms=${Date.now() - last.ts}`
+      // 即使 result.error 也要保留（先生能直接看到错误信息）
+      if (result.error) last.resultError += ` | err=${result.error}`
+      // v0.2.5-H: 把 AI 原始输出填进 debugLog（worker v0.2.5-H 已经写进 result.debug.raw_response）
+      if (result.debug && result.debug.raw_response) {
+        last.raw_response = result.debug.raw_response
+      }
+      if (result.debug && result.debug.system_prompt) {
+        last.system_prompt = result.debug.system_prompt
+      }
+      if (result.debug && result.debug.user_prompt) {
+        last.user_prompt = result.debug.user_prompt
+      }
+      if (result.debug && result.debug.messages) {
+        last.messages_to_ai = result.debug.messages
+      }
     }
     errorMsg = '史官落笔卡壳了——这一页是空白。点此重试。'
     options = [{ label: '重试', key: '__retry__' }]
@@ -443,9 +496,13 @@ function handleAIResponse(result, action, userInput) {
   // 分支 options 缺失或为空：明确报错，不补默认
   if (!Array.isArray(branch.options) || branch.options.length === 0) {
     // v0.2.3: 分支 options 缺失
+    // v0.2.5-H: 即使 options 缺失也要填 raw_response，方便先生排查
     if (debugLog.length > 0) {
       const last = debugLog[debugLog.length - 1]
       last.resultError = `[EMPTY_OPTIONS] branch.options 缺失或为空, ts=${Date.now()}, elapsed_ms=${Date.now() - last.ts}`
+      if (result.debug && result.debug.raw_response) {
+        last.raw_response = result.debug.raw_response
+      }
     }
     errorMsg = '史官落笔卡壳了——这一段选项没写出来。点此重试。'
     options = [{ label: '重试', key: '__retry__' }]
@@ -578,8 +635,10 @@ function render(ctx) {
   // 2. 顶部朱砂印（古卷风顶栏）
   drawSealTopBar(ctx)
 
-  // 2.5 v0.1.82 状态条（health / coin /身份 常显）
-  drawStatusBar(ctx)
+  // 2.5 v0.1.82 状态条（v0.2.5-D：v0.2.2 拍板"状态默认隐藏 + 长按呼出"，改为按需渲染）
+  if (!statusHidden || isLongPressing) {
+    drawStatusBar(ctx)
+  }
 
   // 3. 月份变化提示（如有）
   if (monthChanged) {
@@ -607,10 +666,8 @@ function render(ctx) {
   // 8. 底部物品栏（极简）
   drawItemBar(ctx)
 
-  // 9. 加载中
-  if (loading) {
-    drawLoading(ctx)
-  }
+  // 9. 加载中（v0.2.5-D：去掉 drawLoading 调用，"画在生成中" 跟 narrative 重复且常重叠）
+  // 加载状态改由 narrative 区域显示"史官正在落笔..."提示（drawNarrative 内部处理）
 
   // 10. 错误提示
   if (errorMsg) {
@@ -769,17 +826,11 @@ function drawBgImage(ctx) {
   ctx.restore()
 
   if (!bgImgEl || !bgImgEl.complete || bgImgEl.width === 0) {
-    // 占位：纯暗色 + 中心"画在生成中..."小字
+    // v0.2.5-D：去掉"画在生成中"占位文字（先生反馈 6-12 凌晨：与 narrative "史官正在落笔" 重复且常重叠）
+    // 占位只显示纯暗色背景，不画任何文字
     ctx.save()
     ctx.fillStyle = 'rgba(15,12,8,0.9)'
     ctx.fillRect(sx, sy, sw, sh)
-    ctx.fillStyle = 'rgba(200,168,124,0.4)'
-    ctx.font = '11px ' + ui.fontFamily
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText('画在生成中...', sx + sw / 2, sy + sh / 2)
-    ctx.textAlign = 'left'
-    ctx.textBaseline = 'alphabetic'
     ctx.restore()
   } else {
     // 2. 画主体（cover 模式，1.0 透明度 = 主体）
@@ -939,12 +990,12 @@ function drawStatusBar(ctx) {
   const occStr = state.occupation || '庶民'
   ctx.fillText(occStr.length > 6 ? occStr.slice(0, 5) + '…' : occStr, seg3X + 36, cy)
 
-  // 段 4：年月
+  // 段 4：月份（v0.2.5-D：去掉年信息，年已在 narrative 顶部"天授元年"显示，避免冗余）
   const seg4X = padding + segW * 3
   ctx.fillStyle = 'rgba(200,200,200,0.6)'
-  ctx.fillText('年月', seg4X + 4, cy)
+  ctx.fillText('月', seg4X + 4, cy)
   ctx.fillStyle = 'rgba(245,239,224,0.85)'
-  ctx.fillText((state.year || '?') + '·' + monthStr, seg4X + 36, cy)
+  ctx.fillText(monthStr, seg4X + 30, cy)
 
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
@@ -1066,8 +1117,9 @@ function drawNarrative(ctx) {
   if (scrollOffset < -maxScroll) scrollOffset = -maxScroll
 
   // 5. 打字光标（暖金色小竖线）
+  // v0.2.5-D：闪烁周期 800ms 改 500ms（TYPEWRITE_SPEED 25ms / 字符，光标周期 800ms 太慢，跟不上打字节奏）
   if (displayedChars < totalChars) {
-    const blink = (Date.now() % 800) < 400
+    const blink = (Date.now() % 500) < 250
     if (blink) {
       const lines = text.split('\n')
       const lastLine = lines[lines.length - 1] || ''
@@ -1147,8 +1199,18 @@ function drawOptions(ctx) {
     ctx.stroke()
 
     // 2. 选项文字（暖米黄 + 楷体，v0.2.2 改：无序号）
+    // v0.2.5-D：字号自适应 — 文字宽度超 optW * 0.9 时按比例缩小字号（避免溢出）
+    const optMaxW = optW * 0.9
+    let optFontSize = 15
     ctx.fillStyle = 'rgba(245, 239, 224, 0.95)'
-    ctx.font = '15px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+    ctx.font = optFontSize + 'px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+    let labelW = ctx.measureText(opt.label).width
+    // 缩字号：每缩 1px 测一次，最小 11px
+    while (labelW > optMaxW && optFontSize > 11) {
+      optFontSize--
+      ctx.font = optFontSize + 'px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+      labelW = ctx.measureText(opt.label).width
+    }
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(opt.label, optX + optW / 2, oy + optH / 2)
@@ -1165,10 +1227,13 @@ function drawOptions(ctx) {
 function drawFreeInputButton(ctx) {
   const fadeIn = layout.optionFadeIn || 0
   if (fadeIn <= 0) return
-  const freeY = layout.optionY + options.length * (layout.optionH + layout.optionGap) + 8
+  let freeY = layout.optionY + options.length * (layout.optionH + layout.optionGap) + 8
   const freeH = 26
   const freeX = layout.padding
   const freeW = layout.windowW - layout.padding * 2
+  // v0.2.5-D：限制 freeY 不超出物品栏（防止 3 选项 + 长 narrative 时 freeInput 按钮被切）
+  const maxFreeY = layout.itemBarY - freeH - 8
+  if (freeY > maxFreeY) freeY = maxFreeY
 
   const appearElapsed = Date.now() - optionsAppearTime - options.length * 100
   if (appearElapsed < 0) return
@@ -1282,13 +1347,29 @@ function drawItemBar(ctx) {
     ctx.textBaseline = 'middle'
     ctx.fillText(item.icon || '📦', bx + 11, boxY + boxH / 2)
 
-    // 物品名（右侧，楷体）
+    // 物品名（右侧，楷体）—— v0.2.5-D：字号自适应 + 截断避免溢出 boxW
     ctx.fillStyle = 'rgba(245, 239, 224, 0.9)'
-    ctx.font = '10px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+    const name = item.name || ''
+    const nameMaxW = boxW - 24  // bx+22 起算，到 boxW 右边界留 2px
+    let nameFontSize = 10
+    ctx.font = nameFontSize + 'px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+    let nameW = ctx.measureText(name).width
+    // 缩字号：每缩 1px 测一次，最小 8px
+    while (nameW > nameMaxW && nameFontSize > 8) {
+      nameFontSize--
+      ctx.font = nameFontSize + 'px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+      nameW = ctx.measureText(name).width
+    }
+    // 还不够就截断
+    let displayName = name
+    if (nameW > nameMaxW) {
+      for (let len = name.length - 1; len > 0; len--) {
+        displayName = name.slice(0, len) + '…'
+        if (ctx.measureText(displayName).width <= nameMaxW) break
+      }
+    }
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
-    const name = item.name || ''
-    const displayName = name.length > 4 ? name.slice(0, 4) : name
     ctx.fillText(displayName, bx + 22, boxY + boxH / 2)
 
     ctx.textAlign = 'left'
@@ -1409,9 +1490,10 @@ function drawJadeTablet(ctx) {
 
 // ─────── 加载中 ───────
 // v0.2.2 — 加载提示（暖色小条 + 楷体）
+// v0.2.5-D：Y 位置改为选项上方 30px（之前在 narrative 区域内重叠）
 function drawLoading(ctx) {
   const barH = 40
-  const barY = layout.windowH - layout.itemBarH - barH - 8
+  const barY = layout.optionY - barH - 8  // 选项上方 8px 间隔
   const elapsed = Date.now() - loadingStart
 
   // 1. 半透暖色底（v0.2.2 改：去掉黑底）

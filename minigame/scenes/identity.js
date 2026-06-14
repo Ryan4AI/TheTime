@@ -49,7 +49,7 @@ function calcLayout() {
   var attrValS = Math.min(20, Math.floor(w * 0.052))     // 数值大
   var attrNameY = labelY + Math.floor(cardH * 0.05)
   var attrValY = attrNameY + Math.floor(attrNameS * 1.6)
-  var attrRowH = Math.floor(28 * w / 390)
+  var attrRowH = Math.floor(48 * w / 390)
   var attrColW = Math.floor((cardW - 60) / 3)
 
   // 7. 第二道分割线

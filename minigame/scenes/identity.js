@@ -262,44 +262,103 @@ function render(ctx) {
     return
   }
 
-  // 3. 宣纸卡片
+  // 3. 宣纸卡片 + 卷轴装饰
   var cardOp = anims.card.update(now)
   if (cardOp <= 0) { return }
+
+  // ── 卷轴木轴（上下各一） ──
+  var rollerW = l.cardW + 10
+  var rollerH = 7
+  var rollerTopY = l.cardY - rollerH + 1
+  var rollerBotY = l.cardY + l.cardH - 2
+
+  ctx.save()
+  ctx.globalAlpha = cardOp
+
+  // 上轴
+  var gTop = ctx.createLinearGradient(l.cx, rollerTopY, l.cx, rollerTopY + rollerH)
+  gTop.addColorStop(0, '#504030')
+  gTop.addColorStop(0.4, '#7a6040')
+  gTop.addColorStop(0.6, '#8a7050')
+  gTop.addColorStop(1, '#403020')
+  ctx.fillStyle = gTop
+  roundRect(ctx, l.cx - rollerW / 2, rollerTopY, rollerW, rollerH, 3)
+  ctx.fill()
+  // 轴端装饰
+  ctx.fillStyle = '#302010'
+  roundRect(ctx, l.cx - rollerW / 2 - 1, rollerTopY - 1, 6, rollerH + 2, 2)
+  ctx.fill()
+  roundRect(ctx, l.cx + rollerW / 2 - 5, rollerTopY - 1, 6, rollerH + 2, 2)
+  ctx.fill()
+
+  // 下轴
+  var gBot = ctx.createLinearGradient(l.cx, rollerBotY, l.cx, rollerBotY + rollerH)
+  gBot.addColorStop(0, '#8a7050')
+  gBot.addColorStop(0.3, '#7a6040')
+  gBot.addColorStop(0.6, '#504030')
+  gBot.addColorStop(1, '#403020')
+  ctx.fillStyle = gBot
+  roundRect(ctx, l.cx - rollerW / 2, rollerBotY, rollerW, rollerH, 3)
+  ctx.fill()
+  ctx.fillStyle = '#302010'
+  roundRect(ctx, l.cx - rollerW / 2 - 1, rollerBotY - 1, 6, rollerH + 2, 2)
+  ctx.fill()
+  roundRect(ctx, l.cx + rollerW / 2 - 5, rollerBotY - 1, 6, rollerH + 2, 2)
+  ctx.fill()
+  ctx.restore()
 
   // 卡片外层阴影
   ctx.save()
   ctx.globalAlpha = cardOp
-  ctx.shadowColor = 'rgba(0,0,0,0.3)'
-  ctx.shadowBlur = 20
-  ctx.shadowOffsetY = 4
+  ctx.shadowColor = 'rgba(0,0,0,0.35)'
+  ctx.shadowBlur = 18
+  ctx.shadowOffsetY = 3
 
   // 卡片底——暖色宣纸
-  ctx.fillStyle = 'rgba(40,35,30,0.85)'
+  ctx.fillStyle = 'rgba(40,35,30,0.88)'
   roundRect(ctx, l.cardX, l.cardY, l.cardW, l.cardH, 4)
   ctx.fill()
   ctx.restore()
 
   // 卡片边框
   ctx.save()
-  ctx.globalAlpha = cardOp * 0.15
+  ctx.globalAlpha = cardOp * 0.18
   ctx.strokeStyle = COLORS.gold
-  ctx.lineWidth = 0.8
+  ctx.lineWidth = 1
   roundRect(ctx, l.cardX + 2, l.cardY + 2, l.cardW - 4, l.cardH - 4, 3)
   ctx.stroke()
   ctx.restore()
 
   // 内层宣纸（稍亮）
   ctx.save()
-  ctx.globalAlpha = cardOp * 0.2
+  ctx.globalAlpha = cardOp * 0.12
   ctx.fillStyle = 'rgba(80,68,55,0.3)'
-  roundRect(ctx, l.cardX + 5, l.cardY + 5, l.cardW - 10, l.cardH - 10, 2)
+  roundRect(ctx, l.cardX + 6, l.cardY + 6, l.cardW - 12, l.cardH - 12, 2)
   ctx.fill()
   ctx.restore()
 
-  // 四角装饰
+  // 四角装饰（增强版：L形 + 端点金点）
   drawCornerDeco(ctx, l.cardX + 3, l.cardY + 3, l.cardW - 6, l.cardH - 6, 1)
+  // 四角金点
+  var dotR = 2
+  var dotOp = cardOp * 0.30
+  var corners = [
+    [l.cardX + 3, l.cardY + 3],
+    [l.cardX + l.cardW - 3, l.cardY + 3],
+    [l.cardX + 3, l.cardY + l.cardH - 3],
+    [l.cardX + l.cardW - 3, l.cardY + l.cardH - 3],
+  ]
+  for (var di = 0; di < 4; di++) {
+    ctx.save()
+    ctx.globalAlpha = dotOp
+    ctx.fillStyle = COLORS.gold
+    ctx.beginPath()
+    ctx.arc(corners[di][0], corners[di][1], dotR, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
+  }
 
-  // ── v0.6.11 重新布局：5 段极简（纪年/姓名/副标题/属性/按钮）──
+  // ── v0.6.14 卷轴布局 ──
 
   // 段 1：纪年（超小金色，无装饰线）
   var tOp = anims.title.update(now)
@@ -317,9 +376,23 @@ function render(ctx) {
     })
   }
 
-  // 段 2：姓名
+  // 段 2：姓名 + 水墨光晕背景
   var nOp = anims.name.update(now)
   if (nOp > 0) {
+    // 名字背后的淡墨润染
+    ctx.save()
+    ctx.globalAlpha = nOp * 0.08
+    var inkR = Math.floor(l.nameS * 2.5)
+    var inkGrad = ctx.createRadialGradient(cx, l.nameY, 0, cx, l.nameY, inkR)
+    inkGrad.addColorStop(0, 'rgba(200,168,124,0.6)')
+    inkGrad.addColorStop(0.5, 'rgba(200,168,124,0.15)')
+    inkGrad.addColorStop(1, 'rgba(200,168,124,0)')
+    ctx.fillStyle = inkGrad
+    ctx.beginPath()
+    ctx.arc(cx, l.nameY, inkR, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
+
     ctx.save()
     ctx.shadowColor = 'rgba(232,200,130,' + (nOp * 0.25) + ')'
     ctx.shadowBlur = 4
@@ -351,17 +424,30 @@ function render(ctx) {
     })
   }
 
-  // 段 4：分割线 + 9 属性 3×3 网格（v0.6.14 全属性显示）
+  // 段 4：分割线（双线 + 菱形中点） + 9 属性 3×3 网格
   if (sOp > 0.5) {
-    // 分割线
+    // 双线分割线
+    var divS = l.attrColW * 0.75
     ctx.save()
-    ctx.globalAlpha = (sOp - 0.5) * 0.12
+    ctx.globalAlpha = (sOp - 0.5) * 0.10
     ctx.strokeStyle = COLORS.gold
-    ctx.lineWidth = 0.5
+    ctx.lineWidth = 0.4
     ctx.beginPath()
-    ctx.moveTo(cx - l.attrColW * 0.8, l.divY)
-    ctx.lineTo(cx + l.attrColW * 0.8, l.divY)
+    ctx.moveTo(cx - divS, l.divY)
+    ctx.lineTo(cx + divS, l.divY)
     ctx.stroke()
+    ctx.beginPath()
+    ctx.moveTo(cx - divS, l.divY + 3)
+    ctx.lineTo(cx + divS, l.divY + 3)
+    ctx.stroke()
+    // 菱形中点
+    ctx.fillStyle = COLORS.gold
+    ctx.globalAlpha = (sOp - 0.5) * 0.20
+    ctx.save()
+    ctx.translate(cx, l.divY + 1.5)
+    ctx.rotate(Math.PI / 4)
+    ctx.fillRect(-2, -2, 4, 4)
+    ctx.restore()
     ctx.restore()
 
     // 9 属性顺序：声望 财富 学识 颜值 医术 战功 文采 政绩 义行
@@ -405,17 +491,58 @@ function render(ctx) {
     }
   }
 
-  // 段 5：落笔开局（纯文字，无框无装饰）
-  var yOp = anims.year.update(now)
+  // 段 5：朱砂印"开局"（印章风格）
+  var yOp = anims.seal.update(now)
   if (yOp > 0) {
-    drawText(ctx, '落 笔 开 局', cx, l.btnY, {
-      fontSize: Math.min(16, Math.floor(l.cardH * 0.07)),
-      fontFamily: '"STKaiti", "KaiTi", "楷体", ' + ui.fontFamily,
-      color: COLORS.goldLight,
+    var stampW = 56
+    var stampH = 44
+    var stampX = cx - stampW / 2
+    var stampY = l.btnY - stampH / 2
+
+    ctx.save()
+    // 印章本体——朱砂红，带自然湿度边缘
+    ctx.globalAlpha = yOp * 0.88
+    ctx.shadowColor = 'rgba(200,58,46,0.3)'
+    ctx.shadowBlur = 8
+    ctx.fillStyle = COLORS.vermillion
+    roundRect(ctx, stampX, stampY, stampW, stampH, 4)
+    ctx.fill()
+    ctx.restore()
+
+    // 内框（白线）
+    ctx.save()
+    ctx.globalAlpha = yOp * 0.60
+    ctx.strokeStyle = '#fff'
+    ctx.lineWidth = 0.8
+    roundRect(ctx, stampX + 3, stampY + 3, stampW - 6, stampH - 6, 2)
+    ctx.stroke()
+    ctx.restore()
+
+    // 印章文字（白色，模拟篆刻阴文）
+    ctx.save()
+    ctx.globalAlpha = yOp * 0.85
+    ctx.translate(cx, l.btnY + 1)
+    ctx.rotate(-0.04)  // 微倾，如手工盖印
+    drawText(ctx, '开局', 0, 0, {
+      fontSize: Math.min(15, Math.floor(l.cardH * 0.065)),
+      fontFamily: '"STKaiti", "KaiTi", "楷体", serif',
+      color: '#fff',
       align: 'center', baseline: 'middle',
-      opacity: yOp * 0.75,
-      bold: true,
+      letterSpacing: 4,
     })
+    ctx.restore()
+
+    // 印章左下白描小点（仿传统篆刻印边残损）
+    ctx.save()
+    ctx.globalAlpha = yOp * 0.3
+    ctx.fillStyle = '#fff'
+    ctx.beginPath()
+    ctx.arc(stampX + stampW - 8, stampY + 5, 1.5, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.beginPath()
+    ctx.arc(stampX + 5, stampY + stampH - 8, 1, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
   }
 }
 module.exports = { init, render, onTouch, autoNext: null }

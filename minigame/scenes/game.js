@@ -561,10 +561,17 @@ function handleAIResponse(result, action, userInput) {
   if (patch.coin !== undefined) state.coin = Math.max(0, state.coin + (patch.coin || 0))
   if (patch.health !== undefined) state.health = Math.max(0, Math.min(100, state.health + (patch.health || 0)))
 
-  // v2 新增：9属性 patch
+  // v2 新增：9属性 patch + 飘字
   const V2_ATTRS = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
   for (const attr of V2_ATTRS) {
-    if (patch[attr] !== undefined && typeof patch[attr] === 'number') {
+    if (patch[attr] !== undefined && typeof patch[attr] === 'number' && patch[attr] !== 0) {
+      state[attr] = Math.max(0, Math.min(10000, (state[attr] || 0) + patch[attr]))
+      // v2: 属性变化飘字（+50 暖金 / -50 朱砂）
+      const sign = patch[attr] > 0 ? '+' : ''
+      const color = patch[attr] > 0 ? 'rgba(232,200,130,1)' : 'rgba(192,48,48,1)'  // 暖金/朱砂
+      spawnFloater(attr + sign + patch[attr], color)
+    } else if (patch[attr] !== undefined && typeof patch[attr] === 'number') {
+      // 0 也要写入状态（保持一致性），不飘字
       state[attr] = Math.max(0, Math.min(10000, (state[attr] || 0) + patch[attr]))
     }
   }
@@ -695,8 +702,8 @@ function render(ctx) {
     drawMonthNotice(ctx)
   }
 
-  // v2 新增：属性变化提示 + 超越提示
-  drawAttributeNotice(ctx)
+  // v2 新增：属性变化飘字 + 超越提示
+  drawFloaters(ctx)
   drawSurpassNotice(ctx)
 
   // 4. 叙事文字（题跋·下半屏，v0.1.63 改版）
@@ -1091,6 +1098,7 @@ function drawStatusBar(ctx) {
 }
 
 // v2 新增：死神危险度视觉提示
+// 危·急（level=3）时屏幕边缘红色脉冲（v0.6.1 强化）
 function drawDangerIndicator(ctx) {
   // 计算综合属性
   var attrs = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
@@ -1117,22 +1125,77 @@ function drawDangerIndicator(ctx) {
     '',
     'rgba(200,200,200,0.5)',  // 潜伏：灰色
     'rgba(200,168,124,0.7)',  // 逼近：暗金
-    'rgba(192,48,48,0.85)',   // 紧迫：朱砂红
+    'rgba(220,60,60,1)',      // 紧迫：朱砂红（更亮）
   ]
 
   // 闪烁效果（紧迫时）
   var alpha = 1
   if (level === 3) {
-    alpha = 0.6 + 0.4 * Math.sin(Date.now() * 0.005)
+    alpha = 0.7 + 0.3 * Math.sin(Date.now() * 0.006)
+  } else if (level === 2) {
+    alpha = 0.85 + 0.15 * Math.sin(Date.now() * 0.004)
   }
 
   ctx.save()
   ctx.globalAlpha = alpha
   ctx.fillStyle = colors[level]
-  ctx.font = 'bold 10px ' + ui.fontFamily
+  ctx.font = 'bold 11px ' + ui.fontFamily
   ctx.textAlign = 'right'
   ctx.textBaseline = 'middle'
+  // 紧迫时给文字加红色阴影
+  if (level === 3) {
+    ctx.shadowColor = 'rgba(220,60,60,0.9)'
+    ctx.shadowBlur = 8
+  }
   ctx.fillText(labels[level], layout.windowW - padding - 4, cy)
+  ctx.shadowBlur = 0
+  ctx.restore()
+
+  // v0.6.1 强化：紧迫时屏幕边缘红色脉冲
+  if (level === 3) {
+    drawDangerPulse(ctx)
+  }
+}
+
+// v0.6.1 新增：屏幕边缘红色脉冲（死神追杀视觉）
+function drawDangerPulse(ctx) {
+  var now = Date.now()
+  // 脉冲周期 1.2s，越急越快
+  var period = 1100
+  var t = (now % period) / period
+  // 4 条边都画：上 / 下 / 左 / 右
+  var w = layout.windowW
+  var h = layout.windowH
+  // 边带宽度：6-14 像素渐变
+  var bandW = 4 + 10 * (1 - Math.abs(t - 0.5) * 2)
+  // 整体透明度：中间最亮 0.7，两端最暗 0.2
+  var pulseAlpha = 0.15 + 0.5 * (1 - Math.abs(t - 0.5) * 2)
+
+  ctx.save()
+  // 顶部边带
+  var grdTop = ctx.createLinearGradient(0, 0, 0, bandW)
+  grdTop.addColorStop(0, 'rgba(220,60,60,' + pulseAlpha + ')')
+  grdTop.addColorStop(1, 'rgba(220,60,60,0)')
+  ctx.fillStyle = grdTop
+  ctx.fillRect(0, 0, w, bandW)
+  // 底部边带
+  var grdBot = ctx.createLinearGradient(0, h - bandW, 0, h)
+  grdBot.addColorStop(0, 'rgba(220,60,60,0)')
+  grdBot.addColorStop(1, 'rgba(220,60,60,' + pulseAlpha + ')')
+  ctx.fillStyle = grdBot
+  ctx.fillRect(0, h - bandW, w, bandW)
+  // 左边带
+  var grdLeft = ctx.createLinearGradient(0, 0, bandW, 0)
+  grdLeft.addColorStop(0, 'rgba(220,60,60,' + pulseAlpha + ')')
+  grdLeft.addColorStop(1, 'rgba(220,60,60,0)')
+  ctx.fillStyle = grdLeft
+  ctx.fillRect(0, 0, bandW, h)
+  // 右边带
+  var grdRight = ctx.createLinearGradient(w - bandW, 0, w, 0)
+  grdRight.addColorStop(0, 'rgba(220,60,60,0)')
+  grdRight.addColorStop(1, 'rgba(220,60,60,' + pulseAlpha + ')')
+  ctx.fillStyle = grdRight
+  ctx.fillRect(w - bandW, 0, bandW, h)
   ctx.restore()
 }
 
@@ -1731,52 +1794,122 @@ function drawJadeTablet(ctx) {
   ctx.textBaseline = 'alphabetic'
 }
 
-// v2 新增：属性变化提示（3秒显示，类似 drawMonthNotice）
-function drawAttributeNotice(ctx) {
-  if (!attrNoticeTime || Date.now() - attrNoticeTime > 3000) return
-  if (!attrNoticeText) return
+// v2 新增：属性变化飘字系统
+// 每条飘字独立动画：从中部往上飘 + 渐变消失 + 略微放大
+var floaters = []  // [{ text, color, startTime, x, y, dy }]
 
-  const alpha = Math.min(1, (3000 - (Date.now() - attrNoticeTime)) / 500) * 0.9
-  const y = layout.topBarH + layout.statusBarH + 12
-
-  // 背景条（暗木色半透）
-  ctx.save()
-  ctx.fillStyle = 'rgba(20,16,12,' + (alpha * 0.7) + ')'
-  ctx.fillRect(layout.padding, y - 4, layout.windowW - layout.padding * 2, 22)
-  ctx.restore()
-
-  // 属性变化文字（暖金色）
-  ctx.fillStyle = 'rgba(200,168,124,' + alpha + ')'
-  ctx.font = '11px ' + ui.fontFamily
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText(attrNoticeText, layout.windowW / 2, y + 7)
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'alphabetic'
+function spawnFloater(text, color) {
+  // 起点：状态栏下方居中
+  floaters.push({
+    text: text,
+    color: color || 'rgba(200,168,124,1)',  // 默认暖金色
+    startTime: Date.now(),
+    x: layout.windowW / 2,
+    y: layout.topBarH + layout.statusBarH + 60,
+    dy: 90,  // 往上飘的距离
+  })
 }
 
-// v2 新增：超越历史人物提示（5秒显示，朱砂色）
+function drawFloaters(ctx) {
+  if (floaters.length === 0) return
+  const now = Date.now()
+  const LIFE = 1600  // 总寿命 ms
+  ctx.save()
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  for (var i = floaters.length - 1; i >= 0; i--) {
+    var f = floaters[i]
+    var t = (now - f.startTime) / LIFE
+    if (t >= 1) { floaters.splice(i, 1); continue }
+    // 缓动：ease-out（先快后慢）
+    var ease = 1 - Math.pow(1 - t, 2)
+    // 位置：起点 + 往上飘 dy
+    var y = f.y - f.dy * ease
+    // 透明度：0-0.15 段从 0 到 1，0.15-0.7 保持 1，0.7-1 渐变到 0
+    var alpha
+    if (t < 0.15) alpha = t / 0.15
+    else if (t > 0.7) alpha = (1 - t) / 0.3
+    else alpha = 1
+    // 字号：12 渐变到 18（前段）
+    var fontSize = 13 + 5 * Math.min(t / 0.3, 1)
+    // 描边黑色让金色字更醒目
+    ctx.font = 'bold ' + fontSize.toFixed(1) + 'px ' + ui.fontFamily
+    // 阴影模拟外发光
+    ctx.shadowColor = f.color
+    ctx.shadowBlur = 8 * alpha
+    // 描边
+    ctx.strokeStyle = 'rgba(0,0,0,' + (alpha * 0.8) + ')'
+    ctx.lineWidth = 3
+    ctx.strokeText(f.text, f.x, y)
+    // 填充
+    ctx.fillStyle = f.color.replace(/,1\)$/, ',' + alpha + ')').replace(/,1$/, ',' + alpha)
+    ctx.fillText(f.text, f.x, y)
+    ctx.shadowBlur = 0
+  }
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+  ctx.restore()
+}
+
+// v2 新增：超越历史人物全屏特效（v0.6.1 强化：金光 + 居中大字）
 function drawSurpassNotice(ctx) {
   if (!surpassNoticeTime || Date.now() - surpassNoticeTime > 5000) return
   if (!surpassNoticeText) return
 
-  const alpha = Math.min(1, (5000 - (Date.now() - surpassNoticeTime)) / 800) * 0.95
-  const y = layout.topBarH + layout.statusBarH + 38
+  var now = Date.now()
+  var t = (now - surpassNoticeTime) / 5000  // 0-1
+  var w = layout.windowW
+  var h = layout.windowH
 
-  // 背景条（朱砂色半透）
+  // ── 阶段1（0-0.4s）：金色闪屏 ──
+  // 阶段2（0.4-4.5s）：金光脉冲 + 居中大字
+  // 阶段3（4.5-5s）：渐隐
+
+  // 1. 全屏金光（脉冲）
+  if (t < 0.45) {
+    var flashAlpha = (1 - t / 0.45) * 0.35
+    ctx.save()
+    ctx.fillStyle = 'rgba(232,200,130,' + flashAlpha + ')'
+    ctx.fillRect(0, 0, w, h)
+    ctx.restore()
+  } else if (t < 0.85) {
+    // 持续微金光（呼吸感）
+    var pulseAlpha = 0.04 + 0.03 * Math.sin(now * 0.005)
+    ctx.save()
+    ctx.fillStyle = 'rgba(232,200,130,' + pulseAlpha + ')'
+    ctx.fillRect(0, 0, w, h)
+    ctx.restore()
+  }
+
+  // 2. 中央金色大字
+  var textAlpha
+  if (t < 0.1) textAlpha = t / 0.1
+  else if (t > 0.9) textAlpha = (1 - t) / 0.1
+  else textAlpha = 1
+  textAlpha = Math.max(0, Math.min(1, textAlpha))
+
+  var cy = h / 2 - 10
   ctx.save()
-  ctx.fillStyle = 'rgba(192,48,48,' + (alpha * 0.3) + ')'
-  ctx.fillRect(layout.padding, y - 4, layout.windowW - layout.padding * 2, 24)
-  ctx.restore()
-
-  // 超越文字（朱砂色）
-  ctx.fillStyle = 'rgba(192,48,48,' + alpha + ')'
-  ctx.font = 'bold 12px ' + ui.fontFamily
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText('🏆 ' + surpassNoticeText, layout.windowW / 2, y + 8)
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'alphabetic'
+  // 金色光晕
+  ctx.shadowColor = 'rgba(232,200,130,0.95)'
+  ctx.shadowBlur = 20
+  // 描边
+  ctx.strokeStyle = 'rgba(120,80,30,' + (textAlpha * 0.9) + ')'
+  ctx.lineWidth = 4
+  ctx.font = 'bold 18px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+  ctx.strokeText('🏆 ' + surpassNoticeText, w / 2, cy)
+  // 填充
+  ctx.fillStyle = 'rgba(255,240,200,' + textAlpha + ')'
+  ctx.fillText('🏆 ' + surpassNoticeText, w / 2, cy)
+  ctx.shadowBlur = 0
+
+  // 副标题
+  ctx.font = '11px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+  ctx.fillStyle = 'rgba(200,168,124,' + (textAlpha * 0.85) + ')'
+  ctx.fillText('庇护层数 +1', w / 2, cy + 28)
+  ctx.restore()
 }
 
 // v2 新增：榜单浮窗

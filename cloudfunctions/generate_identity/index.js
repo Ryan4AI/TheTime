@@ -121,26 +121,28 @@ function weightedSelect(items, weightKey) {
 
 /**
  * 找离 targetYear 最近的 era_meta 记录
+ * 排除中华人民共和国，只到民国
  * 优先尝试精确匹配，再试过去和未来
  */
 async function findNearestEraMeta(targetYear) {
+  // 排除中华人民共和国
+  const excludePRC = { dynasty: _.neq('中华人民共和国') }
+  
   // 先试精确匹配
   const exact = await db.collection('era_meta')
-    .where({ year: _.eq(targetYear) })
+    .where({ year: _.eq(targetYear), ...excludePRC })
     .get()
   if (exact.data && exact.data.length > 0) {
-    // 如果有多个精确匹配（如1949同时有民国和共和国），选 dynasty 靠后的
-    exact.data.sort((a, b) => (b.dynasty || '').localeCompare(a.dynasty || ''))
     return exact.data[0]
   }
 
   const past = await db.collection('era_meta')
-    .where({ year: _.lt(targetYear) })
+    .where({ year: _.lt(targetYear), ...excludePRC })
     .orderBy('year', 'desc')
     .limit(1)
     .get()
   const future = await db.collection('era_meta')
-    .where({ year: _.gt(targetYear) })
+    .where({ year: _.gt(targetYear), ...excludePRC })
     .orderBy('year', 'asc')
     .limit(1)
     .get()
@@ -151,8 +153,8 @@ async function findNearestEraMeta(targetYear) {
   if (!f) return p
   const pDelta = targetYear - p.year
   const fDelta = f.year - targetYear
-  // delta 相等时选未来的（朝代更近）
-  return pDelta < fDelta ? p : f
+  // delta 相等时选过去的（不穿越到未来）
+  return pDelta <= fDelta ? p : f
 }
 
 /**
@@ -255,7 +257,9 @@ async function _generateIdentity(event, context) {
     }
 
     // ──────────── 第1遍：加载所有城市数据 ────────────
+    // 只加载1949年以前的数据（排除中华人民共和国）
     const allCities = await db.collection('era_cities')
+      .where({ year: _.lt(1949) })
       .field({ year: true, city: true, popMillion: true, figures: true, cityDesc: true, source: true })
       .limit(1000)
       .get()

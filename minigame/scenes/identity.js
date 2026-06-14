@@ -420,5 +420,15 @@ function render(ctx) {
       bold: true,
     })
   }
+
+  // 版本水印（验证更新）
+  ctx.save()
+  ctx.globalAlpha = 0.15
+  ctx.fillStyle = COLORS.gold
+  ctx.font = '7px sans-serif'
+  ctx.textAlign = 'right'
+  ctx.textBaseline = 'bottom'
+  ctx.fillText('v0.6.13', w - 4, h - 4)
+  ctx.restore()
 }
 module.exports = { init, render, onTouch, autoNext: null }

@@ -12,19 +12,20 @@ var layout = {}
 var anims = {}
 var IDENTITY = null
 
-// ── 主题色（UI 模型方案，独立于全局 COLORS） ──
+// ── 主题色（UI 模型方案） ──
+// 注意：这些是硬编码字符串，不能引用 C.xxx 因为 C 尚未赋值
 var C = {
-  textMain: C.textMain,     // 主文字：暖金白
-  textSub: C.textSub,      // 次级文字：褪金
-  textDim: C.textDim,      // 弱信息
-  accent: C.accent,       // 命格/装饰赭金
-  cardTop: C.cardTop,      // 卡片顶深墨褐
-  cardBottom: C.cardBottom,   // 卡片底近黑
-  cardStroke: C.cardStroke,   // 暗金边框
-  btnTop: C.btnTop,       // 按钮暖褐
-  btnBottom: C.btnBottom,    // 按钮深褐
-  btnText: C.btnText,      // 按钮文字奶油白
-  lineGold: 'rgba(214, 162, 76, 0.55)',  // 分隔线金色
+  textMain: '#f4e4bf',
+  textSub: '#c8a978',
+  textDim: '#8d7658',
+  accent: '#d6a24c',
+  cardTop: '#2b2119',
+  cardBottom: '#120e0a',
+  cardStroke: '#9a6a32',
+  btnTop: '#b87832',
+  btnBottom: '#7a3f1c',
+  btnText: '#fff0cf',
+  lineGold: 'rgba(214, 162, 76, 0.55)',
 }
 
 // ── 命格计算 ──
@@ -51,7 +52,7 @@ function calcDestiny(id) {
   return { title: best.title, guide: best.guide }
 }
 
-// ── 布局计算（UI 模型方案移植） ──
+// ── 布局计算 ──
 function calcLayout() {
   var sys = getSystemInfo()
   var w = sys.width
@@ -59,7 +60,6 @@ function calcLayout() {
   var sc = w / 390
   var cx = Math.floor(w / 2)
 
-  // 卡片尺寸：控制在半屏以内
   var cardW = Math.min(w - 40 * sc, 350 * sc)
   var cardH = Math.min(408 * sc, h * 0.50)
   var cardX = Math.floor(cx - cardW / 2)
@@ -67,11 +67,8 @@ function calcLayout() {
   var padY = 20 * sc
   var innerX = cardX + padX
   var innerW = cardW - padX * 2
-
-  // 卡片垂直位置：略高于正中，CTA 按钮在卡片下方
   var cardY = Math.round(h * 0.16)
 
-  // ── 字号（UI 模型方案） ──
   var dynastyFs = Math.floor(15 * sc)
   var nameFs = Math.floor(34 * sc)
   var basicFs = Math.floor(14 * sc)
@@ -82,7 +79,6 @@ function calcLayout() {
   var chronicleFs = Math.floor(12 * sc)
   var ctaFs = Math.floor(18 * sc)
 
-  // ── 垂直排版 ──
   var yDynasty = Math.floor(cardY + padY + 8 * sc)
   var yName = Math.floor(cardY + padY + 52 * sc)
   var yBasic = Math.floor(cardY + padY + 84 * sc)
@@ -94,11 +90,9 @@ function calcLayout() {
   var yDiv2 = Math.floor(cardY + cardH - 92 * sc)
   var yChronicle = Math.floor(cardY + cardH - 66 * sc)
 
-  // ── 9 属性 3×3 网格 ──
   var attrGapY = Math.floor(24 * sc)
   var attrColW = innerW / 3
 
-  // ── CTA 按钮（卡片下方） ──
   var btnW = Math.floor(156 * sc)
   var btnH = Math.floor(44 * sc)
   var btnX = Math.floor(cx - btnW / 2)
@@ -121,7 +115,7 @@ function calcLayout() {
   }
 }
 
-// ── 初始属性生成（同前） ──
+// ── 初始属性生成 ──
 function init(items, identity) {
   if (identity) {
     const sc = identity.socialClass || identity.social_class || '庶人'
@@ -130,23 +124,23 @@ function init(items, identity) {
     const age = identity.age || 25
 
     let base = { '声望': 100, '财富': 500, '学识': 80 }
-    if (sc.includes('贵') || sc.includes('皇') || sc.includes('公') || sc.includes('侯') || sc.includes('伯') || sc.includes('大夫') || sc.includes('宗')) {
+    if (sc.indexOf('贵') >= 0 || sc.indexOf('皇') >= 0 || sc.indexOf('公') >= 0 || sc.indexOf('侯') >= 0 || sc.indexOf('伯') >= 0 || sc.indexOf('大夫') >= 0 || sc.indexOf('宗') >= 0) {
       base = { '声望': 800, '财富': 5000, '学识': 200 }
-    } else if (sc.includes('官') || sc.includes('士') || sc.includes('举') || sc.includes('进士')) {
+    } else if (sc.indexOf('官') >= 0 || sc.indexOf('士') >= 0 || sc.indexOf('举') >= 0 || sc.indexOf('进士') >= 0) {
       base = { '声望': 500, '财富': 2000, '学识': 300 }
-    } else if (sc.includes('商') || sc.includes('贾')) {
+    } else if (sc.indexOf('商') >= 0 || sc.indexOf('贾') >= 0) {
       base = { '声望': 200, '财富': 4000, '学识': 150 }
-    } else if (sc.includes('贱') || sc.includes('奴') || sc.includes('婢') || sc.includes('仆')) {
+    } else if (sc.indexOf('贱') >= 0 || sc.indexOf('奴') >= 0 || sc.indexOf('婢') >= 0 || sc.indexOf('仆') >= 0) {
       base = { '声望': 30, '财富': 30, '学识': 10 }
     }
     if (canRead) base['学识'] += 200
 
     let specialized = { '医术': 0, '战功': 0, '文采': 0, '政绩': 0, '义行': 0 }
-    if (occ.includes('医') || occ.includes('药') || occ.includes('针灸') || occ.includes('郎中')) specialized['医术'] = 800
-    if (occ.includes('将') || occ.includes('兵') || occ.includes('军') || occ.includes('武') || occ.includes('侠') || occ.includes('卒')) specialized['战功'] = 600
-    if (occ.includes('书') || occ.includes('诗') || occ.includes('文') || occ.includes('画') || occ.includes('儒') || occ.includes('墨') || occ.includes('秀才')) specialized['文采'] = 800
-    if (occ.includes('官') || occ.includes('府') || occ.includes('县') || occ.includes('尹') || occ.includes('令') || occ.includes('相') || occ.includes('卿') || occ.includes('大夫')) specialized['政绩'] = 600
-    if (occ.includes('僧') || occ.includes('道') || occ.includes('侠') || occ.includes('义') || occ.includes('丐') || occ.includes('善')) specialized['义行'] = 500
+    if (occ.indexOf('医') >= 0 || occ.indexOf('药') >= 0 || occ.indexOf('针灸') >= 0 || occ.indexOf('郎中') >= 0) specialized['医术'] = 800
+    if (occ.indexOf('将') >= 0 || occ.indexOf('兵') >= 0 || occ.indexOf('军') >= 0 || occ.indexOf('武') >= 0 || occ.indexOf('侠') >= 0 || occ.indexOf('卒') >= 0) specialized['战功'] = 600
+    if (occ.indexOf('书') >= 0 || occ.indexOf('诗') >= 0 || occ.indexOf('文') >= 0 || occ.indexOf('画') >= 0 || occ.indexOf('儒') >= 0 || occ.indexOf('墨') >= 0 || occ.indexOf('秀才') >= 0) specialized['文采'] = 800
+    if (occ.indexOf('官') >= 0 || occ.indexOf('府') >= 0 || occ.indexOf('县') >= 0 || occ.indexOf('尹') >= 0 || occ.indexOf('令') >= 0 || occ.indexOf('相') >= 0 || occ.indexOf('卿') >= 0 || occ.indexOf('大夫') >= 0) specialized['政绩'] = 600
+    if (occ.indexOf('僧') >= 0 || occ.indexOf('道') >= 0 || occ.indexOf('侠') >= 0 || occ.indexOf('义') >= 0 || occ.indexOf('丐') >= 0 || occ.indexOf('善') >= 0) specialized['义行'] = 500
 
     let ageBonus = 1.0
     if (age < 18) ageBonus = 0.7
@@ -155,7 +149,7 @@ function init(items, identity) {
 
     let face = 3000 + Math.floor(Math.random() * 4000)
 
-    const set = (key, val) => { identity[key] = Math.max(0, Math.min(10000, Math.floor(val))) }
+    const set = function(key, val) { identity[key] = Math.max(0, Math.min(10000, Math.floor(val))) }
     set('声望', base['声望'] * ageBonus)
     set('财富', base['财富'] * ageBonus)
     set('学识', base['学识'] * ageBonus)
@@ -177,16 +171,20 @@ function init(items, identity) {
     button: new FadeAnim(900, 500),
   }
   for (var k in anims) anims[k].start(now)
+
+  // 纪年旁白（固定计算一次）
+  if (IDENTITY && IDENTITY.dynasty) {
+    state.narrative_era = IDENTITY.dynasty + ' · 天命初定'
+  }
 }
 
-// ── 触摸处理：卡片或按钮区域均可触发 ──
 function onTouch(x, y, type) {
   if (!state || state.hasTapped) return
   state.hasTapped = true
   state.fadeOutStart = Date.now()
 }
 
-// ── 柔和分隔线（渐变淡出） ──
+// ── 柔和分隔线 ──
 function drawSoftLine(ctx, x, y, w, op) {
   ctx.save()
   ctx.globalAlpha = op || 1
@@ -205,10 +203,10 @@ function render(ctx) {
   var now = Date.now()
   var w = l.w, h = l.h, cx = l.cx
 
-  // 1. 背景（保持与入口页一致的暗暖调）
+  // 1. 背景
   drawBackground(ctx, w, h)
 
-  // 2. 背景暗角，视线聚集卡片
+  // 2. 暗角背景
   var vignette = ctx.createRadialGradient(cx, h * 0.34, w * 0.15, cx, h * 0.34, w * 0.75)
   vignette.addColorStop(0, 'rgba(255, 244, 210, 0.06)')
   vignette.addColorStop(1, 'rgba(42, 24, 10, 0.32)')
@@ -218,7 +216,7 @@ function render(ctx) {
   ctx.restore()
 
   // 3. 淡出
-  if (state.hasTapped) {
+  if (state && state.hasTapped) {
     var fadeElapsed = now - state.fadeOutStart
     var fadeP = Math.min(1, fadeElapsed / 400)
     ctx.fillStyle = 'rgba(0,0,0,' + fadeP + ')'
@@ -229,21 +227,18 @@ function render(ctx) {
     return
   }
 
-  var cardOp = anims.card.update(now)
+  var cardOp = anims && anims.card ? anims.card.update(now) : 0
   if (cardOp <= 0) return
 
-  // ════════════════════════════════════
-  //  段 1：主卡片（命运文牒）
-  // ════════════════════════════════════
+  // ═══════════════════════
+  //  主卡片
+  // ═══════════════════════
 
-  // 卡片阴影
   ctx.save()
   ctx.globalAlpha = cardOp
   ctx.shadowColor = 'rgba(18, 10, 4, 0.42)'
   ctx.shadowBlur = 24 * l.sc
   ctx.shadowOffsetY = 12 * l.sc
-
-  // 卡片渐变：墨褐→近黑
   var cardGrad = ctx.createLinearGradient(0, l.cardY, 0, l.cardY + l.cardH)
   cardGrad.addColorStop(0, C.cardTop)
   cardGrad.addColorStop(1, C.cardBottom)
@@ -252,7 +247,6 @@ function render(ctx) {
   ctx.fill()
   ctx.restore()
 
-  // 外框线（暗金）
   ctx.save()
   ctx.globalAlpha = cardOp * 0.50
   ctx.strokeStyle = C.cardStroke
@@ -261,7 +255,6 @@ function render(ctx) {
   ctx.stroke()
   ctx.restore()
 
-  // 内框线（淡金，微光）
   ctx.save()
   ctx.globalAlpha = cardOp * 0.16
   ctx.strokeStyle = 'rgba(244, 218, 156, 0.5)'
@@ -270,82 +263,88 @@ function render(ctx) {
   ctx.stroke()
   ctx.restore()
 
-  // ════════════════════════════════════
-  //  段 2：内容（淡入）
-  // ════════════════════════════════════
+  // ═══════════════════════
+  //  内容
+  // ═══════════════════════
 
-  var cOp = anims.content.update(now)
+  var cOp = anims.content ? anims.content.update(now) : 0
   if (cOp <= 0) return
 
-  // 朝代纪年（淡金）
+  // 朝代纪年
   var era = ''
-  if (IDENTITY.dynasty) {
+  if (IDENTITY && IDENTITY.dynasty) {
     var e = IDENTITY.eraDisplay || IDENTITY.eraLabel || ''
     if (e && e.indexOf(IDENTITY.dynasty) === 0) {
       e = e.replace(new RegExp('^' + IDENTITY.dynasty.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[·\\s]*'), '')
     }
     era = e ? IDENTITY.dynasty + ' · ' + e : IDENTITY.dynasty
   }
-  drawText(ctx, era, cx, l.yDynasty, {
-    fontSize: l.dynastyFs, color: C.textSub, align: 'center', baseline: 'middle',
-    opacity: cOp * 0.55,
-  })
+  if (era) {
+    drawText(ctx, era, cx, l.yDynasty, {
+      fontSize: l.dynastyFs, color: C.textSub, align: 'center', baseline: 'middle',
+      opacity: cOp * 0.55,
+    })
+  }
 
-  // 姓名（大字锚点）
-  drawText(ctx, IDENTITY.name, cx, l.yName, {
-    fontSize: l.nameFs, color: C.textMain, align: 'center', baseline: 'middle',
-    opacity: cOp * 0.82, bold: true,
-  })
+  // 姓名
+  if (IDENTITY) {
+    drawText(ctx, IDENTITY.name, cx, l.yName, {
+      fontSize: l.nameFs, color: C.textMain, align: 'center', baseline: 'middle',
+      opacity: cOp * 0.82, bold: true,
+    })
+  }
 
   // 基本信息行
-  var parts = []
-  if (IDENTITY.age != null) parts.push(IDENTITY.age + '岁')
-  if (IDENTITY.gender === '男') parts.push('儿郎')
-  else if (IDENTITY.gender === '女') parts.push('女子')
-  if (IDENTITY.occupation) parts.push(IDENTITY.occupation)
-  if (IDENTITY.residence) parts.push(IDENTITY.residence)
-  drawText(ctx, parts.join(' · '), cx, l.yBasic, {
-    fontSize: l.basicFs, color: C.textSub, align: 'center', baseline: 'middle',
-    opacity: cOp * 0.45,
-  })
+  if (IDENTITY) {
+    var parts = []
+    if (IDENTITY.age != null) parts.push(IDENTITY.age + '岁')
+    if (IDENTITY.gender === '男') parts.push('儿郎')
+    else if (IDENTITY.gender === '女') parts.push('女子')
+    if (IDENTITY.occupation) parts.push(IDENTITY.occupation)
+    if (IDENTITY.residence) parts.push(IDENTITY.residence)
+    drawText(ctx, parts.join(' · '), cx, l.yBasic, {
+      fontSize: l.basicFs, color: C.textSub, align: 'center', baseline: 'middle',
+      opacity: cOp * 0.45,
+    })
+  }
 
   // 分隔线 1
   drawSoftLine(ctx, l.innerX, l.yDiv1, l.innerW, cOp * 0.55)
 
-  // 命格（称号金 + 指引灰）
-  var destiny = calcDestiny(IDENTITY)
-  drawText(ctx, destiny.title, cx, l.yFate, {
-    fontSize: l.fateFs, color: C.accent, align: 'center', baseline: 'middle',
-    opacity: cOp * 0.60,
-  })
-  drawText(ctx, destiny.guide, cx, l.yFateDesc, {
-    fontSize: l.fateDescFs, color: C.textSub, align: 'center', baseline: 'middle',
-    opacity: cOp * 0.35,
-  })
+  // 命格
+  if (IDENTITY) {
+    var destiny = calcDestiny(IDENTITY)
+    drawText(ctx, destiny.title, cx, l.yFate, {
+      fontSize: l.fateFs, color: C.accent, align: 'center', baseline: 'middle',
+      opacity: cOp * 0.60,
+    })
+    drawText(ctx, destiny.guide, cx, l.yFateDesc, {
+      fontSize: l.fateDescFs, color: C.textSub, align: 'center', baseline: 'middle',
+      opacity: cOp * 0.35,
+    })
+  }
 
-  // 属性标签（低调标记）
+  // 初始九数
   drawText(ctx, '初始九数', l.innerX, l.yAttrLabel, {
     fontSize: l.attrFs, color: C.textDim, align: 'left', baseline: 'middle',
     opacity: cOp * 0.30,
   })
 
-  // 9 属性（3×3 文本矩阵：标签左对齐，数值右对齐）
+  // 9属性
   var allAttrOrder = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
   for (var i = 0; i < 9; i++) {
     var name = allAttrOrder[i]
-    var val = IDENTITY[name] || 0
+    var val = (IDENTITY && IDENTITY[name]) || 0
     var col = i % 3
     var row = Math.floor(i / 3)
     var ax = l.innerX + col * l.attrColW
     var ay = l.yAttrRow1 + row * l.attrGapY
-    var aCellW = l.attrColW - 4 * l.sc  // 右侧留 margin
+    var aCellW = l.attrColW - 4 * l.sc
 
-    // 属性名（左对齐）
     drawText(ctx, name, ax, ay, {
       fontSize: l.attrFs, color: C.textDim, align: 'left', baseline: 'middle',
       opacity: cOp * 0.35,
     })
-    // 属性值（右对齐，零值虚化）
     drawText(ctx, val > 0 ? val : '—', ax + aCellW, ay, {
       fontSize: l.attrValFs, color: val > 0 ? C.textMain : C.textDim,
       align: 'right', baseline: 'middle',
@@ -354,33 +353,28 @@ function render(ctx) {
     })
   }
 
-  // 分隔线 2
+  // 分隔线2
   drawSoftLine(ctx, l.innerX, l.yDiv2, l.innerW, cOp * 0.40)
 
-  // 纪年旁白（氛围句，init 时固定）
-  var atmosphere = ''
-  if (IDENTITY.dynasty) {
-    atmosphere = IDENTITY.dynasty + ' · 天命初定'
+  // 纪年旁白
+  if (state && state.narrative_era) {
+    drawText(ctx, state.narrative_era, cx, l.yChronicle, {
+      fontSize: l.chronicleFs, color: C.textDim, align: 'center', baseline: 'middle',
+      opacity: cOp * 0.25,
+    })
   }
-  state.narrative_era = atmosphere
-  drawText(ctx, state.narrative_era || '', cx, l.yChronicle, {
-    fontSize: l.chronicleFs, color: C.textDim, align: 'center', baseline: 'middle',
-    opacity: cOp * 0.25,
-  })
 
-  // ════════════════════════════════════
-  //  段 3：CTA 按钮（卡片下方）
-  // ════════════════════════════════════
+  // ═══════════════════════
+  //  CTA 按钮
+  // ═══════════════════════
 
-  var bOp = anims.button.update(now)
+  var bOp = anims.button ? anims.button.update(now) : 0
   if (bOp > 0) {
-    // 按钮阴影
     ctx.save()
     ctx.globalAlpha = bOp * 0.55
     ctx.shadowColor = 'rgba(35, 16, 4, 0.35)'
     ctx.shadowBlur = 14 * l.sc
     ctx.shadowOffsetY = 6 * l.sc
-
     var btnGrad = ctx.createLinearGradient(0, l.btnY, 0, l.btnY + l.btnH)
     btnGrad.addColorStop(0, C.btnTop)
     btnGrad.addColorStop(1, C.btnBottom)
@@ -389,7 +383,6 @@ function render(ctx) {
     ctx.fill()
     ctx.restore()
 
-    // 按钮边框
     ctx.save()
     ctx.globalAlpha = bOp * 0.42
     ctx.strokeStyle = 'rgba(255, 231, 180, 0.5)'
@@ -398,7 +391,6 @@ function render(ctx) {
     ctx.stroke()
     ctx.restore()
 
-    // 按钮文字
     drawText(ctx, '落笔开局', cx, l.btnY + Math.floor(l.btnH / 2) + 1, {
       fontSize: l.ctaFs, color: C.btnText, align: 'center', baseline: 'middle',
       opacity: bOp * 0.75,

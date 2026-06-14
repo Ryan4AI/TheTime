@@ -232,10 +232,11 @@ async function generateName({ targetYear, selectedCity, figures, eraMeta, isMale
 async function _generateIdentity(event, context) {
   try {
     // ── 池模式：只返回所有唯一朝代·城市对 ──
+    // 排除中华人民共和国，只到民国
     if (event && event.mode === 'pool') {
       const [eraRes, cityRes] = await Promise.all([
-        db.collection('era_meta').limit(200).get(),
-        db.collection('era_cities').limit(1000).get(),
+        db.collection('era_meta').where({ dynasty: _.neq('中华人民共和国') }).limit(200).get(),
+        db.collection('era_cities').where({ year: _.lt(1949) }).limit(1000).get(),
       ])
       const metas = eraRes.data.sort((a, b) => (b.year || 0) - (a.year || 0))
       const getDynasty = (y) => {

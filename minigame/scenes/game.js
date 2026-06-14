@@ -1725,9 +1725,9 @@ function drawJadeTablet(ctx) {
   ctx.fillStyle = 'rgba(245,239,224,0.85)'
   ctx.fillText((state.year || '?') + '年 ' + monthStr, px + 60, curY)
   ctx.fillStyle = 'rgba(200,168,124,0.6)'
-  ctx.fillText('庇护', px + pw/2 + 10, curY)
+  // v0.6.7 移除庇护显示
   ctx.fillStyle = 'rgba(245,239,224,0.85)'
-  ctx.fillText((state['历史庇护'] || 0) + '层', px + pw/2 + 50, curY)
+  // v0.6.7 移除庇护显示
 
   // 分隔线
   curY += 20
@@ -1908,7 +1908,7 @@ function drawSurpassNotice(ctx) {
   // 副标题
   ctx.font = '11px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
   ctx.fillStyle = 'rgba(200,168,124,' + (textAlpha * 0.85) + ')'
-  ctx.fillText('庇护层数 +1', w / 2, cy + 28)
+  ctx.fillText('留 名 青 史', w / 2, cy + 28)
   ctx.restore()
 }
 

@@ -467,28 +467,18 @@ function render(ctx) {
     ctx.restore()
   }
 
-  // 段 8：庇护层数 + 名人彩蛋
+  // 段 8：v0.6.7 移除庇护层数（先生拍板"多余概念，去掉"）
+  // 用一个简单的朝代纪年行填充原位置
   if (sOp > 0) {
-    var shield = IDENTITY['历史庇护'] || 0
-    var shieldText = shield > 0
-      ? '☯ 庇护层数 ' + shield + ' · 历史名人庇佑'
-      : '☯ 庇护层数 0 · 尚未入榜'
-    drawText(ctx, shieldText, cx, l.shieldY, {
+    var tailDynasty = IDENTITY.dynasty || ''
+    var tailEra = IDENTITY.eraDisplay || IDENTITY.eraLabel || ''
+    var tailText = tailDynasty && tailEra ? tailDynasty + ' · ' + tailEra : (tailDynasty || tailEra)
+    drawText(ctx, tailText, cx, l.shieldY, {
       fontSize: l.shieldS,
-      color: shield > 0 ? COLORS.gold : COLORS.paperDarker,
+      color: COLORS.paperDarker,
       align: 'center', baseline: 'middle',
-      opacity: sOp * 0.8,
+      opacity: sOp * 0.7,
     })
-    // 名人彩蛋（如果）
-    if (false) {  // v0.6.6 移除名人彩蛋显示
-      drawText(ctx, '✦ 穿越成 ' + IDENTITY.figure, cx, l.shieldY + Math.floor(l.shieldS * 1.6), {
-        fontSize: l.shieldS,
-        color: COLORS.goldLight,
-        align: 'center', baseline: 'middle',
-        opacity: sOp,
-        bold: true,
-      })
-    }
   }
 
   // 段 9：落笔开局按钮

@@ -45,59 +45,45 @@ function calcLayout() {
 
   // 卡片尺寸
   var cardW = Math.floor(w * 0.86)
-  var cardH = Math.floor(h * 0.56)  // v0.6.17: 略高以容纳命格段
+  var cardH = Math.floor(h * 0.52)
   var cardX = Math.floor(cx - cardW / 2)
-  var cardY = Math.floor(h * 0.18)
+  var cardY = Math.floor(h * 0.20)
 
-  // ── 名帖一体式头部 ──
-  var nameS = Math.min(28, Math.floor(w * 0.072))
+  // ── 头部信息 ──
+  var nameS = Math.min(30, Math.floor(w * 0.077))
   var eraS = Math.min(10, Math.floor(w * 0.026))
-  var subS = Math.min(11, Math.floor(w * 0.028))
-  var plaquePad = 10
-  var plaqueTop = cardY + Math.floor(cardH * 0.04)
-  var eraY = plaqueTop + plaquePad + eraS
-  var nameY = eraY + eraS + 6
-  var subY = nameY + Math.floor(nameS * 0.65) + 3
-  var plaqueH = (subY - plaqueTop) + plaquePad
+  var subS = Math.min(12, Math.floor(w * 0.031))
+  var headPad = Math.floor(cardH * 0.035)
+  var eraY = cardY + headPad + 2
+  var nameY = eraY + eraS + Math.floor(cardH * 0.025)
+  var subY = nameY + Math.floor(nameS * 0.6) + 3
 
   // 分割线
   var divY = subY + Math.floor(cardH * 0.04)
 
   // ── 命格段 ──
-  var destinyTitleS = Math.min(13, Math.floor(w * 0.033))
-  var destinyGuideS = Math.min(9, Math.floor(w * 0.024))
-  var destinyTitleY = divY + Math.floor(cardH * 0.05)
-  var destinyGuideY = destinyTitleY + Math.floor(destinyTitleS * 1.3) + 4
+  var destinyTitleS = Math.min(14, Math.floor(w * 0.036))
+  var destinyGuideS = Math.min(10, Math.floor(w * 0.026))
+  var destinyTitleY = divY + Math.floor(cardH * 0.045)
+  var destinyGuideY = destinyTitleY + Math.floor(destinyTitleS * 1.2) + 3
 
-  // ── 命运签（等宽，独立签，无编绳）──
-  var slipPadX = 16
-  var slipGap = 5
-  var slipN = 9            // 共9片，全部等宽
-  var slipW = Math.floor((cardW - slipPadX * 2 - slipGap * (slipN - 1)) / slipN)
-  var slipH = Math.min(108, Math.floor(cardH * 0.22))
-  var topN = 4, botN = 5
-  // 下排（5片）确定左右边界，上排（4片）在相同边界内居中
-  var botW = botN * slipW + (botN - 1) * slipGap
-  var botS = cx - Math.floor(botW / 2)
-  var botRight = botS + botW
-  var topW = topN * slipW + (topN - 1) * slipGap
-  var topS = botS + Math.floor((botW - topW) / 2)  // 以下排边界为基准居中
+  // ── 3×3 属性网格 ──
+  var gridPadX = 18
+  var gridGap = 4
+  var gridCols = 3
+  var gridRows = 3
+  var gridCellW = Math.floor((cardW - gridPadX * 2 - gridGap * (gridCols - 1)) / gridCols)
+  var gridCellH = 55
+  var gridTop = destinyGuideY + 8
+  var gridW = gridCols * gridCellW + (gridCols - 1) * gridGap
+  var gridX = cx - Math.floor(gridW / 2)
 
-  var destinyBot = destinyGuideY + 10
-  var slip1Y = destinyBot + 4               // 上排命运签顶部
-  var rowGap = 12                           // 两排间距
-  var slip2Y = slip1Y + slipH + rowGap     // 下排命运签顶部
-
-  var slip1Starts = []
-  for (var s1 = 0; s1 < topN; s1++) slip1Starts.push(topS + s1 * (slipW + slipGap))
-  var slip2Starts = []
-  for (var s2 = 0; s2 < botN; s2++) slip2Starts.push(botS + s2 * (slipW + slipGap))
-
-  var attrNameS = Math.min(9, Math.floor(w * 0.023))
-  var attrValS = Math.min(12, Math.floor(w * 0.031))
-
-  // 朱砂印
+  // ── 朱砂印 ──
   var btnY = cardY + cardH - Math.floor(cardH * 0.10)
+
+  // 字号
+  var gridNameS = Math.min(10, Math.floor(w * 0.026))
+  var gridValS = Math.min(13, Math.floor(w * 0.034))
 
   layout = {
     w: w, h: h, cx: cx,
@@ -105,17 +91,16 @@ function calcLayout() {
     nameS: nameS, nameY: nameY,
     eraS: eraS, eraY: eraY,
     subS: subS, subY: subY,
-    plaqueTop: plaqueTop, plaqueH: plaqueH,
+    headPad: headPad,
     divY: divY,
     destinyTitleS: destinyTitleS, destinyGuideS: destinyGuideS,
     destinyTitleY: destinyTitleY, destinyGuideY: destinyGuideY,
-    slipW: slipW, slipH: slipH,
-    slip1Y: slip1Y, slip2Y: slip2Y,
-    slip1Starts: slip1Starts, slip2Starts: slip2Starts,
-    slipPadX: slipPadX,
-    attrNameS: attrNameS, attrValS: attrValS,
+    gridCellW: gridCellW, gridCellH: gridCellH,
+    gridTop: gridTop, gridX: gridX,
+    gridPadX: gridPadX, gridGap: gridGap,
+    gridCols: gridCols, gridRows: gridRows,
+    gridNameS: gridNameS, gridValS: gridValS,
     btnY: btnY,
-    _topN: topN, _botN: botN,
   }
 }
 
@@ -178,89 +163,34 @@ function init(items, identity) {
     set('文采', specialized['文采'] * celebBonus)
     set('政绩', specialized['政绩'] * celebBonus)
     set('义行', specialized['义行'] * celebBonus)
-    set('历史庇护', 0)  // v0.6.6：庇护只通过上榜获得，不靠穿越身份
   }
 
-  // 统一云函数(e.g. generate_identity)和本地引擎的身份数据格式
-  if (identity && identity.city) {
-    // 云函数格式 → 身份卡格式（v0.6.4 修复：保留所有 v2 属性字段）
-    IDENTITY = {
-      ...identity,  // v0.6.4：保留声望/财富/学识/颜值/医术/战功/文采/政绩/义行/历史庇护 等
-      name: identity.name || '???',
-      age: identity.age != null ? identity.age : '?',
-      gender: identity.gender || '?',
-      occupation: identity.occupation || '',
-      socialClass: identity.socialClass || '',
-      residence: identity.city || '',
-      city: identity.city || '',         // v0.1.70 保留原字段（game.js 读 id.city）
-      year: identity.year,               // v0.1.70 加 year 字段（game.js 读 id.year）
-      eraDisplay: identity.eraDisplay || '',
-      eraLabel: identity.eraLabel || '',
-      dynasty: identity.dynasty || '',
-      marital: '',
-      literacy: identity.canRead ? '识字' : '不识字',
-      isCelebrity: false,  // v0.6.6：永远不穿越成名人不与榜单冲突
-      figure: identity.figure || null,
-      source: identity.source || '',
-    }
-  } else {
-    // 本地引擎格式（直接用）
-    IDENTITY = identity || {
-      name: '???',
-      age: '?',
-      gender: '?',
-      origin: '',
-      socialClass: '',
-      occupation: '',
-      occupationDesc: '',
-      residence: '汴京',
-      year: '崇宁元年秋',
-      dynasty: '北宋',
-      marital: '',
-      literacy: '',
-    }
-  }
-
+  IDENTITY = identity
+  state = { hasTapped: false, items: items, fadeOutStart: 0 }
   calcLayout()
-  var now = Date.now()
-
-  state = {
-    items: items || [],
-    ready: false,        // 点击可用
-    hasTapped: false,    // 已点击，等待淡出
-    fadeOutStart: 0,
-  }
-
   anims = {
-    card: new FadeAnim(200, 600),         // 卡片整体淡入
-    name: new FadeAnim(500, 700),         // 名帖一体（纪年+姓名+副标题+竹排）
-    seal: new FadeAnim(1200, 300),        // 朱砂印
+    card: new FadeAnim({ delay: 300, duration: 500 }),
+    name: new FadeAnim({ delay: 600, duration: 600 }),
+    seal: new FadeAnim({ delay: 1000, duration: 500 }),
   }
-  for (var k in anims) anims[k].start(now)
 }
 
 function onTouch(x, y, type) {
-  if (type !== 'end') return null
-  if (!state) return null
-
-  // 首次点击：任意位置可触发（或点击按钮）
-  if (!state.hasTapped) {
-    state.hasTapped = true
-    state.fadeOutStart = Date.now()
-    return null
-  }
-  return null
+  if (!state || state.hasTapped) return
+  // 点击任意位置（或点击朱砂印区域）开始游戏
+  state.hasTapped = true
+  state.fadeOutStart = Date.now()
 }
 
-// 绘制装饰花纹（四角）
 function drawCornerDeco(ctx, x, y, w, h, scale) {
-  ctx.save()
-  ctx.globalAlpha *= 0.25
-  ctx.strokeStyle = COLORS.goldDark
-  ctx.lineWidth = 0.5 * scale
+  var col = COLORS.gold
+  var gap = 4 * scale
+  var len = 12 * scale
 
-  var len = 10 * scale
-  var gap = 3 * scale
+  ctx.save()
+  ctx.globalAlpha = 0.30
+  ctx.strokeStyle = col
+  ctx.lineWidth = 0.8
 
   // 左上
   ctx.beginPath()
@@ -388,7 +318,7 @@ function render(ctx) {
   ctx.fill()
   ctx.restore()
 
-  // 四角装饰（增强版：L形 + 端点金点）
+  // 四角装饰（L形 + 端点金点）
   drawCornerDeco(ctx, l.cardX + 3, l.cardY + 3, l.cardW - 6, l.cardH - 6, 1)
   // 四角金点
   var dotR = 2
@@ -409,13 +339,10 @@ function render(ctx) {
     ctx.restore()
   }
 
-  // ── v0.6.14 卷轴布局 ──
-
-  // ── 段 1-3：名帖头部（层次化构图） ──
-  // 纪年→左上角(小印章感)、姓名→正中大字榜题、副标题→下方左对齐落款
+  // ── 段 1-3：层次化头部 ──
   var nOp = anims.name.update(now)
   if (nOp > 0) {
-    // ── 纪年（左上角，极淡，像鉴藏印） ──
+    // ── 纪年（左上角，极淡小字） ──
     var era = ''
     if (IDENTITY.dynasty) {
       var e = IDENTITY.eraDisplay || IDENTITY.eraLabel || ''
@@ -424,12 +351,12 @@ function render(ctx) {
       }
       era = e ? IDENTITY.dynasty + ' · ' + e : IDENTITY.dynasty
     }
-    drawText(ctx, era, l.cardX + 24, l.plaqueTop + Math.floor(l.plaqueH/2) - 2, {
+    drawText(ctx, era, l.cardX + 22, l.eraY, {
       fontSize: Math.floor(l.eraS * 0.85), color: COLORS.gold,
-      align: 'left', baseline: 'middle', opacity: nOp * 0.30,
+      align: 'left', baseline: 'top', opacity: nOp * 0.28,
     })
 
-    // ── 姓名（正中榜题大字 + 水墨光晕） ──
+    // ── 姓名（大字 + 水墨光晕） ──
     ctx.save()
     var inkR = Math.floor(l.nameS * 3)
     var inkGrad = ctx.createRadialGradient(cx, l.nameY, 0, cx, l.nameY, inkR)
@@ -452,20 +379,20 @@ function render(ctx) {
     })
     ctx.restore()
 
-    // ── 副标题（下方左对齐，像画作落款） ──
+    // ── 副标题（左对齐，落款式） ──
     var parts = []
     if (IDENTITY.age != null) parts.push(IDENTITY.age + '岁')
     if (IDENTITY.gender === '男') parts.push('儿郎')
     else if (IDENTITY.gender === '女') parts.push('女子')
     if (IDENTITY.occupation) parts.push(IDENTITY.occupation)
     if (IDENTITY.residence) parts.push(IDENTITY.residence)
-    drawText(ctx, parts.join(' · '), l.cardX + 24, l.subY, {
+    drawText(ctx, parts.join(' · '), l.cardX + 22, l.subY, {
       fontSize: l.subS, color: COLORS.paperDarker,
-      align: 'left', baseline: 'middle', opacity: nOp * 0.55,
+      align: 'left', baseline: 'middle', opacity: nOp * 0.50,
     })
 
-    // ── 极细分割线（不贯穿，以人物为中心左右对称短横） ──
-    var divLen = Math.floor(l.cardW * 0.3)
+    // ── 极细分割线 ──
+    var divLen = Math.floor(l.cardW * 0.25)
     ctx.save()
     ctx.globalAlpha = nOp * 0.04
     ctx.strokeStyle = COLORS.gold
@@ -477,10 +404,9 @@ function render(ctx) {
     ctx.restore()
   }
 
-  // ── 段 4：命格（所有命格统一展示，不高亮不偏袒） ──
+  // ── 段 4：命格（统一展示，不高亮不偏袒） ──
   if (nOp > 0.3) {
     var destiny = calcDestiny(IDENTITY)
-    // 命格称号（楷体，冷金色，所有命格同样展示）
     ctx.save()
     ctx.globalAlpha = nOp * 0.50
     ctx.fillStyle = COLORS.goldLight
@@ -490,107 +416,70 @@ function render(ctx) {
     ctx.fillText(destiny.title, cx, l.destinyTitleY)
     ctx.restore()
 
-    // 指引语（中性灰色，具体游戏建议）
     drawText(ctx, destiny.guide, cx, l.destinyGuideY, {
       fontSize: l.destinyGuideS, color: COLORS.paperDarker,
       align: 'center', baseline: 'middle', opacity: nOp * 0.30,
     })
   }
 
-  // ── 段 5：命运签属性（上 4 下 5） ──
-  // 每片独立签：朱红签头 + 竹签体 + 微旋转
+  // ── 段 5：3×3 紧凑属性网格（仿户籍册条目） ──
   if (nOp > 0.5) {
     var allAttrOrder = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
-    var allVals = allAttrOrder.map(function(n) { return IDENTITY[n] || 0 })
-    var headH = Math.floor(l.slipH * 0.20)  // 签头高度（红漆部分）
-    var rows = [[l.slip1Starts, l._topN, l.slip1Y], [l.slip2Starts, l._botN, l.slip2Y]]
 
-    for (var ri = 0; ri < rows.length; ri++) {
-      var starts = rows[ri][0], count = rows[ri][1], slipY = rows[ri][2]
-      for (var si = 0; si < count; si++) {
-        var attrIdx = ri * 4 + si  // 上排0-3，下排4-8
-        var sx = starts[si]
+    for (var ri = 0; ri < l.gridRows; ri++) {
+      for (var ci = 0; ci < l.gridCols; ci++) {
+        var attrIdx = ri * 3 + ci
         var name = allAttrOrder[attrIdx]
-        var val = allVals[attrIdx]
+        var val = IDENTITY[name] || 0
         var isZero = (val === 0)
 
-        // ── 签头（朱红漆） ──
-        var hg = ctx.createLinearGradient(sx, 0, sx + l.slipW, 0)
-        hg.addColorStop(0, '#9a2018')
-        hg.addColorStop(0.3, '#c83a2e')
-        hg.addColorStop(0.7, '#c83a2e')
-        hg.addColorStop(1, '#9a2018')
-        ctx.globalAlpha = nOp * 0.90
-        ctx.fillStyle = hg
-        roundRect(ctx, sx, slipY, l.slipW, headH, 1)
+        var cellX = l.gridX + ci * (l.gridCellW + l.gridGap)
+        var cellY = l.gridTop + ri * (l.gridCellH + l.gridGap)
+
+        // ── 格底（深色竹木小卡片） ──
+        var cGrad = ctx.createLinearGradient(cellX, 0, cellX + l.gridCellW, 0)
+        cGrad.addColorStop(0, '#4a3b28')
+        cGrad.addColorStop(0.3, '#5a4b38')
+        cGrad.addColorStop(0.5, '#5e4f3c')
+        cGrad.addColorStop(0.7, '#5a4b38')
+        cGrad.addColorStop(1, '#4a3b28')
+        ctx.save()
+        ctx.globalAlpha = nOp * 0.65
+        ctx.fillStyle = cGrad
+        roundRect(ctx, cellX, cellY, l.gridCellW, l.gridCellH, 2)
         ctx.fill()
+        ctx.restore()
 
-        // 签头底部金线
-        ctx.globalAlpha = nOp * 0.12
-        ctx.strokeStyle = COLORS.gold
-        ctx.lineWidth = 0.3
-        ctx.beginPath()
-        ctx.moveTo(sx + 3, slipY + headH)
-        ctx.lineTo(sx + l.slipW - 3, slipY + headH)
-        ctx.stroke()
-
-        // ── 签体（竹色） ──
-        var bg = ctx.createLinearGradient(sx, 0, sx + l.slipW, 0)
-        bg.addColorStop(0, '#b8a880')
-        bg.addColorStop(0.15, '#d4c8a8')
-        bg.addColorStop(0.5, '#e0d0b0')
-        bg.addColorStop(0.85, '#d4c8a8')
-        bg.addColorStop(1, '#b8a880')
-        ctx.globalAlpha = nOp * 0.85
-        ctx.fillStyle = bg
-        roundRect(ctx, sx, slipY + headH, l.slipW, l.slipH - headH, 1)
-        ctx.fill()
-
-        // ── 竹纹（左右纵线） ──
+        // ── 格边框 ──
         ctx.save()
         ctx.globalAlpha = nOp * 0.08
-        ctx.strokeStyle = '#6a5a40'
+        ctx.strokeStyle = COLORS.gold
         ctx.lineWidth = 0.3
-        ctx.beginPath(); ctx.moveTo(sx + 1.5, slipY + headH); ctx.lineTo(sx + 1.5, slipY + l.slipH - 1); ctx.stroke()
-        ctx.beginPath(); ctx.moveTo(sx + l.slipW - 1.5, slipY + headH); ctx.lineTo(sx + l.slipW - 1.5, slipY + l.slipH - 1); ctx.stroke()
+        roundRect(ctx, cellX + 1, cellY + 1, l.gridCellW - 2, l.gridCellH - 2, 1)
+        ctx.stroke()
         ctx.restore()
 
-        // ── 竹节横纹（2道） ──
-        ctx.save()
-        ctx.globalAlpha = nOp * 0.05
-        ctx.strokeStyle = '#5a4a30'
-        ctx.lineWidth = 0.3
-        var bodyH = l.slipH - headH
-        for (var j = 1; j < 3; j++) {
-          ctx.beginPath()
-          ctx.moveTo(sx + 2, slipY + headH + bodyH * j / 3)
-          ctx.lineTo(sx + l.slipW - 2, slipY + headH + bodyH * j / 3)
-          ctx.stroke()
-        }
-        ctx.restore()
-
-        // ── 属性名（红签头上，白金色小字） ──
-        drawText(ctx, name, sx + l.slipW / 2, slipY + headH / 2 + 1, {
-          fontSize: Math.floor(l.attrNameS * 0.85), color: 'rgba(255,230,200,0.65)',
-          align: 'center', baseline: 'middle',
+        // ── 属性名（小字，暗金色） ──
+        drawText(ctx, name, cellX + Math.floor(l.gridCellW / 2), cellY + Math.floor(l.gridCellH * 0.32), {
+          fontSize: l.gridNameS, color: COLORS.gold,
+          align: 'center', baseline: 'middle', opacity: nOp * 0.35,
           fontFamily: '"STKaiti", "KaiTi", "楷体", ' + ui.fontFamily,
         })
 
-        // ── 属性值（签体上） ──
-        var valCX = sx + l.slipW / 2
-        var valCY = slipY + headH + bodyH * 0.55
+        // ── 属性值 ──
+        var valCY = cellY + Math.floor(l.gridCellH * 0.68)
         if (isZero) {
-          drawText(ctx, '—', valCX, valCY, {
-            fontSize: l.attrValS, color: COLORS.paperDarker,
-            align: 'center', baseline: 'middle', opacity: nOp * 0.05,
+          drawText(ctx, '—', cellX + Math.floor(l.gridCellW / 2), valCY, {
+            fontSize: Math.floor(l.gridValS * 0.85), color: '#5a4b38',
+            align: 'center', baseline: 'middle', opacity: nOp * 0.15,
           })
         } else {
           ctx.save()
-          ctx.shadowColor = 'rgba(232,200,130,' + (nOp * 0.10) + ')'
-          ctx.shadowBlur = 1.5
-          drawText(ctx, val, valCX, valCY, {
-            fontSize: l.attrValS, color: COLORS.goldLight,
-            align: 'center', baseline: 'middle', opacity: nOp * 0.60, bold: true,
+          ctx.shadowColor = 'rgba(232,200,130,' + (nOp * 0.08) + ')'
+          ctx.shadowBlur = 1
+          drawText(ctx, val, cellX + Math.floor(l.gridCellW / 2), valCY, {
+            fontSize: l.gridValS, color: '#e0d0b0',
+            align: 'center', baseline: 'middle', opacity: nOp * 0.55, bold: true,
           })
           ctx.restore()
         }
@@ -598,7 +487,7 @@ function render(ctx) {
     }
   }
 
-  // 段 6：朱砂印"开局"（印章风格）
+  // ── 段 6：朱砂印"开局" ──
   var yOp = anims.seal.update(now)
   if (yOp > 0) {
     var stampW = 56
@@ -607,7 +496,6 @@ function render(ctx) {
     var stampY = l.btnY - stampH / 2
 
     ctx.save()
-    // 印章本体——朱砂红，带自然湿度边缘
     ctx.globalAlpha = yOp * 0.88
     ctx.shadowColor = 'rgba(200,58,46,0.3)'
     ctx.shadowBlur = 8
@@ -616,7 +504,6 @@ function render(ctx) {
     ctx.fill()
     ctx.restore()
 
-    // 内框（白线）
     ctx.save()
     ctx.globalAlpha = yOp * 0.60
     ctx.strokeStyle = '#fff'
@@ -625,11 +512,10 @@ function render(ctx) {
     ctx.stroke()
     ctx.restore()
 
-    // 印章文字（白色，模拟篆刻阴文）
     ctx.save()
     ctx.globalAlpha = yOp * 0.85
     ctx.translate(cx, l.btnY + 1)
-    ctx.rotate(-0.04)  // 微倾，如手工盖印
+    ctx.rotate(-0.04)
     drawText(ctx, '开局', 0, 0, {
       fontSize: Math.min(15, Math.floor(l.cardH * 0.065)),
       fontFamily: '"STKaiti", "KaiTi", "楷体", serif',
@@ -639,7 +525,7 @@ function render(ctx) {
     })
     ctx.restore()
 
-    // 印章左下白描小点（仿传统篆刻印边残损）
+    // 印章左下白描小点
     ctx.save()
     ctx.globalAlpha = yOp * 0.3
     ctx.fillStyle = '#fff'

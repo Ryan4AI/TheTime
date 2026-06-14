@@ -69,12 +69,8 @@ function calcLayout() {
 
   // ── 竹简属性（上5下4） ──
   var slipPadX = 16
-  var slipGap = 5
   var topN = 5, botN = 4
 
-  // 下排 4 片：更宽
-  var botW = botN * slipW + (botN - 1) * slipGap
-  // 得先算出 slipW
   var fullAvail = cardW - slipPadX * 2  // 可用宽度
   var slipGap = 4
   var topSlipW = Math.floor((fullAvail - slipGap * (topN - 1)) / topN)

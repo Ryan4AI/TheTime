@@ -11,7 +11,7 @@ const ITEMS = [
   { id: 'watch', name: '电子表', desc: '卡西欧电子表，带闹钟和秒表', icon: '⌚' },
   { id: 'mirror', name: '小圆镜', desc: '巴掌大的圆形镜子，铜框', icon: '🪞' },
   { id: 'rope', name: '尼龙绳', desc: '七米长的登山绳，承重200kg', icon: '🪢' },
-  { id: 'sharpener', name: '磨刀石', desc: '天然油石，巴掌大小', icon: '💎' },
+  { id: 'sharpener', name: '磨刀石', desc: '天然油石，巴掌大小', icon: '🪵' },
   { id: 'thermos', name: '保温杯', desc: '不锈钢保温杯，500ml容量', icon: '🥤' },
   { id: 'whistle', name: '哨子', desc: '金属口哨，声音能传很远', icon: '📯' },
   { id: 'glasses', name: '近视镜', desc: '你的备用近视眼镜', icon: '👓' },

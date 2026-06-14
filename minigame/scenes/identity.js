@@ -72,28 +72,64 @@ function calcLayout() {
 }
 
 function init(items, identity) {
-  // v2 新增：根据出身阶层初始化属性
+  // v0.6.3 重构：精细化初始属性（阶层/职业/年龄/名人 4 维度）
   if (identity) {
     const sc = identity.socialClass || identity.social_class || '庶人'
-    // 声望：贵族500 / 平民100 / 贱籍50
-    if (sc.includes('贵') || sc.includes('皇') || sc.includes('官')) identity['声望'] = 500
-    else if (sc.includes('贱') || sc.includes('奴')) identity['声望'] = 50
-    else identity['声望'] = 100
-    // 财富：贵族3000 / 平民500 / 贱籍50
-    if (sc.includes('贵') || sc.includes('皇') || sc.includes('官')) identity['财富'] = 3000
-    else if (sc.includes('贱') || sc.includes('奴')) identity['财富'] = 50
-    else identity['财富'] = 500
-    // 学识：识字300 / 不识字50
-    identity['学识'] = identity.canRead ? 300 : 50
-    // 颜值：随机 3000-7000
-    identity['颜值'] = 3000 + Math.floor(Math.random() * 4000)
-    // 专属属性初始0
-    identity['医术'] = 0
-    identity['战功'] = 0
-    identity['文采'] = 0
-    identity['政绩'] = 0
-    identity['义行'] = 0
-    identity['历史庇护'] = 0
+    const occ = identity.occupation || ''
+    const canRead = !!identity.canRead
+    const age = identity.age || 25
+    const isCelebrity = !!identity.isCelebrity
+
+    // ── 1. 阶层基础（声望/财富/学识）──
+    let base = { '声望': 100, '财富': 500, '学识': 80 }
+    if (sc.includes('贵') || sc.includes('皇') || sc.includes('公') || sc.includes('侯') || sc.includes('伯') || sc.includes('大夫') || sc.includes('宗')) {
+      base = { '声望': 800, '财富': 5000, '学识': 200 }  // 贵族
+    } else if (sc.includes('官') || sc.includes('士') || sc.includes('举') || sc.includes('进士')) {
+      base = { '声望': 500, '财富': 2000, '学识': 300 }  // 士绅
+    } else if (sc.includes('商') || sc.includes('贾')) {
+      base = { '声望': 200, '财富': 4000, '学识': 150 }  // 商人
+    } else if (sc.includes('贱') || sc.includes('奴') || sc.includes('婢') || sc.includes('仆')) {
+      base = { '声望': 30, '财富': 30, '学识': 10 }  // 贱籍
+    } else {
+      base = { '声望': 100, '财富': 500, '学识': 80 }  // 平民/农/工
+    }
+
+    // ── 2. 识字加成 ──
+    if (canRead) base['学识'] += 200
+
+    // ── 3. 职业专属属性（v0.6.3 新增：医生有医术，士兵有战功等）──
+    let specialized = { '医术': 0, '战功': 0, '文采': 0, '政绩': 0, '义行': 0 }
+    if (occ.includes('医') || occ.includes('药') || occ.includes('针灸') || occ.includes('郎中')) specialized['医术'] = 800
+    if (occ.includes('将') || occ.includes('兵') || occ.includes('军') || occ.includes('武') || occ.includes('侠') || occ.includes('卒')) specialized['战功'] = 600
+    if (occ.includes('书') || occ.includes('诗') || occ.includes('文') || occ.includes('画') || occ.includes('儒') || occ.includes('墨') || occ.includes('秀才')) specialized['文采'] = 800
+    if (occ.includes('官') || occ.includes('府') || occ.includes('县') || occ.includes('尹') || occ.includes('令') || occ.includes('相') || occ.includes('卿') || occ.includes('大夫')) specialized['政绩'] = 600
+    if (occ.includes('僧') || occ.includes('道') || occ.includes('侠') || occ.includes('义') || occ.includes('丐') || occ.includes('善')) specialized['义行'] = 500
+
+    // ── 4. 年龄调整系数 ──
+    let ageBonus = 1.0
+    if (age < 18) ageBonus = 0.7           // 少年：属性低但潜力大
+    else if (age > 60) ageBonus = 1.3     // 老年：经验丰富
+    else if (age >= 30 && age <= 50) ageBonus = 1.2  // 壮年：黄金期
+
+    // ── 5. 名人彩蛋加成 ──
+    let celebBonus = isCelebrity ? 1.5 : 1.0
+
+    // ── 6. 颜值：随机 3000-7000，名人 +30% ──
+    let face = 3000 + Math.floor(Math.random() * 4000)
+    if (isCelebrity) face = Math.floor(face * 1.3)
+
+    // ── 7. 综合赋值（clamp 0-10000）──
+    const set = (key, val) => { identity[key] = Math.max(0, Math.min(10000, Math.floor(val))) }
+    set('声望', base['声望'] * ageBonus * celebBonus)
+    set('财富', base['财富'] * ageBonus * celebBonus)
+    set('学识', base['学识'] * ageBonus * celebBonus)
+    set('颜值', face)
+    set('医术', specialized['医术'] * celebBonus)
+    set('战功', specialized['战功'] * celebBonus)
+    set('文采', specialized['文采'] * celebBonus)
+    set('政绩', specialized['政绩'] * celebBonus)
+    set('义行', specialized['义行'] * celebBonus)
+    set('历史庇护', isCelebrity ? 3 : 0)  // 名人初始 3 层庇护
   }
 
   // 统一云函数(e.g. generate_identity)和本地引擎的身份数据格式

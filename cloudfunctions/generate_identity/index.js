@@ -158,24 +158,12 @@ async function findNearestEraMeta(targetYear) {
 }
 
 /**
- * 用 AI 生成穿越身份名字
- * 若穿越成了历史名人，直接返回名人姓名
+ * 用 AI 生成穿越身份名字（v0.6.6：移除名人彩蛋，避免与排行榜冲突）
+ * 玩家永远不直接成为历史名人——名人只在排行榜里作为"够榜目标"存在
  */
 async function generateName({ targetYear, selectedCity, figures, eraMeta, isMale, socialClass }) {
-  // 检查是否穿越成名人（概率 = 名人数量 / 城市人口）
-  if (figures && figures.length > 0) {
-    // 城市人口 popMillion 是百万人单位，转为绝对人口
-    // 名人概率 = figures.length / (popMillion × 1,000,000)
-    const cityPop = selectedCity.popMillion || 0
-    const totalPeople = cityPop * 1000000
-    let celebProbability = totalPeople > 0 ? figures.length / totalPeople : 0
-
-    if (Math.random() < celebProbability) {
-      // 穿越成名人！随机选一个
-      const chosenFigure = figures[Math.floor(Math.random() * figures.length)]
-      return { name: chosenFigure, isCelebrity: true, figure: chosenFigure, occupation: null }
-    }
-  }
+  // v0.6.6 移除名人彩蛋：直接用 AI 生成平民名字
+  // 原因：玩家穿越成"华佗"会和排行榜"华佗"数据冲突，不如让名人只在榜上做参考
 
   // 普通穿越者，用 AI 生成名字
   const dynasty = eraMeta.dynasty || '未知'
@@ -184,7 +172,7 @@ async function generateName({ targetYear, selectedCity, figures, eraMeta, isMale
   const surnames = eraMeta.surnames || ['无']
   const surnamePool = surnames.join('、')
 
-  const systemPrompt = '你是一位精通中国历代取名文化和职业体系的历史学者。根据用户给出的时代、地点、阶层、名人群像，生成一个符合时代特征和历史背景的平民姓名及其适合的职业。回复格式：姓名|职业。只回复格式内容，不要任何解释、标点或多余文字。'
+  const systemPrompt = '你是一位精通中国历代取名文化和职业体系的历史学者。根据用户给出的时代、地点、阶层，生成一个符合时代特征和历史背景的平民姓名及其适合的职业。回复格式：姓名|职业。只回复格式内容，不要任何解释、标点或多余文字。'
 
   const userPrompt = [
     `时代：${dynasty}（${eraLabel}），在位君主：${emperor}`,
@@ -193,7 +181,7 @@ async function generateName({ targetYear, selectedCity, figures, eraMeta, isMale
     `性别：${isMale ? '男' : '女'}`,
     socialClass ? `社会阶层：${socialClass}` : '',
     `姓氏来源：${surnamePool}`,
-    figures && figures.length > 0 ? `该城名人（参考风格）：${figures.slice(0, 5).join('、')}` : '',
+    // v0.6.6 移除"参考名人"行——避免 AI 借鉴名人的名字
     `要求：生成1个${isMale ? '男性' : '女性'}名字（姓+名，名可为1-2字）及1个适合该时代、该性别、该阶层的职业。职业需真实历史存在（如农夫、织工、木匠、铁匠、陶工、渔夫、猎户、脚夫、伙夫、裁缝、军户、货郎、茶役、医工、文书等），不得使用现代职业。回复格式：姓名|职业。例如：张三|农夫`,
   ].filter(Boolean).join('\n')
 

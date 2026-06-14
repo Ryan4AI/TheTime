@@ -94,7 +94,8 @@ function init(items, identity) {
     const occ = identity.occupation || ''
     const canRead = !!identity.canRead
     const age = identity.age || 25
-    const isCelebrity = !!identity.isCelebrity
+    // v0.6.6 移除名人彩蛋（避免与排行榜冲突）
+    const isCelebrity = false
 
     // ── 1. 阶层基础（声望/财富/学识）──
     let base = { '声望': 100, '财富': 500, '学识': 80 }
@@ -128,11 +129,11 @@ function init(items, identity) {
     else if (age >= 30 && age <= 50) ageBonus = 1.2  // 壮年：黄金期
 
     // ── 5. 名人彩蛋加成 ──
-    let celebBonus = isCelebrity ? 1.5 : 1.0
+    let celebBonus = 1.0  // v0.6.6 永远 1.0
 
     // ── 6. 颜值：随机 3000-7000，名人 +30% ──
     let face = 3000 + Math.floor(Math.random() * 4000)
-    if (isCelebrity) face = Math.floor(face * 1.3)
+    // v0.6.6 移除名人颜值加成
 
     // ── 7. 综合赋值（clamp 0-10000）──
     const set = (key, val) => { identity[key] = Math.max(0, Math.min(10000, Math.floor(val))) }
@@ -145,7 +146,7 @@ function init(items, identity) {
     set('文采', specialized['文采'] * celebBonus)
     set('政绩', specialized['政绩'] * celebBonus)
     set('义行', specialized['义行'] * celebBonus)
-    set('历史庇护', isCelebrity ? 3 : 0)  // 名人初始 3 层庇护
+    set('历史庇护', 0)  // v0.6.6：庇护只通过上榜获得，不靠穿越身份
   }
 
   // 统一云函数(e.g. generate_identity)和本地引擎的身份数据格式
@@ -166,7 +167,7 @@ function init(items, identity) {
       dynasty: identity.dynasty || '',
       marital: '',
       literacy: identity.canRead ? '识字' : '不识字',
-      isCelebrity: !!identity.isCelebrity,
+      isCelebrity: false,  // v0.6.6：永远不穿越成名人不与榜单冲突
       figure: identity.figure || null,
       source: identity.source || '',
     }
@@ -479,7 +480,7 @@ function render(ctx) {
       opacity: sOp * 0.8,
     })
     // 名人彩蛋（如果）
-    if (IDENTITY.isCelebrity && IDENTITY.figure) {
+    if (false) {  // v0.6.6 移除名人彩蛋显示
       drawText(ctx, '✦ 穿越成 ' + IDENTITY.figure, cx, l.shieldY + Math.floor(l.shieldS * 1.6), {
         fontSize: l.shieldS,
         color: COLORS.goldLight,

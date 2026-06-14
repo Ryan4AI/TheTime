@@ -119,18 +119,6 @@ function render() {
       }
     }
     
-    // DEBUG: 在场景渲染之后显示调试信息（最顶层）
-    ctx.save()
-    ctx.font = 'bold 14px sans-serif'
-    ctx.fillStyle = '#00ff00'
-    ctx.textAlign = 'left'
-    ctx.fillText('Scene: ' + currentScene, 10, 20)
-    ctx.fillText('Scenes: ' + Object.keys(scenes).join(','), 10, 40)
-    if (_g.tapX >= 0) {
-      ctx.fillText('Touch: ' + _g.tapX + ',' + _g.tapY, 10, 60)
-    }
-    ctx.restore()
-    
   } catch(e) {
     ctx.font = '14px sans-serif'
     ctx.fillStyle = '#e04040'

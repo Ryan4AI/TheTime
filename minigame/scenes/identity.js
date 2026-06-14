@@ -44,15 +44,16 @@ function calcLayout() {
   var labelS = Math.min(12, Math.floor(w * 0.032))
   var labelY = div1Y + Math.floor(cardH * 0.06)
 
-  // 6. 4 列属性：名+值
+  // 6. 3×3 九属性网格：名+值
   var attrNameS = Math.min(12, Math.floor(w * 0.032))
   var attrValS = Math.min(20, Math.floor(w * 0.052))     // 数值大
   var attrNameY = labelY + Math.floor(cardH * 0.05)
   var attrValY = attrNameY + Math.floor(attrNameS * 1.6)
-  var attrColW = Math.floor((cardW - 60) / 4)
+  var attrRowH = Math.floor(28 * w / 390)
+  var attrColW = Math.floor((cardW - 60) / 3)
 
   // 7. 第二道分割线
-  var div2Y = attrValY + Math.floor(cardH * 0.06)
+  var div2Y = attrValY + attrRowH * 2 + Math.floor(cardH * 0.06)
 
   // 8. 庇护层数
   var shieldS = Math.min(12, Math.floor(w * 0.032))
@@ -79,6 +80,7 @@ function calcLayout() {
     labelS: labelS, labelY: labelY,
     attrNameS: attrNameS, attrValS: attrValS,
     attrNameY: attrNameY, attrValY: attrValY,
+    attrRowH: attrRowH,
     attrColW: attrColW,
     div2Y: div2Y,
     shieldS: shieldS, shieldY: shieldY,
@@ -420,20 +422,28 @@ function render(ctx) {
     })
   }
 
-  // 段 6：4 列属性
+  // 段 6：3×3 全属性网格
   if (sOp > 0) {
     var attrs = [
       { name: '声望', val: IDENTITY['声望'] || 0 },
       { name: '财富', val: IDENTITY['财富'] || 0 },
       { name: '学识', val: IDENTITY['学识'] || 0 },
       { name: '颜值', val: IDENTITY['颜值'] || 0 },
+      { name: '医术', val: IDENTITY['医术'] || 0 },
+      { name: '战功', val: IDENTITY['战功'] || 0 },
+      { name: '文采', val: IDENTITY['文采'] || 0 },
+      { name: '政绩', val: IDENTITY['政绩'] || 0 },
+      { name: '义行', val: IDENTITY['义行'] || 0 },
     ]
     for (var ai = 0; ai < attrs.length; ai++) {
-      var col = ai % 4
+      var col = ai % 3
+      var row = Math.floor(ai / 3)
       var ax = l.cardX + 30 + col * l.attrColW + l.attrColW / 2
+      var ay = l.attrNameY + row * l.attrRowH
+      var av = l.attrValY + row * l.attrRowH
 
       // 属性名（小字）
-      drawText(ctx, attrs[ai].name, ax, l.attrNameY, {
+      drawText(ctx, attrs[ai].name, ax, ay, {
         fontSize: l.attrNameS,
         color: COLORS.paperDarker,
         align: 'center', baseline: 'middle',
@@ -443,7 +453,7 @@ function render(ctx) {
       ctx.save()
       ctx.shadowColor = 'rgba(232,200,130,' + (sOp * 0.3) + ')'
       ctx.shadowBlur = 4
-      drawText(ctx, attrs[ai].val, ax, l.attrValY, {
+      drawText(ctx, attrs[ai].val, ax, av, {
         fontSize: l.attrValS,
         color: COLORS.goldLight,
         align: 'center', baseline: 'middle',

@@ -182,17 +182,8 @@ function init(items, identity) {
 // ── 触摸处理：卡片或按钮区域均可触发 ──
 function onTouch(x, y, type) {
   if (!state || state.hasTapped) return
-  var l = layout
-  // 按钮区域
-  var inBtn = (x >= l.btnX && x <= l.btnX + l.btnW &&
-               y >= l.btnY && y <= l.btnY + l.btnH)
-  // 卡片区域
-  var inCard = (x >= l.cardX && x <= l.cardX + l.cardW &&
-                y >= l.cardY && y <= l.cardY + l.cardH)
-  if (inBtn || inCard) {
-    state.hasTapped = true
-    state.fadeOutStart = Date.now()
-  }
+  state.hasTapped = true
+  state.fadeOutStart = Date.now()
 }
 
 // ── 柔和分隔线（渐变淡出） ──

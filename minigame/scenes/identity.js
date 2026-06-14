@@ -41,6 +41,13 @@ function calcLayout() {
   var infoY1 = divY + 20
   var infoSep = Math.floor(infoS * 1.6)
 
+  // v2: 初始属性区（位于信息区下方、纪年脚注上方）
+  var attrS = Math.min(14, Math.floor(w * 0.038))           // 属性字号
+  var attrRowH = Math.floor(attrS * 1.7)                     // 每行高度
+  var attrY = divY + Math.floor(cardH * 0.42)                // 属性标题 Y
+  var attrColW = Math.floor((cardW - 60) / 4)                // 每列宽度
+  var attrStartY = attrY + Math.floor(attrRowH * 0.7)        // 属性值起始 Y
+
   // 纪年
   var yearS = Math.min(12, Math.floor(w * 0.032))
   var yearY = cardY + cardH - Math.floor(cardH * 0.13)
@@ -57,6 +64,8 @@ function calcLayout() {
     nameS: nameS, nameY: nameY,
     divY: divY,
     infoS: infoS, infoY1: infoY1, infoSep: infoSep,
+    attrS: attrS, attrY: attrY, attrColW: attrColW,
+    attrRowH: attrRowH, attrStartY: attrStartY,
     yearS: yearS, yearY: yearY,
     tapS: tapS, tapY: tapY,
   }
@@ -368,13 +377,12 @@ function render(ctx) {
         opacity: attrOp * 0.6,
       })
 
-      // 属性4列布局
-      var attrStartY = l.attrY + l.attrRowH
+      // 属性4列布局（v0.6.2 修复：用 layout 预计算的 attrColW/attrStartY）
       for (var ai = 0; ai < attrs.length; ai++) {
         var col = ai % 4
         var row = Math.floor(ai / 4)
         var ax = l.cardX + 30 + col * l.attrColW
-        var ay = attrStartY + row * l.attrRowH
+        var ay = l.attrStartY + row * l.attrRowH
 
         // 属性名
         drawText(ctx, attrs[ai].name, ax, ay, {

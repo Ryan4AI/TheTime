@@ -25,42 +25,54 @@ function calcLayout() {
   var cardX = Math.floor(cx - cardW / 2)
   var cardY = Math.floor(h * 0.19)
 
-  // 段 1：纪年（超小金，居中）
-  var eraS = Math.min(10, Math.floor(w * 0.026))
-  var eraY = cardY + Math.floor(cardH * 0.06)
-
-  // 段 2：姓名
+  // ── 名帖一体式头部 ──
   var nameS = Math.min(28, Math.floor(w * 0.072))
-  var nameY = eraY + Math.floor(cardH * 0.12)
-
-  // 段 3：副标题（单行：年龄·职业·居所）
+  var eraS = Math.min(10, Math.floor(w * 0.026))
   var subS = Math.min(11, Math.floor(w * 0.028))
+  var plaquePad = 10
+  var plaqueTop = cardY + Math.floor(cardH * 0.045)
+  var eraY = plaqueTop + plaquePad + eraS
+  var nameY = eraY + eraS + 6
   var subY = nameY + Math.floor(nameS * 0.65) + 3
+  var plaqueH = (subY - plaqueTop) + plaquePad
 
-  // 段 4：分割线 + 9 属性 3×3 网格
-  var divY = subY + Math.floor(cardH * 0.06)
-  var attrNameS = Math.min(10, Math.floor(w * 0.026))
-  var attrValS = Math.min(14, Math.floor(w * 0.036))
-  var attrGridY = divY + Math.floor(cardH * 0.07)
-  var attrRowGap = Math.floor(cardH * 0.10)
-  var attrColW = Math.floor((cardW - 48) / 3)
-  var attrCellX = [cardX + 24, cardX + 24 + attrColW, cardX + 24 + attrColW * 2]
-  var attrCellW = attrColW - 6
+  // 段 4：竹排式属性（上 4 下 5 两行吊挂）
+  var divY = subY + Math.floor(cardH * 0.045)
+  var slipPadX = 16
+  var slipGap = 5
+  var slip1N = 4
+  var slip2N = 5
+  var slip1W = Math.floor((cardW - slipPadX * 2 - slipGap * (slip1N - 1)) / slip1N)
+  var slip2W = Math.floor((cardW - slipPadX * 2 - slipGap * (slip2N - 1)) / slip2N)
+  var slipH = Math.min(50, Math.floor(cardH * 0.11))
+  var stringY1 = divY + 3
+  var slip1Y = stringY1 + 3
+  var stringY2 = slip1Y + slipH + 6
+  var slip2Y = stringY2 + 3
+  var slip1Starts = []
+  for (var s1 = 0; s1 < slip1N; s1++) slip1Starts.push(cardX + slipPadX + s1 * (slip1W + slipGap))
+  var slip2Starts = []
+  for (var s2 = 0; s2 < slip2N; s2++) slip2Starts.push(cardX + slipPadX + s2 * (slip2W + slipGap))
+  var attrNameS = Math.min(9, Math.floor(w * 0.023))
+  var attrValS = Math.min(13, Math.floor(w * 0.033))
 
-  // 段 5：落笔按钮（纯文字）
+  // 段 5：朱砂印
   var btnY = cardY + cardH - Math.floor(cardH * 0.11)
 
   layout = {
     w: w, h: h, cx: cx,
-    cardW: cardW, cardH: cardH,
-    cardX: cardX, cardY: cardY,
-    eraS: eraS, eraY: eraY,
+    cardW: cardW, cardH: cardH, cardX: cardX, cardY: cardY,
     nameS: nameS, nameY: nameY,
+    eraS: eraS, eraY: eraY,
     subS: subS, subY: subY,
+    plaqueTop: plaqueTop, plaqueH: plaqueH,
     divY: divY,
+    slip1W: slip1W, slip2W: slip2W, slipH: slipH,
+    slip1Y: slip1Y, slip2Y: slip2Y,
+    stringY1: stringY1, stringY2: stringY2,
+    slip1Starts: slip1Starts, slip2Starts: slip2Starts,
+    slipPadX: slipPadX,
     attrNameS: attrNameS, attrValS: attrValS,
-    attrGridY: attrGridY, attrRowGap: attrRowGap,
-    attrColW: attrColW, attrCellX: attrCellX, attrCellW: attrCellW,
     btnY: btnY,
   }
 }
@@ -179,11 +191,8 @@ function init(items, identity) {
 
   anims = {
     card: new FadeAnim(200, 600),         // 卡片整体淡入
-    title: new FadeAnim(400, 500),
-    name: new FadeAnim(600, 500),
-    info: new FadeAnim(800, 600),
-    year: new FadeAnim(1100, 400),
-    seal: new FadeAnim(1200, 300),
+    name: new FadeAnim(500, 700),         // 名帖一体（纪年+姓名+副标题+竹排）
+    seal: new FadeAnim(1200, 300),        // 朱砂印
   }
   for (var k in anims) anims[k].start(now)
 }
@@ -361,31 +370,45 @@ function render(ctx) {
   // ── v0.6.14 卷轴布局 ──
 
   // 段 1：纪年（超小金色，无装饰线）
-  var tOp = anims.title.update(now)
-  if (tOp > 0 && IDENTITY.dynasty) {
-    var era = IDENTITY.eraDisplay || IDENTITY.eraLabel || ''
-    if (era && era.indexOf(IDENTITY.dynasty) === 0) {
-      era = era.replace(new RegExp('^' + IDENTITY.dynasty.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[·\\s]*'), '')
-    }
-    var eraText = era ? IDENTITY.dynasty + ' · ' + era : IDENTITY.dynasty
-    drawText(ctx, eraText, cx, l.eraY, {
-      fontSize: l.eraS,
-      color: COLORS.gold,
-      align: 'center', baseline: 'middle',
-      opacity: tOp * 0.65,
-    })
-  }
-
-  // 段 2：姓名 + 水墨光晕背景
+  // ── 段 1-3：名帖一体式（匾额背景 + 纪年/姓名/副标题） ──
   var nOp = anims.name.update(now)
   if (nOp > 0) {
-    // 名字背后的淡墨润染
+    // 匾额底（极淡暖色矩形）
+    var plaqueX = l.cardX + 10
+    var plaqueW = l.cardW - 20
     ctx.save()
     ctx.globalAlpha = nOp * 0.08
+    ctx.fillStyle = 'rgba(200,168,124,0.2)'
+    roundRect(ctx, plaqueX, l.plaqueTop, plaqueW, l.plaqueH, 2)
+    ctx.fill()
+    // 匾额边框
+    ctx.globalAlpha = nOp * 0.06
+    ctx.strokeStyle = COLORS.gold
+    ctx.lineWidth = 0.4
+    roundRect(ctx, plaqueX + 1, l.plaqueTop + 1, plaqueW - 2, l.plaqueH - 2, 2)
+    ctx.stroke()
+    ctx.restore()
+
+    // 纪年
+    var era = ''
+    if (IDENTITY.dynasty) {
+      var e = IDENTITY.eraDisplay || IDENTITY.eraLabel || ''
+      if (e && e.indexOf(IDENTITY.dynasty) === 0) {
+        e = e.replace(new RegExp('^' + IDENTITY.dynasty.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[·\\s]*'), '')
+      }
+      era = e ? IDENTITY.dynasty + ' · ' + e : IDENTITY.dynasty
+    }
+    drawText(ctx, era, cx, l.eraY, {
+      fontSize: l.eraS, color: COLORS.gold,
+      align: 'center', baseline: 'middle', opacity: nOp * 0.65,
+    })
+
+    // 水墨光晕 + 姓名
+    ctx.save()
     var inkR = Math.floor(l.nameS * 2.5)
     var inkGrad = ctx.createRadialGradient(cx, l.nameY, 0, cx, l.nameY, inkR)
-    inkGrad.addColorStop(0, 'rgba(200,168,124,0.6)')
-    inkGrad.addColorStop(0.5, 'rgba(200,168,124,0.15)')
+    inkGrad.addColorStop(0, 'rgba(200,168,124,' + (nOp * 0.06) + ')')
+    inkGrad.addColorStop(0.5, 'rgba(200,168,124,' + (nOp * 0.015) + ')')
     inkGrad.addColorStop(1, 'rgba(200,168,124,0)')
     ctx.fillStyle = inkGrad
     ctx.beginPath()
@@ -397,19 +420,13 @@ function render(ctx) {
     ctx.shadowColor = 'rgba(232,200,130,' + (nOp * 0.25) + ')'
     ctx.shadowBlur = 4
     drawText(ctx, IDENTITY.name, cx, l.nameY, {
-      fontSize: l.nameS,
-      fontFamily: '"STKaiti", "KaiTi", "楷体", ' + ui.fontFamily,
-      color: COLORS.goldLight,
-      align: 'center', baseline: 'middle',
-      opacity: nOp * 0.85,
-      bold: true,
+      fontSize: l.nameS, fontFamily: '"STKaiti", "KaiTi", "楷体", ' + ui.fontFamily,
+      color: COLORS.goldLight, align: 'center', baseline: 'middle',
+      opacity: nOp * 0.85, bold: true,
     })
     ctx.restore()
-  }
 
-  // 段 3：副标题（单行：年龄·儿郎/女子·职业·居所）
-  var sOp = anims.info.update(now)
-  if (sOp > 0) {
+    // 副标题
     var parts = []
     if (IDENTITY.age != null) parts.push(IDENTITY.age + '岁')
     if (IDENTITY.gender === '男') parts.push('儿郎')
@@ -417,78 +434,111 @@ function render(ctx) {
     if (IDENTITY.occupation) parts.push(IDENTITY.occupation)
     if (IDENTITY.residence) parts.push(IDENTITY.residence)
     drawText(ctx, parts.join(' · '), cx, l.subY, {
-      fontSize: l.subS,
-      color: COLORS.paperDarker,
-      align: 'center', baseline: 'middle',
-      opacity: sOp * 0.75,
+      fontSize: l.subS, color: COLORS.paperDarker,
+      align: 'center', baseline: 'middle', opacity: nOp * 0.75,
     })
   }
 
-  // 段 4：分割线（双线 + 菱形中点） + 9 属性 3×3 网格
-  if (sOp > 0.5) {
-    // 双线分割线
-    var divS = l.attrColW * 0.75
-    ctx.save()
-    ctx.globalAlpha = (sOp - 0.5) * 0.10
-    ctx.strokeStyle = COLORS.gold
-    ctx.lineWidth = 0.4
-    ctx.beginPath()
-    ctx.moveTo(cx - divS, l.divY)
-    ctx.lineTo(cx + divS, l.divY)
-    ctx.stroke()
-    ctx.beginPath()
-    ctx.moveTo(cx - divS, l.divY + 3)
-    ctx.lineTo(cx + divS, l.divY + 3)
-    ctx.stroke()
-    // 菱形中点
-    ctx.fillStyle = COLORS.gold
-    ctx.globalAlpha = (sOp - 0.5) * 0.20
-    ctx.save()
-    ctx.translate(cx, l.divY + 1.5)
-    ctx.rotate(Math.PI / 4)
-    ctx.fillRect(-2, -2, 4, 4)
-    ctx.restore()
-    ctx.restore()
+  // ── 段 4：竹排式属性（上 4 下 5 两行吊挂） ──
+  if (nOp > 0.5) {
+    // 上排吊绳
+    var drawSlipRow = function(starts, slipW, count, stringY, slipY, attrNames, offsetIdx) {
+      // 吊绳
+      ctx.save()
+      ctx.globalAlpha = nOp * 0.15
+      ctx.strokeStyle = '#8a7a60'
+      ctx.lineWidth = 0.6
+      ctx.beginPath()
+      ctx.moveTo(l.cardX + l.slipPadX + 2, stringY)
+      ctx.lineTo(l.cardX + l.cardW - l.slipPadX - 2, stringY)
+      ctx.stroke()
+      ctx.restore()
 
-    // 9 属性顺序：声望 财富 学识 颜值 医术 战功 文采 政绩 义行
-    var attrOrder = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
-    for (var ai = 0; ai < attrOrder.length; ai++) {
-      var key = attrOrder[ai]
-      var val = IDENTITY[key] || 0
-      var col = ai % 3
-      var row = Math.floor(ai / 3)
-      var cellCX = l.attrCellX[col] + l.attrCellW / 2
-      var cy = l.attrGridY + row * l.attrRowGap
-      var isZero = (val === 0)
+      for (var si = 0; si < count; si++) {
+        var sx = starts[si]
+        var name = attrNames[offsetIdx + si]
+        var val = IDENTITY[name] || 0
+        var isZero = (val === 0)
 
-      // 属性名
-      drawText(ctx, key, cellCX, cy, {
-        fontSize: l.attrNameS,
-        color: COLORS.paperDarker,
-        align: 'center', baseline: 'middle',
-        opacity: sOp * (isZero ? 0.25 : 0.50),
-      })
-      // 属性值：非零金色+微光；零值极小浅灰
-      if (isZero) {
-        drawText(ctx, val, cellCX, cy + Math.floor(l.attrNameS * 1.3), {
-          fontSize: l.attrValS,
-          color: COLORS.paperDarker,
-          align: 'center', baseline: 'middle',
-          opacity: sOp * 0.20,
-        })
-      } else {
         ctx.save()
-        ctx.shadowColor = 'rgba(232,200,130,' + (sOp * 0.15) + ')'
-        ctx.shadowBlur = 2
-        drawText(ctx, val, cellCX, cy + Math.floor(l.attrNameS * 1.3), {
-          fontSize: l.attrValS,
-          color: COLORS.goldLight,
-          align: 'center', baseline: 'middle',
-          opacity: sOp * 0.85, bold: true,
-        })
+        ctx.globalAlpha = nOp * 0.95
+
+        // 竹片本体
+        var grad = ctx.createLinearGradient(sx, 0, sx + slipW, 0)
+        grad.addColorStop(0, '#b8a880')
+        grad.addColorStop(0.15, '#d4c8a8')
+        grad.addColorStop(0.5, '#dfd0b0')
+        grad.addColorStop(0.85, '#d0c0a0')
+        grad.addColorStop(1, '#b0a078')
+        ctx.fillStyle = grad
+        roundRect(ctx, sx, slipY, slipW, l.slipH, 1.5)
+        ctx.fill()
+
+        // 左右竹纹
+        ctx.globalAlpha = nOp * 0.12
+        ctx.strokeStyle = '#6a5a40'
+        ctx.lineWidth = 0.4
+        ctx.beginPath()
+        ctx.moveTo(sx + 2, slipY + 1)
+        ctx.lineTo(sx + 2, slipY + l.slipH - 1)
+        ctx.stroke()
+        ctx.beginPath()
+        ctx.moveTo(sx + slipW - 2, slipY + 1)
+        ctx.lineTo(sx + slipW - 2, slipY + l.slipH - 1)
+        ctx.stroke()
+
         ctx.restore()
+
+        // 绳结
+        ctx.save()
+        ctx.globalAlpha = nOp * 0.20
+        ctx.fillStyle = '#8a7a60'
+        ctx.beginPath()
+        ctx.arc(sx + slipW / 2, stringY + 1, 1.5, 0, Math.PI * 2)
+        ctx.fill()
+        // 垂下细绳
+        ctx.strokeStyle = '#8a7a60'
+        ctx.lineWidth = 0.3
+        ctx.beginPath()
+        ctx.moveTo(sx + slipW / 2, stringY + 2.5)
+        ctx.lineTo(sx + slipW / 2, slipY - 1)
+        ctx.stroke()
+        ctx.restore()
+
+        // 属性名
+        ctx.save()
+        ctx.globalAlpha = nOp * (isZero ? 0.30 : 0.55)
+        ctx.fillStyle = COLORS.paperDarker
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.font = l.attrNameS + 'px ' + ui.fontFamily
+        ctx.fillText(name, sx + slipW / 2, slipY + l.slipH * 0.30)
+        ctx.restore()
+
+        // 属性值
+        var valCX = sx + slipW / 2
+        var valCY = slipY + l.slipH * 0.68
+        if (isZero) {
+          drawText(ctx, val, valCX, valCY, {
+            fontSize: l.attrValS, color: COLORS.paperDarker,
+            align: 'center', baseline: 'middle', opacity: nOp * 0.20,
+          })
+        } else {
+          ctx.save()
+          ctx.shadowColor = 'rgba(232,200,130,' + (nOp * 0.15) + ')'
+          ctx.shadowBlur = 2
+          drawText(ctx, val, valCX, valCY, {
+            fontSize: l.attrValS, color: COLORS.goldLight,
+            align: 'center', baseline: 'middle', opacity: nOp * 0.85, bold: true,
+          })
+          ctx.restore()
+        }
       }
     }
+
+    var allAttrOrder = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
+    drawSlipRow(l.slip1Starts, l.slip1W, 4, l.stringY1, l.slip1Y, allAttrOrder, 0)
+    drawSlipRow(l.slip2Starts, l.slip2W, 5, l.stringY2, l.slip2Y, allAttrOrder, 4)
   }
 
   // 段 5：朱砂印"开局"（印章风格）

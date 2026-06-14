@@ -42,13 +42,13 @@ const db = cloud.database()
 const _ = db.command
 const https = require('https')
 
-// v0.2.5-W（先生 2026-06-13 17:11 拍板）：换用阿里百炼 qwen3.7-max
-// 之前用 MiniMax-M2.7-highspeed，现在切换到阿里百炼
-// API key 从 OpenClaw 配置的 qwen-token-plan 复用
-const MM_API_KEY = process.env.DASHSCOPE_API_KEY || 'sk-b830b692b5c846e6a6808e9af9451f45'
-const MM_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
-const MM_MODEL = 'qwen3.7-max'
-const MM_FALLBACK_MODEL = 'qwen3.7-plus'  // fallback 模型
+// v0.6.9（先生 2026-06-14 22:58 拍板）：换用 DeepSeek v4 Flash
+// v0.6.9（先生 2026-06-14 22:58 拍板）：换用 DeepSeek v4 Flash
+// 之前用 MiniMax-M2.7-highspeed → 阿里百炼 qwen3.7-max
+const DS_API_KEY = process.env.DS_API_KEY
+const DS_BASE_URL = 'https://api.deepseek.com/v1'
+const DS_MODEL = 'deepseek-v4-flash'
+const DS_FALLBACK_MODEL = 'deepseek-v4-flash'  // fallback 模型（同模型，API 层面重试）
 const MAX_TOKENS = 2500
 const TEMPERATURE = 0.85
 const LLM_TIMEOUT_MS = 110000
@@ -454,15 +454,15 @@ async function callAI(state, input, history, monthEvent, isRetry) {
     messages.push({ role: 'user', content: userPrompt })
   }
 
-  // v0.1.83: 400/5xx 时自动 fallback 到 M2（更通用模型）
+  // v0.6.9: DeepSeek 极简回退逻辑
   let response
   try {
-    response = await callLLM(messages, MM_MODEL)
+    response = await callLLM(messages, DS_MODEL)
   } catch (e) {
     const status = e.statusCode || 0
     if (status === 400 || status === 429 || (status >= 500 && status < 600)) {
-      console.error('[ai_narrate_worker] 主模型失败，回退 M2:', status, e.message)
-      response = await callLLM(messages, MM_FALLBACK_MODEL)
+      console.error('[ai_narrate_worker] 主模型失败，回退:', status, e.message)
+      response = await callLLM(messages, DS_FALLBACK_MODEL)
     } else {
       throw e
     }
@@ -867,21 +867,19 @@ function pickBranch(branches) {
 }
 
 function callLLM(messages, modelOverride) {
-  // v0.1.83: 支持 modelOverride fallback（默认 M2.7-highspeed，400 时回退 M2）
   return new Promise((resolve, reject) => {
-    const useModel = modelOverride || MM_MODEL
+    const useModel = modelOverride || DS_MODEL
     const data = JSON.stringify({ model: useModel, messages, max_tokens: MAX_TOKENS, temperature: TEMPERATURE })
-    const url = new URL(MM_BASE_URL + '/chat/completions')
+    const url = new URL(DS_BASE_URL + '/chat/completions')
     const req = https.request({
       hostname: url.hostname, path: url.pathname, method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + MM_API_KEY },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DS_API_KEY },
       timeout: LLM_TIMEOUT_MS,
     }, res => {
       let body = ''
       res.on('data', chunk => body += chunk)
       res.on('end', () => {
         if (res.statusCode !== 200) {
-          // v0.1.83: log 完整错误响应体（不截断），方便排查
           console.error('[ai_narrate_worker] AI 非 200 响应，model=' + useModel + ', status=' + res.statusCode + ', body:', body)
           const err = new Error(`AI服务暂不可用 (${res.statusCode})`)
           err.statusCode = res.statusCode

@@ -134,8 +134,9 @@ function init(items, identity) {
 
   // 统一云函数(e.g. generate_identity)和本地引擎的身份数据格式
   if (identity && identity.city) {
-    // 云函数格式 → 身份卡格式
+    // 云函数格式 → 身份卡格式（v0.6.4 修复：保留所有 v2 属性字段）
     IDENTITY = {
+      ...identity,  // v0.6.4：保留声望/财富/学识/颜值/医术/战功/文采/政绩/义行/历史庇护 等
       name: identity.name || '???',
       age: identity.age != null ? identity.age : '?',
       gender: identity.gender || '?',

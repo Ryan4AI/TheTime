@@ -100,24 +100,6 @@ function render() {
   try {
     ctx.clearRect(0, 0, cssW, cssH)
     
-    // DEBUG: 显示当前场景和触摸状态
-    ctx.save()
-    ctx.font = '12px sans-serif'
-    ctx.fillStyle = '#00ff00'
-    ctx.textAlign = 'left'
-    ctx.fillText('Scene: ' + currentScene, 10, 20)
-    ctx.fillText('Scenes loaded: ' + Object.keys(scenes).join(','), 10, 35)
-    if (_g.tapX >= 0) {
-      ctx.fillText('Touch: ' + _g.tapX + ',' + _g.tapY, 10, 50)
-      // 画触摸点
-      ctx.strokeStyle = '#ff0000'
-      ctx.lineWidth = 2
-      ctx.beginPath()
-      ctx.arc(_g.tapX, _g.tapY, 20, 0, Math.PI * 2)
-      ctx.stroke()
-    }
-    ctx.restore()
-    
     if (currentScene) {
       var s = scenes[currentScene]
       if (s && s.render) {
@@ -146,6 +128,19 @@ function render() {
         }
       }
     }
+    
+    // DEBUG: 在场景渲染之后显示调试信息（最顶层）
+    ctx.save()
+    ctx.font = 'bold 14px sans-serif'
+    ctx.fillStyle = '#00ff00'
+    ctx.textAlign = 'left'
+    ctx.fillText('Scene: ' + currentScene, 10, 20)
+    ctx.fillText('Scenes: ' + Object.keys(scenes).join(','), 10, 40)
+    if (_g.tapX >= 0) {
+      ctx.fillText('Touch: ' + _g.tapX + ',' + _g.tapY, 10, 60)
+    }
+    ctx.restore()
+    
   } catch(e) {
     ctx.font = '14px sans-serif'
     ctx.fillStyle = '#e04040'

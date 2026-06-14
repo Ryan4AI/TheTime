@@ -323,4 +323,3 @@ function render(ctx) {
 }
 
 module.exports = { init, render, onTouch }
-dule.exports = { init, render, onTouch }

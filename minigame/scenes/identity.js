@@ -19,37 +19,36 @@ function calcLayout() {
   var h = sys.height
   var cx = Math.floor(w / 2)
 
-  // 卡片尺寸（v0.6.11 重新布局：少即是多）
+  // 卡片尺寸
   var cardW = Math.floor(w * 0.86)
   var cardH = Math.floor(h * 0.54)
   var cardX = Math.floor(cx - cardW / 2)
   var cardY = Math.floor(h * 0.19)
 
-  // 段 1：纪年（超小，金色，居中）
-  var eraS = Math.min(11, Math.floor(w * 0.028))
+  // 段 1：纪年（超小金，居中）
+  var eraS = Math.min(10, Math.floor(w * 0.026))
   var eraY = cardY + Math.floor(cardH * 0.06)
 
-  // 段 2：姓名（v0.6.12 缩小字号，不抢其他信息视觉权重）
-  var nameS = Math.min(30, Math.floor(w * 0.078))
-  var nameY = eraY + Math.floor(cardH * 0.13)
+  // 段 2：姓名
+  var nameS = Math.min(28, Math.floor(w * 0.072))
+  var nameY = eraY + Math.floor(cardH * 0.12)
 
   // 段 3：副标题（单行：年龄·职业·居所）
-  var subS = Math.min(12, Math.floor(w * 0.031))
-  var subY = nameY + Math.floor(nameS * 0.65) + 4
+  var subS = Math.min(11, Math.floor(w * 0.028))
+  var subY = nameY + Math.floor(nameS * 0.65) + 3
 
-  // 段 4：分割线 + 全部属性（通用 4 + 专业技能）
+  // 段 4：分割线 + 9 属性 3×3 网格
   var divY = subY + Math.floor(cardH * 0.06)
   var attrNameS = Math.min(10, Math.floor(w * 0.026))
-  var attrValS = Math.min(15, Math.floor(w * 0.039))
-  var attrGridY = divY + Math.floor(cardH * 0.06)
-  var attrRowGap = Math.floor(cardH * 0.09)
-  var attrColW = Math.floor((cardW - 40) / 2)
-  var attrCellX = [cardX + 20, cardX + 20 + attrColW]
-  var attrCellW = attrColW - 8
-  var specGridY = attrGridY + 2 * attrRowGap  // 专业技能从通用 4 属性之后开始
+  var attrValS = Math.min(14, Math.floor(w * 0.036))
+  var attrGridY = divY + Math.floor(cardH * 0.07)
+  var attrRowGap = Math.floor(cardH * 0.10)
+  var attrColW = Math.floor((cardW - 48) / 3)
+  var attrCellX = [cardX + 24, cardX + 24 + attrColW, cardX + 24 + attrColW * 2]
+  var attrCellW = attrColW - 6
 
   // 段 5：落笔按钮（纯文字）
-  var btnY = cardY + cardH - Math.floor(cardH * 0.12)
+  var btnY = cardY + cardH - Math.floor(cardH * 0.11)
 
   layout = {
     w: w, h: h, cx: cx,
@@ -62,7 +61,6 @@ function calcLayout() {
     attrNameS: attrNameS, attrValS: attrValS,
     attrGridY: attrGridY, attrRowGap: attrRowGap,
     attrColW: attrColW, attrCellX: attrCellX, attrCellW: attrCellW,
-    specGridY: specGridY,
     btnY: btnY,
   }
 }
@@ -319,12 +317,12 @@ function render(ctx) {
     })
   }
 
-  // 段 2：姓名（v0.6.12 缩小字号、降低光晕）
+  // 段 2：姓名
   var nOp = anims.name.update(now)
   if (nOp > 0) {
     ctx.save()
-    ctx.shadowColor = 'rgba(232,200,130,' + (nOp * 0.3) + ')'
-    ctx.shadowBlur = 5
+    ctx.shadowColor = 'rgba(232,200,130,' + (nOp * 0.25) + ')'
+    ctx.shadowBlur = 4
     drawText(ctx, IDENTITY.name, cx, l.nameY, {
       fontSize: l.nameS,
       fontFamily: '"STKaiti", "KaiTi", "楷体", ' + ui.fontFamily,
@@ -353,7 +351,7 @@ function render(ctx) {
     })
   }
 
-  // 段 4：分割线 + 全部属性（通用 4 + 专业技能）
+  // 段 4：分割线 + 9 属性 3×3 网格（v0.6.14 全属性显示）
   if (sOp > 0.5) {
     // 分割线
     ctx.save()
@@ -361,49 +359,48 @@ function render(ctx) {
     ctx.strokeStyle = COLORS.gold
     ctx.lineWidth = 0.5
     ctx.beginPath()
-    ctx.moveTo(cx - l.attrColW * 0.6, l.divY)
-    ctx.lineTo(cx + l.attrColW * 0.6, l.divY)
+    ctx.moveTo(cx - l.attrColW * 0.8, l.divY)
+    ctx.lineTo(cx + l.attrColW * 0.8, l.divY)
     ctx.stroke()
     ctx.restore()
 
-    // ── 通用 4 属性，2×2 ──
-    var commonAttrs = [
-      { name: '声望', val: IDENTITY['声望'] || 0 },
-      { name: '财富', val: IDENTITY['财富'] || 0 },
-      { name: '学识', val: IDENTITY['学识'] || 0 },
-      { name: '颜值', val: IDENTITY['颜值'] || 0 },
-    ]
-    var drawCellAt = function(name, val, colIdx, baseY, rowIdx) {
-      var cellCX = l.attrCellX[colIdx] + l.attrCellW / 2
-      var cy = baseY + rowIdx * l.attrRowGap
-      drawText(ctx, name, cellCX, cy, {
-        fontSize: l.attrNameS, color: COLORS.paperDarker,
-        align: 'center', baseline: 'middle', opacity: sOp * 0.55,
-      })
-      ctx.save()
-      ctx.shadowColor = 'rgba(232,200,130,' + (sOp * 0.2) + ')'
-      ctx.shadowBlur = 2
-      drawText(ctx, val, cellCX, cy + Math.floor(l.attrNameS * 1.4), {
-        fontSize: l.attrValS, color: COLORS.goldLight,
-        align: 'center', baseline: 'middle', opacity: sOp * 0.85, bold: true,
-      })
-      ctx.restore()
-    }
-    for (var ai = 0; ai < commonAttrs.length; ai++) {
-      drawCellAt(commonAttrs[ai].name, commonAttrs[ai].val, ai % 2, l.attrGridY, Math.floor(ai / 2))
-    }
+    // 9 属性顺序：声望 财富 学识 颜值 医术 战功 文采 政绩 义行
+    var attrOrder = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
+    for (var ai = 0; ai < attrOrder.length; ai++) {
+      var key = attrOrder[ai]
+      var val = IDENTITY[key] || 0
+      var col = ai % 3
+      var row = Math.floor(ai / 3)
+      var cellCX = l.attrCellX[col] + l.attrCellW / 2
+      var cy = l.attrGridY + row * l.attrRowGap
+      var isZero = (val === 0)
 
-    // ── 专业技能（非零才显示）──
-    var specAttrs = [
-      { name: '医术', val: IDENTITY['医术'] || 0 },
-      { name: '战功', val: IDENTITY['战功'] || 0 },
-      { name: '文采', val: IDENTITY['文采'] || 0 },
-      { name: '政绩', val: IDENTITY['政绩'] || 0 },
-      { name: '义行', val: IDENTITY['义行'] || 0 },
-    ].filter(function(a) { return a.val > 0 })
-    if (specAttrs.length > 0) {
-      for (var si = 0; si < specAttrs.length; si++) {
-        drawCellAt(specAttrs[si].name, specAttrs[si].val, si % 2, l.specGridY, Math.floor(si / 2))
+      // 属性名
+      drawText(ctx, key, cellCX, cy, {
+        fontSize: l.attrNameS,
+        color: COLORS.paperDarker,
+        align: 'center', baseline: 'middle',
+        opacity: sOp * (isZero ? 0.25 : 0.50),
+      })
+      // 属性值：非零金色+微光；零值极小浅灰
+      if (isZero) {
+        drawText(ctx, val, cellCX, cy + Math.floor(l.attrNameS * 1.3), {
+          fontSize: l.attrValS,
+          color: COLORS.paperDarker,
+          align: 'center', baseline: 'middle',
+          opacity: sOp * 0.20,
+        })
+      } else {
+        ctx.save()
+        ctx.shadowColor = 'rgba(232,200,130,' + (sOp * 0.15) + ')'
+        ctx.shadowBlur = 2
+        drawText(ctx, val, cellCX, cy + Math.floor(l.attrNameS * 1.3), {
+          fontSize: l.attrValS,
+          color: COLORS.goldLight,
+          align: 'center', baseline: 'middle',
+          opacity: sOp * 0.85, bold: true,
+        })
+        ctx.restore()
       }
     }
   }
@@ -420,15 +417,5 @@ function render(ctx) {
       bold: true,
     })
   }
-
-  // 版本水印（验证更新）
-  ctx.save()
-  ctx.globalAlpha = 0.15
-  ctx.fillStyle = COLORS.gold
-  ctx.font = '7px sans-serif'
-  ctx.textAlign = 'right'
-  ctx.textBaseline = 'bottom'
-  ctx.fillText('v0.6.13', w - 4, h - 4)
-  ctx.restore()
 }
 module.exports = { init, render, onTouch, autoNext: null }

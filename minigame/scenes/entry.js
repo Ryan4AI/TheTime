@@ -319,15 +319,19 @@ function render(ctx) {
 
 // ─── Touch ───
 function onTouch(x, y, type) {
+  console.log('[entry] onTouch:', x, y, type, 'btn1:', layout.btnX, layout.btnY1, 'btn2:', layout.btnX, layout.btnY2)
   if (type === 'end') {
     // 按钮1：踏入长河（扩大点击区域，上下左右各+20px）
     if (hitTest(x, y, layout.btnX - 20, layout.btnY1 - 20, layout.btnW + 40, layout.btnH + 40)) {
+      console.log('[entry] Button 1 clicked, switching to selection')
       return { scene: 'selection' }
     }
     // 按钮2：群英录（也扩大点击区域）
     if (hitTest(x, y, layout.btnX - 20, layout.btnY2 - 20, layout.btnW + 40, layout.btnH + 40)) {
+      console.log('[entry] Button 2 clicked, switching to leaderboard')
       return { scene: 'leaderboard' }
     }
+    console.log('[entry] No button hit')
   }
   return null
 }

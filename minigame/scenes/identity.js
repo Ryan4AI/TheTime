@@ -26,29 +26,30 @@ function calcLayout() {
   var cardY = Math.floor(h * 0.19)
 
   // 段 1：纪年（超小，金色，居中）
-  var eraS = Math.min(12, Math.floor(w * 0.030))
-  var eraY = cardY + Math.floor(cardH * 0.08)
+  var eraS = Math.min(11, Math.floor(w * 0.028))
+  var eraY = cardY + Math.floor(cardH * 0.06)
 
-  // 段 2：姓名（主角大字）
-  var nameS = Math.min(44, Math.floor(w * 0.115))
-  var nameY = eraY + Math.floor(cardH * 0.16)
+  // 段 2：姓名（v0.6.12 缩小字号，不抢其他信息视觉权重）
+  var nameS = Math.min(30, Math.floor(w * 0.078))
+  var nameY = eraY + Math.floor(cardH * 0.13)
 
   // 段 3：副标题（单行：年龄·职业·居所）
-  var subS = Math.min(13, Math.floor(w * 0.034))
-  var subY = nameY + Math.floor(nameS * 0.55) + 6
+  var subS = Math.min(12, Math.floor(w * 0.031))
+  var subY = nameY + Math.floor(nameS * 0.65) + 4
 
-  // 段 4：分割线 + 属性 2×2
-  var divY = subY + Math.floor(cardH * 0.07)
-  var attrNameS = Math.min(11, Math.floor(w * 0.028))
-  var attrValS = Math.min(18, Math.floor(w * 0.046))
-  var attrGridY = divY + Math.floor(cardH * 0.07)
-  var attrRowGap = Math.floor(cardH * 0.11)
+  // 段 4：分割线 + 全部属性（通用 4 + 专业技能）
+  var divY = subY + Math.floor(cardH * 0.06)
+  var attrNameS = Math.min(10, Math.floor(w * 0.026))
+  var attrValS = Math.min(15, Math.floor(w * 0.039))
+  var attrGridY = divY + Math.floor(cardH * 0.06)
+  var attrRowGap = Math.floor(cardH * 0.09)
   var attrColW = Math.floor((cardW - 40) / 2)
   var attrCellX = [cardX + 20, cardX + 20 + attrColW]
   var attrCellW = attrColW - 8
+  var specGridY = attrGridY + 2 * attrRowGap  // 专业技能从通用 4 属性之后开始
 
-  // 段 5：落笔按钮（纯文字，无边框）
-  var btnY = cardY + cardH - Math.floor(cardH * 0.13)
+  // 段 5：落笔按钮（纯文字）
+  var btnY = cardY + cardH - Math.floor(cardH * 0.12)
 
   layout = {
     w: w, h: h, cx: cx,
@@ -61,6 +62,7 @@ function calcLayout() {
     attrNameS: attrNameS, attrValS: attrValS,
     attrGridY: attrGridY, attrRowGap: attrRowGap,
     attrColW: attrColW, attrCellX: attrCellX, attrCellW: attrCellW,
+    specGridY: specGridY,
     btnY: btnY,
   }
 }
@@ -317,18 +319,18 @@ function render(ctx) {
     })
   }
 
-  // 段 2：姓名（大字主角，金色光晕）
+  // 段 2：姓名（v0.6.12 缩小字号、降低光晕）
   var nOp = anims.name.update(now)
   if (nOp > 0) {
     ctx.save()
-    ctx.shadowColor = 'rgba(232,200,130,' + (nOp * 0.6) + ')'
-    ctx.shadowBlur = 12
+    ctx.shadowColor = 'rgba(232,200,130,' + (nOp * 0.3) + ')'
+    ctx.shadowBlur = 5
     drawText(ctx, IDENTITY.name, cx, l.nameY, {
       fontSize: l.nameS,
       fontFamily: '"STKaiti", "KaiTi", "楷体", ' + ui.fontFamily,
       color: COLORS.goldLight,
       align: 'center', baseline: 'middle',
-      opacity: nOp,
+      opacity: nOp * 0.85,
       bold: true,
     })
     ctx.restore()
@@ -351,7 +353,7 @@ function render(ctx) {
     })
   }
 
-  // 段 4：分割线 + 属性 2×2
+  // 段 4：分割线 + 全部属性（通用 4 + 专业技能）
   if (sOp > 0.5) {
     // 分割线
     ctx.save()
@@ -364,38 +366,45 @@ function render(ctx) {
     ctx.stroke()
     ctx.restore()
 
-    // 4 属性，2×2 宫格
-    var attrList = [
+    // ── 通用 4 属性，2×2 ──
+    var commonAttrs = [
       { name: '声望', val: IDENTITY['声望'] || 0 },
       { name: '财富', val: IDENTITY['财富'] || 0 },
       { name: '学识', val: IDENTITY['学识'] || 0 },
       { name: '颜值', val: IDENTITY['颜值'] || 0 },
     ]
-    for (var ai = 0; ai < attrList.length; ai++) {
-      var row = Math.floor(ai / 2)
-      var col = ai % 2
-      var cellCX = l.attrCellX[col] + l.attrCellW / 2
-      var cy = l.attrGridY + row * l.attrRowGap
-
-      // 属性名（小字浅色）
-      drawText(ctx, attrList[ai].name, cellCX, cy, {
-        fontSize: l.attrNameS,
-        color: COLORS.paperDarker,
-        align: 'center', baseline: 'middle',
-        opacity: sOp * 0.6,
+    var drawCellAt = function(name, val, colIdx, baseY, rowIdx) {
+      var cellCX = l.attrCellX[colIdx] + l.attrCellW / 2
+      var cy = baseY + rowIdx * l.attrRowGap
+      drawText(ctx, name, cellCX, cy, {
+        fontSize: l.attrNameS, color: COLORS.paperDarker,
+        align: 'center', baseline: 'middle', opacity: sOp * 0.55,
       })
-      // 属性值（金色大字）
       ctx.save()
-      ctx.shadowColor = 'rgba(232,200,130,' + (sOp * 0.25) + ')'
-      ctx.shadowBlur = 3
-      drawText(ctx, attrList[ai].val, cellCX, cy + Math.floor(l.attrNameS * 1.5), {
-        fontSize: l.attrValS,
-        color: COLORS.goldLight,
-        align: 'center', baseline: 'middle',
-        opacity: sOp * 0.9,
-        bold: true,
+      ctx.shadowColor = 'rgba(232,200,130,' + (sOp * 0.2) + ')'
+      ctx.shadowBlur = 2
+      drawText(ctx, val, cellCX, cy + Math.floor(l.attrNameS * 1.4), {
+        fontSize: l.attrValS, color: COLORS.goldLight,
+        align: 'center', baseline: 'middle', opacity: sOp * 0.85, bold: true,
       })
       ctx.restore()
+    }
+    for (var ai = 0; ai < commonAttrs.length; ai++) {
+      drawCellAt(commonAttrs[ai].name, commonAttrs[ai].val, ai % 2, l.attrGridY, Math.floor(ai / 2))
+    }
+
+    // ── 专业技能（非零才显示）──
+    var specAttrs = [
+      { name: '医术', val: IDENTITY['医术'] || 0 },
+      { name: '战功', val: IDENTITY['战功'] || 0 },
+      { name: '文采', val: IDENTITY['文采'] || 0 },
+      { name: '政绩', val: IDENTITY['政绩'] || 0 },
+      { name: '义行', val: IDENTITY['义行'] || 0 },
+    ].filter(function(a) { return a.val > 0 })
+    if (specAttrs.length > 0) {
+      for (var si = 0; si < specAttrs.length; si++) {
+        drawCellAt(specAttrs[si].name, specAttrs[si].val, si % 2, l.specGridY, Math.floor(si / 2))
+      }
     }
   }
 

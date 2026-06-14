@@ -320,11 +320,12 @@ function render(ctx) {
 // ─── Touch ───
 function onTouch(x, y, type) {
   if (type === 'end') {
-    // Use static positions for hit testing (more forgiving, works even during animation)
-    if (hitTest(x, y, layout.btnX, layout.btnY1, layout.btnW, layout.btnH)) {
+    // 按钮1：踏入长河（扩大点击区域，上下左右各+20px）
+    if (hitTest(x, y, layout.btnX - 20, layout.btnY1 - 20, layout.btnW + 40, layout.btnH + 40)) {
       return { scene: 'selection' }
     }
-    if (hitTest(x, y, layout.btnX, layout.btnY2, layout.btnW, layout.btnH)) {
+    // 按钮2：群英录（也扩大点击区域）
+    if (hitTest(x, y, layout.btnX - 20, layout.btnY2 - 20, layout.btnW + 40, layout.btnH + 40)) {
       return { scene: 'leaderboard' }
     }
   }

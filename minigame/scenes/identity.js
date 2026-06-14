@@ -90,65 +90,77 @@ function calcLayout() {
 }
 
 function init(items, identity) {
-  // v0.6.3 重构：精细化初始属性（阶层/职业/年龄/名人 4 维度）
+  // v0.6.31：科学属性生成模型
+  // 阶层→总能力预算，职业→分配权重，年龄→分项微调
   if (identity) {
     const sc = identity.socialClass || identity.social_class || '庶人'
     const occ = identity.occupation || ''
     const canRead = !!identity.canRead
     const age = identity.age || 25
-    // v0.6.6 移除名人彩蛋（避免与排行榜冲突）
-    const isCelebrity = false
 
-    // ── 1. 阶层基础（声望/财富/学识）──
-    let base = { '声望': 100, '财富': 500, '学识': 80 }
-    if (sc.includes('贵') || sc.includes('皇') || sc.includes('公') || sc.includes('侯') || sc.includes('伯') || sc.includes('大夫') || sc.includes('宗')) {
-      base = { '声望': 800, '财富': 5000, '学识': 200 }  // 贵族
-    } else if (sc.includes('官') || sc.includes('士') || sc.includes('举') || sc.includes('进士')) {
-      base = { '声望': 500, '财富': 2000, '学识': 300 }  // 士绅
-    } else if (sc.includes('商') || sc.includes('贾')) {
-      base = { '声望': 200, '财富': 4000, '学识': 150 }  // 商人
-    } else if (sc.includes('贱') || sc.includes('奴') || sc.includes('婢') || sc.includes('仆')) {
-      base = { '声望': 30, '财富': 30, '学识': 10 }  // 贱籍
-    } else {
-      base = { '声望': 100, '财富': 500, '学识': 80 }  // 平民/农/工
+    // ── 1. 阶层能力预算 ──
+    var budget = 8000
+    if (sc.indexOf('贵') >= 0 || sc.indexOf('皇') >= 0 || sc.indexOf('公') >= 0 || sc.indexOf('侯') >= 0 || sc.indexOf('伯') >= 0 || sc.indexOf('大夫') >= 0 || sc.indexOf('宗') >= 0) {
+      budget = 12000  // 贵族：资源最优
+    } else if (sc.indexOf('官') >= 0 || sc.indexOf('士') >= 0 || sc.indexOf('举') >= 0 || sc.indexOf('进士') >= 0) {
+      budget = 10000  // 士族：教育充裕
+    } else if (sc.indexOf('商') >= 0 || sc.indexOf('贾') >= 0) {
+      budget = 11000  // 商人：财富充裕但偏科
+    } else if (sc.indexOf('贱') >= 0 || sc.indexOf('奴') >= 0 || sc.indexOf('婢') >= 0 || sc.indexOf('仆') >= 0) {
+      budget = 6000   // 贱籍：起点最低
+    }
+    // 预算波动 ±10%
+    budget = Math.floor(budget * (0.9 + Math.random() * 0.2))
+
+    // ── 2. 职业权重分布（不设默认 sum=1，运行时归一化）──
+    // 权重概念：该职业在某属性上的发育潜力
+    // 3.0 = 顶尖，1.0 = 一般水平，0.2 = 几乎不涉猎
+    var occProfiles = [
+      { rx: /医|药|针灸|郎中/, w: { 声望:0.3, 财富:0.3, 学识:0.6, 颜值:0.3, 医术:2.8, 战功:0.2, 文采:0.2, 政绩:0.2, 义行:0.5 }},
+      { rx: /将|兵|军|武|侠|卒/, w: { 声望:0.8, 财富:0.2, 学识:0.2, 颜值:0.4, 医术:0.3, 战功:2.8, 文采:0.1, 政绩:0.5, 义行:0.5 }},
+      { rx: /书|诗|文|画|儒|墨|秀才/, w: { 声望:0.5, 财富:0.1, 学识:1.2, 颜值:0.3, 医术:0.1, 战功:0.1, 文采:2.8, 政绩:0.3, 义行:0.1 }},
+      { rx: /官|府|县|尹|令|相|卿/, w: { 声望:1.0, 财富:0.4, 学识:0.6, 颜值:0.2, 医术:0.1, 战功:0.1, 文采:0.5, 政绩:2.8, 义行:0.3 }},
+      { rx: /商|贾|贩/, w: { 声望:0.6, 财富:2.8, 学识:0.2, 颜值:0.3, 医术:0.1, 战功:0.1, 文采:0.1, 政绩:0.4, 义行:0.1 }},
+      { rx: /僧|道|观/, w: { 声望:0.4, 财富:0.1, 学识:0.8, 颜值:0.2, 医术:0.4, 战功:0.1, 文采:0.3, 政绩:0.1, 义行:1.0 }},
+      { rx: /渔|猎|樵|牧/, w: { 声望:0.1, 财富:0.2, 学识:0.1, 颜值:0.4, 医术:0.3, 战功:0.4, 文采:0.1, 政绩:0.1, 义行:0.5 }},
+      { rx: /农|耕|田/, w: { 声望:0.1, 财富:0.2, 学识:0.1, 颜值:0.4, 医术:0.2, 战功:0.2, 文采:0.1, 政绩:0.1, 义行:0.3 }},
+      // 兜底：百工/奴婢/其他
+      { w: { 声望:0.2, 财富:0.2, 学识:0.2, 颜值:0.3, 医术:0.2, 战功:0.2, 文采:0.1, 政绩:0.1, 义行:0.3 }},
+    ]
+    var profile = occProfiles[occProfiles.length - 1]  // 兜底
+    for (var pi = 0; pi < occProfiles.length - 1; pi++) {
+      if (occ.search(occProfiles[pi].rx) >= 0) { profile = occProfiles[pi]; break }
     }
 
-    // ── 2. 识字加成 ──
-    if (canRead) base['学识'] += 200
+    // ── 3. 归一化权重 ──
+    var wSum = 0
+    for (var at in profile.w) { if (profile.w.hasOwnProperty(at)) wSum += profile.w[at] }
 
-    // ── 3. 职业专属属性（v0.6.3 新增：医生有医术，士兵有战功等）──
-    let specialized = { '医术': 0, '战功': 0, '文采': 0, '政绩': 0, '义行': 0 }
-    if (occ.includes('医') || occ.includes('药') || occ.includes('针灸') || occ.includes('郎中')) specialized['医术'] = 800
-    if (occ.includes('将') || occ.includes('兵') || occ.includes('军') || occ.includes('武') || occ.includes('侠') || occ.includes('卒')) specialized['战功'] = 600
-    if (occ.includes('书') || occ.includes('诗') || occ.includes('文') || occ.includes('画') || occ.includes('儒') || occ.includes('墨') || occ.includes('秀才')) specialized['文采'] = 800
-    if (occ.includes('官') || occ.includes('府') || occ.includes('县') || occ.includes('尹') || occ.includes('令') || occ.includes('相') || occ.includes('卿') || occ.includes('大夫')) specialized['政绩'] = 600
-    if (occ.includes('僧') || occ.includes('道') || occ.includes('侠') || occ.includes('义') || occ.includes('丐') || occ.includes('善')) specialized['义行'] = 500
+    // ── 4. 识字基线加成 → 学识+学识权重提升 ──
+    var literacyBoost = canRead ? 1.3 : 0.7  // ↑学识权重30% / ↓30%
 
-    // ── 4. 年龄调整系数 ──
-    let ageBonus = 1.0
-    if (age < 18) ageBonus = 0.7           // 少年：属性低但潜力大
-    else if (age > 60) ageBonus = 1.3     // 老年：经验丰富
-    else if (age >= 30 && age <= 50) ageBonus = 1.2  // 壮年：黄金期
+    // ── 5. 年龄分项调节 ──
+    function ageMultFor(a) {
+      if (age < 18) return { '声望':0.4, '财富':0.3, '学识':0.6, '颜值':1.4, '医术':0.3, '战功':0.3, '文采':0.5, '政绩':0.2, '义行':0.7 }[a] || 1.0
+      if (age < 30) return { '声望':0.7, '财富':0.7, '学识':0.8, '颜值':1.2, '医术':0.7, '战功':0.8, '文采':0.8, '政绩':0.6, '义行':0.9 }[a] || 1.0
+      if (age <= 50) return { '声望':1.2, '财富':1.1, '学识':1.1, '颜值':0.7, '医术':1.0, '战功':1.0, '文采':1.1, '政绩':1.3, '义行':1.0 }[a] || 1.0
+      if (age <= 60) return { '声望':1.3, '财富':1.1, '学识':1.2, '颜值':0.3, '医术':1.1, '战功':0.6, '文采':1.2, '政绩':1.3, '义行':1.1 }[a] || 1.0
+      return { '声望':1.3, '财富':0.9, '学识':1.2, '颜值':0.2, '医术':0.8, '战功':0.3, '文采':1.1, '政绩':1.2, '义行':1.2 }[a] || 1.0
+    }
 
-    // ── 5. 名人彩蛋加成 ──
-    let celebBonus = 1.0  // v0.6.6 永远 1.0
-
-    // ── 6. 颜值：随机 3000-7000，名人 +30% ──
-    let face = 3000 + Math.floor(Math.random() * 4000)
-    // v0.6.6 移除名人颜值加成
-
-    // ── 7. 综合赋值（clamp 0-10000）──
-    const set = (key, val) => { identity[key] = Math.max(0, Math.min(10000, Math.floor(val))) }
-    set('声望', base['声望'] * ageBonus * celebBonus)
-    set('财富', base['财富'] * ageBonus * celebBonus)
-    set('学识', base['学识'] * ageBonus * celebBonus)
-    set('颜值', face)
-    set('医术', specialized['医术'] * celebBonus)
-    set('战功', specialized['战功'] * celebBonus)
-    set('文采', specialized['文采'] * celebBonus)
-    set('政绩', specialized['政绩'] * celebBonus)
-    set('义行', specialized['义行'] * celebBonus)
-    set('历史庇护', 0)  // v0.6.6：庇护只通过上榜获得，不靠穿越身份
+    // ── 6. 综合计算 ──
+    var ALL_ATTRS = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
+    for (var ai = 0; ai < ALL_ATTRS.length; ai++) {
+      var an = ALL_ATTRS[ai]
+      var w = profile.w[an] / wSum
+      // 学识识字加成
+      if (an === '学识') w *= literacyBoost
+      var raw = budget * w * ageMultFor(an)
+      // 随机波动 ±25%（让同职业不千篇一律）
+      raw *= 0.75 + Math.random() * 0.5
+      identity[an] = Math.max(0, Math.min(10000, Math.floor(raw)))
+    }
+    identity['历史庇护'] = 0
   }
 
   // 统一云函数(e.g. generate_identity)和本地引擎的身份数据格式

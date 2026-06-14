@@ -76,12 +76,12 @@ function calcLayout() {
   var slipW = Math.floor((cardW - slipPadX * 2 - slipGap * (slipN - 1)) / slipN)
   var slipH = Math.min(108, Math.floor(cardH * 0.22))
   var topN = 4, botN = 5
-  // 上排（4片）自居中于卡片
-  var topW = topN * slipW + (topN - 1) * slipGap
-  var topS = cx - Math.floor(topW / 2)
-  // 下排（5片）自居中于卡片
+  // 下排（5片）确定左右边界，上排（4片）在相同边界内居中
   var botW = botN * slipW + (botN - 1) * slipGap
   var botS = cx - Math.floor(botW / 2)
+  var botRight = botS + botW
+  var topW = topN * slipW + (topN - 1) * slipGap
+  var topS = botS + Math.floor((botW - topW) / 2)  // 以下排边界为基准居中
 
   var destinyBot = destinyGuideY + 10
   var slip1Y = destinyBot + 4               // 上排命运签顶部
@@ -505,9 +505,6 @@ function render(ctx) {
     var headH = Math.floor(l.slipH * 0.20)  // 签头高度（红漆部分）
     var rows = [[l.slip1Starts, l._topN, l.slip1Y], [l.slip2Starts, l._botN, l.slip2Y]]
 
-    // 旋转角度（固定种子，依据索引微调）
-    function slipRot(idx) { return (idx * 2.7 - 12) * 0.006 }
-
     for (var ri = 0; ri < rows.length; ri++) {
       var starts = rows[ri][0], count = rows[ri][1], slipY = rows[ri][2]
       for (var si = 0; si < count; si++) {
@@ -516,11 +513,6 @@ function render(ctx) {
         var name = allAttrOrder[attrIdx]
         var val = allVals[attrIdx]
         var isZero = (val === 0)
-
-        ctx.save()
-        ctx.translate(sx + l.slipW / 2, slipY + l.slipH / 2)
-        ctx.rotate(slipRot(attrIdx))
-        ctx.translate(-(sx + l.slipW / 2), -(slipY + l.slipH / 2))
 
         // ── 签头（朱红漆） ──
         var hg = ctx.createLinearGradient(sx, 0, sx + l.slipW, 0)
@@ -602,8 +594,6 @@ function render(ctx) {
           })
           ctx.restore()
         }
-
-        ctx.restore()  // 恢复旋转变换
       }
     }
   }

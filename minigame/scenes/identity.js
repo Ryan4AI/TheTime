@@ -168,11 +168,13 @@ function init(items, identity) {
   IDENTITY = identity
   state = { hasTapped: false, items: items, fadeOutStart: 0 }
   calcLayout()
+  var now = Date.now()
   anims = {
-    card: new FadeAnim({ delay: 300, duration: 500 }),
-    name: new FadeAnim({ delay: 600, duration: 600 }),
-    seal: new FadeAnim({ delay: 1000, duration: 500 }),
+    card: new FadeAnim(300, 500),
+    name: new FadeAnim(600, 600),
+    seal: new FadeAnim(1000, 500),
   }
+  for (var k in anims) anims[k].start(now)
 }
 
 function onTouch(x, y, type) {

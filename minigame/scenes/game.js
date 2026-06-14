@@ -1028,7 +1028,7 @@ function drawSealTopBar(ctx) {
 
 // ─────── 月份变化提示 ───────
 function drawStatusBar(ctx) {
-  // v0.1.82 (D008 显示): 常显状态条（health / coin /身份 /年月）
+  // v2: 显示4个通用属性（声望/财富/学识/颜值）
   const padding = layout.padding
   const top = layout.safeTop + layout.topBarH
   const h = layout.statusBarH
@@ -1050,37 +1050,41 @@ function drawStatusBar(ctx) {
   ctx.stroke()
   ctx.restore()
 
-  // 2. 3 段信息：金银 / 身份 / 城市（v0.2.5-AA：去掉气血，先生说数值不准）
-  ctx.font = '11px ' + ui.fontFamily
+  // 2. 4 段属性：声望 / 财富 / 学识 / 颜值
+  ctx.font = '10px ' + ui.fontFamily
   ctx.textBaseline = 'middle'
 
-  // 分段布局：金银 33% / 身份 33% / 城市 33%
-  const segW = w / 3
+  const segW = w / 4
   const cy = top + h / 2
 
-  // 段 1：金银
+  // 段 1：声望
   const seg1X = padding
   ctx.textAlign = 'left'
-  ctx.fillStyle = 'rgba(200,200,200,0.6)'
-  ctx.fillText('金银', seg1X + 4, cy)
-  ctx.fillStyle = 'rgba(245,239,224,0.85)'
-  ctx.fillText((state.coin || 0) + '文', seg1X + 36, cy)
+  ctx.fillStyle = 'rgba(200,168,124,0.7)'
+  ctx.fillText('声望', seg1X + 3, cy)
+  ctx.fillStyle = 'rgba(245,239,224,0.9)'
+  ctx.fillText(state['声望'] || 0, seg1X + 30, cy)
 
-  // 段 2：身份（职业）
+  // 段 2：财富
   const seg2X = padding + segW
-  ctx.fillStyle = 'rgba(200,200,200,0.6)'
-  ctx.fillText('身份', seg2X + 4, cy)
-  ctx.fillStyle = 'rgba(245,239,224,0.85)'
-  const occStr = state.occupation || '庶民'
-  ctx.fillText(occStr.length > 4 ? occStr.slice(0, 3) + '…' : occStr, seg2X + 32, cy)
+  ctx.fillStyle = 'rgba(200,168,124,0.7)'
+  ctx.fillText('财富', seg2X + 3, cy)
+  ctx.fillStyle = 'rgba(245,239,224,0.9)'
+  ctx.fillText(state['财富'] || 0, seg2X + 30, cy)
 
-  // 段 3：城市
+  // 段 3：学识
   const seg3X = padding + segW * 2
-  ctx.fillStyle = 'rgba(200,200,200,0.6)'
-  ctx.fillText('城', seg3X + 4, cy)
-  ctx.fillStyle = 'rgba(245,239,224,0.85)'
-  const cityStr = state.city || '?'
-  ctx.fillText(cityStr.length > 4 ? cityStr.slice(0, 3) + '…' : cityStr, seg3X + 28, cy)
+  ctx.fillStyle = 'rgba(200,168,124,0.7)'
+  ctx.fillText('学识', seg3X + 3, cy)
+  ctx.fillStyle = 'rgba(245,239,224,0.9)'
+  ctx.fillText(state['学识'] || 0, seg3X + 30, cy)
+
+  // 段 4：颜值
+  const seg4X = padding + segW * 3
+  ctx.fillStyle = 'rgba(200,168,124,0.7)'
+  ctx.fillText('颜值', seg4X + 3, cy)
+  ctx.fillStyle = 'rgba(245,239,224,0.9)'
+  ctx.fillText(state['颜值'] || 0, seg4X + 30, cy)
 
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'

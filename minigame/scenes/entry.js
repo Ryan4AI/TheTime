@@ -305,21 +305,6 @@ function render(ctx) {
     drawButton(ctx, l.btnX, l.btnY2, l.btnW, l.btnH, BTN_LEADERBOARD,
       { fontSize: l.btnS, opacity: b2.opacity })
   }
-  
-  // DEBUG: 画出按钮点击区域（红色边框）
-  ctx.save()
-  ctx.strokeStyle = 'rgba(255,0,0,0.5)'
-  ctx.lineWidth = 2
-  // 按钮1区域
-  ctx.strokeRect(l.btnX - 20, l.btnY1 - 20, l.btnW + 40, l.btnH + 40)
-  // 按钮2区域
-  ctx.strokeRect(l.btnX - 20, l.btnY2 - 20, l.btnW + 40, l.btnH + 40)
-  // 显示按钮坐标
-  ctx.fillStyle = 'rgba(255,0,0,0.8)'
-  ctx.font = '10px sans-serif'
-  ctx.fillText('btn1: ' + l.btnX + ',' + l.btnY1 + ' w=' + l.btnW + ' h=' + l.btnH, l.btnX, l.btnY1 - 25)
-  ctx.fillText('btn2: ' + l.btnX + ',' + l.btnY2, l.btnX, l.btnY2 - 25)
-  ctx.restore()
 
   // 10. Footer
   var f = anims.footer.update(now)

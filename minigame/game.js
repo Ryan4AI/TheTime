@@ -66,22 +66,12 @@ var _g = { tapX: -1, tapY: -1, tapTime: 0 }
 // Must register onTouchStart for onTouchEnd to work on some devices
 wx.onTouchStart(function() {})
 wx.onTouchEnd(function(e) {
-  console.log('[game] onTouchEnd triggered, changedTouches:', e.changedTouches ? e.changedTouches.length : 0)
   if (e.changedTouches && e.changedTouches.length > 0) {
-    var touch = e.changedTouches[0]
-    var tx = Math.floor(touch.clientX || touch.x || 0)
-    var ty = Math.floor(touch.clientY || touch.y || 0)
-    console.log('[game] Touch at:', tx, ty, 'clientX:', touch.clientX, 'x:', touch.x)
+    var tx = Math.floor(e.changedTouches[0].clientX)
+    var ty = Math.floor(e.changedTouches[0].clientY)
     _g.tapX = tx
     _g.tapY = ty
     _g.tapTime = Date.now()
-    
-    // 全局调试：任何触摸都直接切换到 selection（绕过 scene.onTouch）
-    if (currentScene === 'entry') {
-      console.log('[game] DEBUG: Direct switch to selection')
-      switchScene('selection')
-      return
-    }
     
     // Process touch immediately
     if (currentScene) {

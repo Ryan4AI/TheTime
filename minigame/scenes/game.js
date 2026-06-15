@@ -827,7 +827,9 @@ function adjustFluidLayout() {
   layout.sceneVisible = showScene
   // v0.2.5-M（先生 2026-06-13 11:15 拍板·修"叠在一起"）：textY 加上 statusBarH
   // 之前漏算 statusBarH 导致文字起点在顶栏下方，但状态栏（26 高）也画在那里 → 文字和状态栏重叠
-  layout.textY = safeTop + topBarH + (layout.statusBarH || 0) + 4 + sceneH + 8
+  // v0.6.41: 再加上榜单目标条高度（24px），避免 drawBoardTarget 与叙事区重叠
+  const boardTargetOffset = 24  // 榜单目标条高度（22px + 2px margin）
+  layout.textY = safeTop + topBarH + (layout.statusBarH || 0) + 4 + sceneH + 8 + boardTargetOffset
   layout.textH = finalTextH
   // v0.1.67: 文字面板底部 + 6px 缓冲后再放选项（解决按钮紧贴文字面板的"下溢"感）
   layout.optionY = layout.textY + finalTextH + 6
@@ -1321,7 +1323,7 @@ function drawScrollIndicator(ctx) {
 
   const barX = layout.windowW - 6
   // v0.2.5-J：barY 起点改成 statusBarH 下方（状态栏常显后画滚动条位置要重新算）
-  const barY = (layout.safeTop || 0) + layout.topBarH + (layout.statusBarH || 0) + 8
+  const barY = (layout.safeTop || 0) + layout.topBarH + (layout.statusBarH || 0) + 32  // +24 boardTarget + 8 gap
   const barH = viewH - 16
   const thumbH = Math.max(14, barH * (viewH / contentH))
   const maxOff = Math.max(1, contentH - viewH)

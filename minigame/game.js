@@ -63,8 +63,26 @@ switchScene('entry')
 // Touch state
 var _g = { tapX: -1, tapY: -1, tapTime: 0 }
 
-// Must register onTouchStart for onTouchEnd to work on some devices
-wx.onTouchStart(function() {})
+// 转发触摸事件到当前场景
+function sendTouch(x, y, type) {
+  if (currentScene) {
+    var s = scenes[currentScene]
+    if (s && s.onTouch) {
+      s.onTouch(x, y, type)
+    }
+  }
+}
+
+wx.onTouchStart(function(e) {
+  if (e.touches && e.touches.length > 0) {
+    sendTouch(Math.floor(e.touches[0].clientX), Math.floor(e.touches[0].clientY), 'start')
+  }
+})
+wx.onTouchMove(function(e) {
+  if (e.touches && e.touches.length > 0) {
+    sendTouch(Math.floor(e.touches[0].clientX), Math.floor(e.touches[0].clientY), 'move')
+  }
+})
 wx.onTouchEnd(function(e) {
   if (e.changedTouches && e.changedTouches.length > 0) {
     var tx = Math.floor(e.changedTouches[0].clientX)
@@ -72,8 +90,8 @@ wx.onTouchEnd(function(e) {
     _g.tapX = tx
     _g.tapY = ty
     _g.tapTime = Date.now()
-    
-    // Process touch immediately
+
+    // 转发 end 事件
     if (currentScene) {
       var s = scenes[currentScene]
       if (s && s.onTouch) {

@@ -1125,19 +1125,17 @@ function drawBoardTarget(ctx) {
   ctx.textAlign = 'left'
   ctx.fillText('🏆 ' + closestBoardInfo.name, padding + 6, top + h / 2)
 
-  // 目标人物
+  // 目标文案：还差xxx分超越孔伯华，登上名医榜
+  ctx.fillStyle = 'rgba(200,168,124,0.7)'
+  ctx.font = '9px ' + ui.fontFamily
+  ctx.textAlign = 'center'
+  var targetText
   if (closestBoardInfo.targetPerson) {
-    ctx.fillStyle = 'rgba(200,168,124,0.6)'
-    ctx.font = '9px ' + ui.fontFamily
-    ctx.textAlign = 'center'
-    ctx.fillText('超越 ' + closestBoardInfo.targetPerson, padding + w / 2, top + h / 2)
+    targetText = '还差' + closestBoardInfo.diff + '分超越' + closestBoardInfo.targetPerson + '，登上' + closestBoardInfo.name
+  } else {
+    targetText = '还差' + closestBoardInfo.diff + '分登上' + closestBoardInfo.name
   }
-
-  // 还差分
-  ctx.fillStyle = 'rgba(245,239,224,0.7)'
-  ctx.font = 'bold 10px ' + ui.fontFamily
-  ctx.textAlign = 'right'
-  ctx.fillText('还差 ' + closestBoardInfo.diff + ' 分', padding + w - 6, top + h / 2)
+  ctx.fillText(targetText, padding + w / 2, top + h / 2)
 
   ctx.restore()
 }

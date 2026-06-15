@@ -1,0 +1,9 @@
+{
+  "name": "leaderboard_query",
+  "version": "1.0.0",
+  "description": "查询历史名人榜数据",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

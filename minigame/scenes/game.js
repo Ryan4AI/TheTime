@@ -144,8 +144,9 @@ module.exports = {
 
     initLayout()
 
-    // v0.6.41: 从云函数查询榜单接近度
-    fetchClosestBoard()
+    // v0.6.43: 本地即时计算榜单接近度（同步，不等云函数）
+    closestBoardInfo = computeClosestBoard(state)
+    fetchClosestBoard()  // 云函数后台刷新（稍后覆盖）
 
     // 首次调用 AI
     callAI('初始回合')
@@ -578,7 +579,8 @@ function handleAIResponse(result, action, userInput) {
   if (patch.coin !== undefined) state.coin = Math.max(0, state.coin + (patch.coin || 0))
   if (patch.health !== undefined) state.health = Math.max(0, Math.min(100, state.health + (patch.health || 0)))
 
-  // v0.6.41: 从云函数刷新榜单接近度
+  // v0.6.43: 本地即时刷新榜单接近度（同步）+ 云函数后台刷新
+  closestBoardInfo = computeClosestBoard(state)
   fetchClosestBoard()
 
   // 物品状态变化 — v10（D-1 改造）
@@ -1172,7 +1174,39 @@ var leaderboardData = null       // 榜单数据（从云函数获取）
 var leaderboardLoading = false   // 是否在加载榜单数据
 var closestBoardInfo = null      // v0.6.35: 最接近榜单信息 {name, diff, on}
 
-// v0.6.41: 榜单接近度从云函数查询（不再硬编码）
+// v0.6.43: 本地即时计算榜单接近度（不等云函数）
+const BOARD_THRESHOLDS = {
+  '名医榜': 148, '名将榜': 5200, '富商榜': 200,
+  '文豪榜': 2390, '能臣榜': 2300, '义士榜': 590,
+  '全能榜': 19000, '颜值榜': 8000,
+}
+function calcBoardScore(st, name) {
+  var s = function(a) { return st[a] || 0 }
+  switch(name) {
+    case '名医榜': return Math.round(s('医术')*0.7 + s('声望')*0.3)
+    case '名将榜': return Math.round(s('战功')*0.7 + s('声望')*0.3)
+    case '富商榜': return s('财富')
+    case '文豪榜': return Math.round(s('文采')*0.7 + s('学识')*0.3)
+    case '能臣榜': return Math.round(s('政绩')*0.7 + s('声望')*0.3)
+    case '义士榜': return Math.round(s('义行')*0.7 + s('声望')*0.3)
+    case '全能榜': return s('声望')+s('财富')+s('学识')+s('颜值')
+    case '颜值榜': return s('颜值')
+    default: return 0
+  }
+}
+function computeClosestBoard(st) {
+  if (!st) return null
+  var best = null, bestDiff = Infinity
+  for (var name in BOARD_THRESHOLDS) {
+    var score = calcBoardScore(st, name)
+    var diff = BOARD_THRESHOLDS[name] - score
+    if (diff <= 0) return { name: name, diff: 0, on: true }
+    if (diff < bestDiff) { best = { name: name, diff: diff, on: false }; bestDiff = diff }
+  }
+  return best
+}
+
+// v0.6.41: 榜单接近度从云函数查询（后台刷新用）
 function fetchClosestBoard() {
   if (!state || typeof wx === 'undefined' || !wx.cloud) return
   wx.cloud.callFunction({

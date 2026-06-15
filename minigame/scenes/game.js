@@ -1104,20 +1104,41 @@ function drawBoardTarget(ctx) {
   const padding = layout.padding
   const top = (layout.safeTop || 0) + layout.topBarH + (layout.statusBarH || 0) + 2
   const w = layout.windowW - padding * 2
+  const h = 22
 
   ctx.save()
-  ctx.globalAlpha = 0.7
-  ctx.fillStyle = 'rgba(20,16,12,0.4)'
-  ctx.fillRect(padding, top, w, 16)
+  // 底色
+  ctx.fillStyle = 'rgba(20,16,12,0.5)'
+  roundRect(ctx, padding, top, w, h, 4)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(200,168,124,0.15)'
+  ctx.lineWidth = 0.5
+  roundRect(ctx, padding, top, w, h, 4)
+  ctx.stroke()
 
-  ctx.fillStyle = 'rgba(232,200,130,0.8)'
-  ctx.font = '9px ' + ui.fontFamily
-  ctx.textAlign = 'left'
+  // 目标榜名 + 分差 + 目标人物
   ctx.textBaseline = 'middle'
-  ctx.fillText('🎯 ' + closestBoardInfo.name, padding + 4, top + 8)
-  ctx.fillStyle = 'rgba(200,168,124,0.6)'
+
+  // 🏆 榜名
+  ctx.fillStyle = 'rgba(232,200,130,0.85)'
+  ctx.font = 'bold 10px ' + ui.fontFamily
+  ctx.textAlign = 'left'
+  ctx.fillText('🏆 ' + closestBoardInfo.name, padding + 6, top + h / 2)
+
+  // 目标人物
+  if (closestBoardInfo.targetPerson) {
+    ctx.fillStyle = 'rgba(200,168,124,0.6)'
+    ctx.font = '9px ' + ui.fontFamily
+    ctx.textAlign = 'center'
+    ctx.fillText('超越 ' + closestBoardInfo.targetPerson, padding + w / 2, top + h / 2)
+  }
+
+  // 还差分
+  ctx.fillStyle = 'rgba(245,239,224,0.7)'
+  ctx.font = 'bold 10px ' + ui.fontFamily
   ctx.textAlign = 'right'
-  ctx.fillText('还差 ' + closestBoardInfo.diff + ' 分', padding + w - 4, top + 8)
+  ctx.fillText('还差 ' + closestBoardInfo.diff + ' 分', padding + w - 6, top + h / 2)
+
   ctx.restore()
 }
 
@@ -2411,8 +2432,9 @@ function handleTouch(x, y, type) {
   // ── v2 新增：榜单浮窗触摸拦截 ──
   if (showLeaderboard) {
     if (type === 'end') {
-      // 关闭按钮
-      if (layout._boardCloseBtn && hitTest(x, y, layout._boardCloseBtn.x, layout._boardCloseBtn.y, layout._boardCloseBtn.w, layout._boardCloseBtn.h)) {
+      // 点击任意位置关闭（除了 Tab 切换）
+      var tappedOnClose = layout._boardCloseBtn && hitTest(x, y, layout._boardCloseBtn.x, layout._boardCloseBtn.y, layout._boardCloseBtn.w, layout._boardCloseBtn.h)
+      if (tappedOnClose) {
         showLeaderboard = false
         return null
       }
@@ -2429,6 +2451,9 @@ function handleTouch(x, y, type) {
           }
         }
       }
+      // 点击任意位置 → 关闭浮窗
+      showLeaderboard = false
+      return null
     }
     return null // 榜单浮窗打开时拦截所有触摸
   }

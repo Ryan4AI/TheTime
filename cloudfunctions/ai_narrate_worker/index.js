@@ -59,6 +59,11 @@ const BOARD_THRESHOLDS = {
   '文豪榜': 2390, '能臣榜': 2300, '义士榜': 590,
   '全能榜': 19000, '颜值榜': 8000,
 }
+const BOARD_TARGET_PERSON = {
+  '名医榜': '孔伯华(民国)', '名将榜': '林冲(宋)', '富商榜': '伍崇曜(清)',
+  '文豪榜': '黄景仁(清)', '能臣榜': '赵高(秦)', '义士榜': '王光兴(明末)',
+  '全能榜': '关汉卿(元)', '颜值榜': '岳飞(南宋)',
+}
 const ATTR_NAMES = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
 
 function calcBoardScore(state, board) {
@@ -160,6 +165,7 @@ async function backgroundTask(request_id, payload) {
         name: closestBoard.name,
         diff: closestBoard.diff,
         on: closestBoard.on,
+        targetPerson: BOARD_TARGET_PERSON[closestBoard.name] || null,
       }
     }
 

@@ -144,6 +144,9 @@ module.exports = {
 
     initLayout()
 
+    // v0.6.40: 首次加载时本地计算榜单接近度（不等 AI 响应）
+    closestBoardInfo = computeClosestBoard(state)
+
     // 首次调用 AI
     callAI('初始回合')
 
@@ -575,9 +578,9 @@ function handleAIResponse(result, action, userInput) {
   if (patch.coin !== undefined) state.coin = Math.max(0, state.coin + (patch.coin || 0))
   if (patch.health !== undefined) state.health = Math.max(0, Math.min(100, state.health + (patch.health || 0)))
 
-  // v0.6.35: 存储榜单接近度
-  if (result.closest_board) {
-    closestBoardInfo = result.closest_board
+  // v0.6.40: 前端本地计算榜单接近度（独立于worker，每次状态更新后刷新）
+  if (state) {
+    closestBoardInfo = computeClosestBoard(state)
   }
 
   // 物品状态变化 — v10（D-1 改造）
@@ -1008,25 +1011,7 @@ function drawSealTopBar(ctx) {
   // 4. 暗金细线分隔（顶栏底部）
   ui.drawClassicalDivider(ctx, padding, safeTop + topH - 1, layout.windowW - padding * 2, 0.6)
 
-  // 5. v2 新增：右侧"榜"按钮（移回安全区域，避开微信右上角三点菜单）
-  const btnSize = 28
-  const btnX = Math.min(layout.windowW - 60, Math.floor(layout.windowW * 0.65))  // 避免与三点菜单重叠
-  const btnY = safeTop + (topH - btnSize) / 2
-  ctx.save()
-  ctx.fillStyle = 'rgba(192,48,48,0.7)'
-  roundRect(ctx, btnX, btnY, btnSize, btnSize, 6)
-  ctx.fill()
-  ctx.strokeStyle = 'rgba(200,168,124,0.6)'
-  ctx.lineWidth = 0.8
-  roundRect(ctx, btnX, btnY, btnSize, btnSize, 6)
-  ctx.stroke()
-  ctx.fillStyle = 'rgba(245,239,224,0.95)'
-  ctx.font = 'bold 13px ' + ui.fontFamily
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText('榜', btnX + btnSize / 2, btnY + btnSize / 2)
-  ctx.restore()
-  layout._boardBtn = { x: btnX, y: btnY, w: btnSize, h: btnSize }
+  // 5. v2 新增：右侧"榜"按钮（已移除 → 榜单目标条可点击）
 
   // 6. 触摸区域
   layout._sealArea = { x: 0, y: 0, w: layout.windowW, h: safeTop + topH }
@@ -1137,6 +1122,9 @@ function drawBoardTarget(ctx) {
   }
   ctx.fillText(targetText, padding + w / 2, top + h / 2)
 
+  // 存储点击区域（点击整个横条打开榜单）
+  layout._boardTargetArea = { x: padding, y: top, w: w, h: h }
+
   ctx.restore()
 }
 
@@ -1183,6 +1171,37 @@ var currentBoardIndex = 0        // 当前选中榜单索引（0-9）
 var leaderboardData = null       // 榜单数据（从云函数获取）
 var leaderboardLoading = false   // 是否在加载榜单数据
 var closestBoardInfo = null      // v0.6.35: 最接近榜单信息 {name, diff, on}
+
+// v0.6.40: 前端本地榜单接近度计算（与 worker 保持一致）
+const BOARD_THRESHOLDS = {
+  '名医榜': 148, '名将榜': 5200, '富商榜': 200,
+  '文豪榜': 2390, '能臣榜': 2300, '义士榜': 590,
+  '全能榜': 19000, '颜值榜': 8000,
+}
+function calcBoardScore(state, name) {
+  const s = (a) => state[a] || 0
+  switch(name) {
+    case '名医榜': return Math.round(s('医术')*0.7 + s('声望')*0.3)
+    case '名将榜': return Math.round(s('战功')*0.7 + s('声望')*0.3)
+    case '富商榜': return s('财富')
+    case '文豪榜': return Math.round(s('文采')*0.7 + s('学识')*0.3)
+    case '能臣榜': return Math.round(s('政绩')*0.7 + s('声望')*0.3)
+    case '义士榜': return Math.round(s('义行')*0.7 + s('声望')*0.3)
+    case '全能榜': return s('声望')+s('财富')+s('学识')+s('颜值')
+    case '颜值榜': return s('颜值')
+    default: return 0
+  }
+}
+function computeClosestBoard(st) {
+  let best = null, bestDiff = Infinity
+  for (const [name, threshold] of Object.entries(BOARD_THRESHOLDS)) {
+    const score = calcBoardScore(st, name)
+    const diff = threshold - score
+    if (diff <= 0) { return { name, diff:0, on:true } }
+    if (diff < bestDiff) { best = { name, diff, on:false }; bestDiff = diff }
+  }
+  return best
+}
 var boardTargetVisible = false   // v0.6.35: 是否显示榜单目标行
 const BOARD_LIST = ['名医榜', '名将榜', '富商榜', '文豪榜', '能臣榜', '义士榜', '全能榜', '长寿榜', '旅行家榜', '颜值榜']
 
@@ -2456,8 +2475,8 @@ function handleTouch(x, y, type) {
     return null // 榜单浮窗打开时拦截所有触摸
   }
 
-  // ── v2 新增：顶栏"榜"按钮 ──
-  if (type === 'end' && layout._boardBtn && hitTest(x, y, layout._boardBtn.x, layout._boardBtn.y, layout._boardBtn.w, layout._boardBtn.h)) {
+  // ── v2 新增：榜单目标条点击 → 打开榜单 ──
+  if (type === 'end' && layout._boardTargetArea && hitTest(x, y, layout._boardTargetArea.x, layout._boardTargetArea.y, layout._boardTargetArea.w, layout._boardTargetArea.h)) {
     showLeaderboard = true
     fetchLeaderboardData()
     return null

@@ -57,7 +57,42 @@ exports.main = async (event) => {
       };
     }
     
-    // 3. 查询玩家排名
+    // 3. 查询玩家最接近榜单
+    if (action === 'closest' && playerAttributes) {
+      const allBoards = await db.collection('leaderboards').get()
+      let best = null, bestDiff = Infinity
+
+      for (const doc of (allBoards.data || [])) {
+        const config = BOARD_CONFIG[doc.name || doc._id]
+        if (!config || !doc.characters || doc.characters.length === 0) continue
+        // 长寿榜/旅行家榜透传属性算不了玩家分（需寿命/游历数据），跳过
+        if (doc.name === '长寿榜' || doc.name === '旅行家榜') continue
+
+        const playerScore = Math.round(config.formula(playerAttributes))
+        const threshold = doc.characters[doc.characters.length - 1].综合分
+        const diff = threshold - playerScore
+
+        if (diff <= 0) {
+          // 已上榜：立即返回
+          return {
+            success: true,
+            data: { name: doc.name, diff: 0, on: true, targetPerson: null }
+          }
+        }
+        if (diff < bestDiff) {
+          const bottom = doc.characters[doc.characters.length - 1]
+          bestDiff = diff
+          best = {
+            name: doc.name,
+            diff: diff,
+            on: false,
+            targetPerson: bottom.name + '(' + (bottom.dynasty || '') + ')'
+          }
+        }
+      }
+
+      return { success: true, data: best }
+    }
     if (action === 'rank' && board && playerAttributes) {
       const result = await db.collection('leaderboards')
         .doc(board)

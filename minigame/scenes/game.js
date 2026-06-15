@@ -144,8 +144,8 @@ module.exports = {
 
     initLayout()
 
-    // v0.6.40: 首次加载时本地计算榜单接近度（不等 AI 响应）
-    closestBoardInfo = computeClosestBoard(state)
+    // v0.6.41: 从云函数查询榜单接近度
+    fetchClosestBoard()
 
     // 首次调用 AI
     callAI('初始回合')
@@ -578,10 +578,8 @@ function handleAIResponse(result, action, userInput) {
   if (patch.coin !== undefined) state.coin = Math.max(0, state.coin + (patch.coin || 0))
   if (patch.health !== undefined) state.health = Math.max(0, Math.min(100, state.health + (patch.health || 0)))
 
-  // v0.6.40: 前端本地计算榜单接近度（独立于worker，每次状态更新后刷新）
-  if (state) {
-    closestBoardInfo = computeClosestBoard(state)
-  }
+  // v0.6.41: 从云函数刷新榜单接近度
+  fetchClosestBoard()
 
   // 物品状态变化 — v10（D-1 改造）
   // 改：AI 用物品中文名（"茶包"）当 key，不再用 id
@@ -1172,35 +1170,19 @@ var leaderboardData = null       // 榜单数据（从云函数获取）
 var leaderboardLoading = false   // 是否在加载榜单数据
 var closestBoardInfo = null      // v0.6.35: 最接近榜单信息 {name, diff, on}
 
-// v0.6.40: 前端本地榜单接近度计算（与 worker 保持一致）
-const BOARD_THRESHOLDS = {
-  '名医榜': 148, '名将榜': 5200, '富商榜': 200,
-  '文豪榜': 2390, '能臣榜': 2300, '义士榜': 590,
-  '全能榜': 19000, '颜值榜': 8000,
-}
-function calcBoardScore(state, name) {
-  const s = (a) => state[a] || 0
-  switch(name) {
-    case '名医榜': return Math.round(s('医术')*0.7 + s('声望')*0.3)
-    case '名将榜': return Math.round(s('战功')*0.7 + s('声望')*0.3)
-    case '富商榜': return s('财富')
-    case '文豪榜': return Math.round(s('文采')*0.7 + s('学识')*0.3)
-    case '能臣榜': return Math.round(s('政绩')*0.7 + s('声望')*0.3)
-    case '义士榜': return Math.round(s('义行')*0.7 + s('声望')*0.3)
-    case '全能榜': return s('声望')+s('财富')+s('学识')+s('颜值')
-    case '颜值榜': return s('颜值')
-    default: return 0
-  }
-}
-function computeClosestBoard(st) {
-  let best = null, bestDiff = Infinity
-  for (const [name, threshold] of Object.entries(BOARD_THRESHOLDS)) {
-    const score = calcBoardScore(st, name)
-    const diff = threshold - score
-    if (diff <= 0) { return { name, diff:0, on:true } }
-    if (diff < bestDiff) { best = { name, diff, on:false }; bestDiff = diff }
-  }
-  return best
+// v0.6.41: 榜单接近度从云函数查询（不再硬编码）
+function fetchClosestBoard() {
+  if (!state || typeof wx === 'undefined' || !wx.cloud) return
+  wx.cloud.callFunction({
+    name: 'leaderboard_query',
+    data: { action: 'closest', playerAttributes: state }
+  }).then(function(res) {
+    if (res.result && res.result.success && res.result.data) {
+      closestBoardInfo = res.result.data
+    }
+  }).catch(function(err) {
+    console.warn('[fetchClosestBoard] 失败:', err)
+  })
 }
 var boardTargetVisible = false   // v0.6.35: 是否显示榜单目标行
 const BOARD_LIST = ['名医榜', '名将榜', '富商榜', '文豪榜', '能臣榜', '义士榜', '全能榜', '长寿榜', '旅行家榜', '颜值榜']

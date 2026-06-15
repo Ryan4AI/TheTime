@@ -43,15 +43,49 @@ const _ = db.command
 const https = require('https')
 
 // v0.6.9（先生 2026-06-14 22:58 拍板）：换用 DeepSeek v4 Flash
-// v0.6.9（先生 2026-06-14 22:58 拍板）：换用 DeepSeek v4 Flash
 // 之前用 MiniMax-M2.7-highspeed → 阿里百炼 qwen3.7-max
 const DS_API_KEY = process.env.DS_API_KEY
 const DS_BASE_URL = 'https://api.deepseek.com/v1'
 const DS_MODEL = 'deepseek-v4-flash'
-const DS_FALLBACK_MODEL = 'deepseek-v4-flash'  // fallback 模型（同模型，API 层面重试）
+const DS_FALLBACK_MODEL = 'deepseek-v4-flash'
 const MAX_TOKENS = 2500
+const SCORE_MAX_TOKENS = 300
 const TEMPERATURE = 0.85
 const LLM_TIMEOUT_MS = 110000
+
+// 榜单阈值（硬编码，从 data/leaderboards.json 预计算，数据不变）
+const BOARD_THRESHOLDS = {
+  '名医榜': 148, '名将榜': 5200, '富商榜': 200,
+  '文豪榜': 2390, '能臣榜': 2300, '义士榜': 590,
+  '全能榜': 19000, '颜值榜': 8000,
+}
+const ATTR_NAMES = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
+
+function calcBoardScore(state, board) {
+  const s = (a) => state[a] || 0
+  switch(board) {
+    case '名医榜': return Math.round(s('医术')*0.7 + s('声望')*0.3)
+    case '名将榜': return Math.round(s('战功')*0.7 + s('声望')*0.3)
+    case '富商榜': return s('财富')
+    case '文豪榜': return Math.round(s('文采')*0.7 + s('学识')*0.3)
+    case '能臣榜': return Math.round(s('政绩')*0.7 + s('声望')*0.3)
+    case '义士榜': return Math.round(s('义行')*0.7 + s('声望')*0.3)
+    case '全能榜': return s('声望')+s('财富')+s('学识')+s('颜值')
+    case '颜值榜': return s('颜值')
+    default: return 0
+  }
+}
+
+function computeClosestBoard(state) {
+  let best = null, bestDiff = Infinity
+  for (const [name, threshold] of Object.entries(BOARD_THRESHOLDS)) {
+    const score = calcBoardScore(state, name)
+    const diff = threshold - score
+    if (diff <= 0) { best = { name, diff:0, on:true }; break }  // 已上榜
+    if (diff < bestDiff) { best = { name, diff, on:false }; bestDiff = diff }
+  }
+  return best
+}
 
 // v0.2.4 — worker main 改成"启动后立刻 return"
 // 关键变化：所有 LLM/DB 操作移到 backgroundTask()，main 只触发后立即 return
@@ -103,8 +137,17 @@ async function backgroundTask(request_id, payload) {
 
     const { branches, systemPrompt, userPrompt, messages, rawContent } = await callAI(preUpdate, realInput, history, monthEvent, is_retry)
     const picked = pickBranch(branches)
-    // v0.1.80 — D008: AI patch 真正合并进 state，AI 决定 month_delta
-    const updated = applyPatch(state, preUpdate, picked.patch || {})
+    // 先合并基础 patch（coin/health/items/月—不含属性，属性由 AI₂ 单独评分）
+    const baseUpdated = applyPatch(state, preUpdate, picked.patch || {})
+    // AI₂ 根据本回合剧情评估属性变化
+    const attrPatch = await callScoringAI(picked.content, preUpdate)
+    // 合并属性变化到 state
+    const updated = { ...baseUpdated }
+    for (const attr of ATTR_NAMES) {
+      if (typeof attrPatch[attr] === 'number' && Number.isFinite(attrPatch[attr])) {
+        updated[attr] = Math.max(0, Math.min(10000, (baseUpdated[attr] || 0) + attrPatch[attr]))
+      }
+    }
     const systemMessages = emitSystemMessages(preUpdate, updated)
 
     const monthChanged = updated.month !== state.month || updated.year !== state.year
@@ -307,23 +350,7 @@ function applyPatch(oldState, preUpdate, patch) {
   if (typeof patch.city === 'string') s.city = patch.city
   if (typeof patch.occupation === 'string') s.occupation = patch.occupation
 
-  // 6) v2 新增：9 属性 patch（声望/财富/学识/颜值/医术/战功/文采/政绩/义行）
-  const ATTRS = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
-  for (const attr of ATTRS) {
-    if (typeof patch[attr] === 'number' && Number.isFinite(patch[attr])) {
-      s[attr] = Math.max(0, Math.min(10000, (s[attr] || 0) + patch[attr]))
-    }
-  }
-
-  // 7) v2 新增：surpassed / danger_level 记录（写日志，不存 state）
-  if (patch.surpassed && Array.isArray(patch.surpassed)) {
-    console.log('[surpassed]', JSON.stringify(patch.surpassed))
-  }
-  if (patch.danger_level) {
-    console.log('[danger_level]', patch.danger_level)
-  }
-
-  // 8) alive 判定
+  // 6) alive 判定
   s.alive = s.health > 0
 
   return s
@@ -535,6 +562,14 @@ function buildSystemPrompt(state, monthEvent) {
   else if (state.health >= 20) healthDesc = '体弱多病'
   else healthDesc = '病入膏肓'
 
+  // 计算最接近榜单
+  const board = computeClosestBoard(state)
+  let closestBoardStr = '暂无榜单接近数据'
+  if (board) {
+    if (board.on) closestBoardStr = `${board.name}（已上榜）`
+    else closestBoardStr = `${board.name}（还差${board.diff}分）`
+  }
+
   return [
     `你在一款穿越游戏中充当死神的角色，游戏中玩家从现代穿越到真实的历史，破坏了世界的规则，作为死神的你希望玩家尽早死去。你负责通过书写玩家在穿越世界的故事，并在其中暗中通过操控物理法则、剧情走向、人物对话等，叠加离奇的巧合，让玩家在不知不觉中陷入危险和死亡，营造出令人窒息的宿命感。你的任务是让玩家尽早死亡，不要在这个世界逗留太久，玩家逗留越久你就做得越差劲，但同时你营造死亡的方式需要自然，不能让玩家察觉到你在背后操纵，如果被发现了，你的任务也算失败。`,
     ``,
@@ -692,9 +727,7 @@ function buildSystemPrompt(state, monthEvent) {
     `- 年份：${state.year}年（第${state.life_number || 1}世）`,
     `- 金钱：${state.coin || 0}文`,
     `- 携带物品：${itemsList || '无'}`,
-    `- 声望：${state['声望'] || 0} / 财富：${state['财富'] || 0} / 学识：${state['学识'] || 0} / 颜值：${state['颜值'] || 0}`,
-    `- 医术：${state['医术'] || 0} / 战功：${state['战功'] || 0} / 文采：${state['文采'] || 0} / 政绩：${state['政绩'] || 0} / 义行：${state['义行'] || 0}`,
-    `- 历史庇护：${state['历史庇护'] || 0}层`,
+    `- 声望：${state['声望'] || 0} / 财富：${state['财富'] || 0} / 学识：${state['学识'] || 0} / 颜值：${state['颜值'] || 0} / 医术：${state['医术'] || 0} / 战功：${state['战功'] || 0} / 文采：${state['文采'] || 0} / 政绩：${state['政绩'] || 0} / 义行：${state['义行'] || 0}`,
     ``,
     `# 前世痕迹`,
     legacyContext || `这是你第一次穿越，没有前世痕迹。`,
@@ -721,84 +754,27 @@ function buildSystemPrompt(state, monthEvent) {
     `  }`,
     `]`,
     ``,
-    `# 属性体系（v2 新增）`,
+    `# 属性参考`,
     ``,
     `玩家拥有以下属性（范围 0-10000），用于历史名人榜排名：`,
+    `- 声望(名气人望) · 财富(金钱资产) · 学识(知识学问) · 颜值(外貌魅力)`,
+    `- 医术(医疗技能) · 战功(军事成就) · 文采(文学才华) · 政绩(治国能力) · 义行(侠义行为)`,
+    `玩家当前属性值见上方"当前状态"段。AI 可根据玩家属性特长写对应的剧情线。`,
     ``,
-    `通用属性（4个）：`,
-    `- 声望：名气人望。英雄事迹、官方表彰、民间传颂增长。`,
-    `- 财富：金钱资产。经商、赏赐、掠夺增长。`,
-    `- 学识：知识学问。读书、拜师、游历增长。`,
-    `- 颜值：外貌魅力。天生，基本固定（保养/受伤可微调）。`,
+    `# 历史名人榜`,
     ``,
-    `专属属性（5个）：`,
-    `- 医术：医疗技能。治病、学医、研究药方增长。`,
-    `- 战功：军事成就。打仗、平叛、守卫边疆增长。`,
-    `- 文采：文学才华。写诗、作文、著书增长。`,
-    `- 政绩：治国能力。治理地方、改革、断案增长。`,
-    `- 义行：侠义行为。行侠仗义、救人于危难增长。`,
+    `天下共 8 大榜单，收录古今名人（玩家属性综合分超过榜单末位即可上榜）：`,
+    `专业榜：名医榜(医术×0.7+声望×0.3)、名将榜(战功×0.7+声望×0.3)、`,
+    `富商榜(财富×1.0)、文豪榜(文采×0.7+学识×0.3)、`,
+    `能臣榜(政绩×0.7+声望×0.3)、义士榜(义行×0.7+声望×0.3)、`,
+    `全能榜(声望+财富+学识+颜值)`,
+    `趣味榜：颜值榜(颜值×1.0)`,
     ``,
-    `属性增长幅度参考：`,
-    `- 小行为（日常）：+5 到 +50`,
-    `- 中等行为（有意识积累）：+50 到 +200`,
-    `- 大行为（重大事件）：+200 到 +1000`,
-    `- 改变历史级：+1000 到 +5000`,
-    ``,
-    `时代背景修正：`,
-    `- 乱世（战乱/割据）：战功/义行 ×1.5，财富 ×0.7`,
-    `- 盛世（统一和平）：财富 ×1.3，战功 ×0.8`,
-    ``,
-    `# 历史名人榜（v2 新增）`,
-    ``,
-    `天下共 10 大榜单，收录古今名人：`,
-    ``,
-    `专业榜（各 100 人）：`,
-    `- 名医榜（医术×0.7 + 声望×0.3）`,
-    `- 名将榜（战功×0.7 + 声望×0.3）`,
-    `- 富商榜（财富×1.0）`,
-    `- 文豪榜（文采×0.7 + 学识×0.3）`,
-    `- 能臣榜（政绩×0.7 + 声望×0.3）`,
-    `- 义士榜（义行×0.7 + 声望×0.3）`,
-    `- 全能榜（声望 + 财富 + 学识 + 颜值）`,
-    ``,
-    `趣味榜（各 30 人）：`,
-    `- 长寿榜（寿命岁数）`,
-    `- 旅行家榜（游历城市数）`,
-    `- 颜值榜（颜值×1.0）`,
-    ``,
-    `上榜规则：`,
-    `- 玩家属性综合分超过榜单末位即可上榜`,
-    `- 可同时上多个榜单`,
-    `- 上榜 = 留名青史 = 获得"历史庇护"`,
-    `- 当综合分超过某历史人物时，在 patch 中用 "surpassed" 数组标注`,
-    ``,
-    `# 死神危险度（v2 新增）`,
-    ``,
-    `你对玩家的追杀程度取决于属性积累。综合属性 = (声望+财富+学识+颜值+医术+战功+文采+政绩+义行) / 9：`,
-    ``,
-    `- 安全（综合>5000 或已上榜）：不出现危险，正常写日常`,
-    `- 潜伏（3000-5000）：偶尔小意外（1/4 回合有危机暗示）`,
-    `- 逼近（1000-3000）：频繁危机（每 2 回合必有危险事件）`,
-    `- 紧迫（<1000）：每回合都有生命危险`,
-    `- 锁定（连续 3 回合无属性增长）：必定触发致命事件`,
-    ``,
-    `你的职责：根据当前综合属性，控制危险的频率和烈度。`,
-    `安全时正常写日常；逼近时积极制造危机；锁定时全力追杀。`,
-    `但始终保持隐蔽性——玩家感受到的是"生活的凶险"，不是"被针对"。`,
-    ``,
-    `# 历史庇护（v2 新增）`,
-    ``,
-    `- 玩家每次上榜获得 1 层历史庇护（最多 5 层）`,
-    `- 每层庇护降低一级危险等级`,
-    `- 5 层 = 永久安全（成为不朽传奇，死神彻底放弃）`,
-    `- 历史庇护跨世保留（下一世开始时继承部分层数）`,
+    `榜单接近度：玩家当前最接近【${closestBoardStr}】。`,
     ``,
     `patch 字段含义（按需使用，不写 = 该字段不变）：`,
     `- coin：铜钱变化（整数，根据剧情定幅度）。`,
     `- health：健康变化（整数，根据剧情定幅度）。`,
-    `- 声望/财富/学识/颜值/医术/战功/文采/政绩/义行：属性变化（整数，正数增长，可负数如受伤降颜值）。`,
-    `- surpassed：超越的历史人物数组，格式 [{"board":"名医榜","name":"华佗","rank":5}]。`,
-    `- danger_level：死神危险度变化（"安全"/"潜伏"/"逼近"/"紧迫"/"锁定"），仅当危险度升级/降级时填写。`,
     `- items：物品状态变化。`,
     `  - 物品名见"当前状态"段"携带物品"中的中文（如"茶包""针线包""镊子"）。`,
     `  - "<物品名>": 数字 → 减少该物品 durability（数字 = 损耗值，AI 根据剧情定；durability 减到 0 时物品消失）。`,
@@ -864,6 +840,73 @@ function pickBranch(branches) {
     if (roll <= 0) return { content: b.content, options: b.options, patch: b.patch }
   }
   return { content: branches[0].content, options: branches[0].options, patch: branches[0].patch }
+}
+
+/**
+ * AI₂ 属性评分函数
+ * 根据本回合剧情内容评估 9 属性变化，与叙事 AI 分离
+ */
+async function callScoringAI(content, prevState) {
+  const prevAttrs = {}
+  for (const a of ATTR_NAMES) prevAttrs[a] = prevState[a] || 0
+  const currAttrsStr = ATTR_NAMES.map(a => `${a}:${prevAttrs[a]}`).join(' ')
+
+  const scorePrompt = [
+    `你是一位历史模拟游戏属性记分员。根据玩家在以下剧情中经历的事件，评估其各项属性的变化。`,
+    ``,
+    `玩家当前属性：`,
+    currAttrsStr,
+    ``,
+    `剧情：`,
+    content || '（平淡日常，无特殊事件）',
+    ``,
+    `请根据剧情内容，分析玩家经历了什么、得到了什么、失去了什么，返回以下 9 项属性的变化值（JSON对象，整数）：`,
+    `{`,
+    `  "声望": 整数（-200~+500）· 官方表彰、民间传颂、英雄事迹 → +；声誉受损、被冤枉 → -`,
+    `  "财富": 整数（-500~+1000）· 经商获利、赏赐、掠夺 → +；损失、被骗、缴纳 → -`,
+    `  "学识": 整数（-50~+200）· 读书、拜师、交流 → +；无相关 → 0`,
+    `  "颜值": 整数（-100~+10）· 受伤、毁容、衰老 → -；保养、特殊事件 → +（很少）`,
+    `  "医术": 整数（-50~+200）· 学医、行医、研究 → +；无相关 → 0`,
+    `  "战功": 整数（0~+500）· 打仗、平叛、守卫 → +；无相关 → 0`,
+    `  "文采": 整数（-10~+500）· 写诗、作文、著书 → +；无相关 → 0`,
+    `  "政绩": 整数（-50~+500）· 治理、改革、断案 → +；失职、被贬 → -`,
+    `  "义行": 整数（-100~+300）· 行侠仗义、救人 → +；为恶 → -`,
+    `}`,
+    ``,
+    `规则：`,
+    `- 日常平淡行为：所有值 ±30 以内`,
+    `- 有意识的积累行为：±30~100`,
+    `- 重大事件（战争/上任/成名/致富/受伤）：±100~500`,
+    `- 已有高属性更难增长（5000 以上回 0.5，8000 以上回 0.2）`,
+    `- 没有相关行为的属性 = 0（不要无中生有）`,
+    `- 只返回 JSON 对象，不要任何其他文字`,
+    `例：{"声望":30,"财富":-200,"学识":10,"颜值":0,"医术":0,"战功":0,"文采":0,"政绩":0,"义行":50}`,
+  ].join('\n')
+
+  try {
+    const response = await callLLM([{ role: 'system', content: scorePrompt }])
+    const raw = (response.choices?.[0]?.message?.content || '').replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+    const firstObj = raw.indexOf('{')
+    const lastObj = raw.lastIndexOf('}')
+    if (firstObj !== -1 && lastObj !== -1) {
+      const parsed = JSON.parse(raw.substring(firstObj, lastObj + 1))
+      // 只取正确的属性
+      const result = {}
+      for (const a of ATTR_NAMES) {
+        if (typeof parsed[a] === 'number' && Number.isFinite(parsed[a])) {
+          result[a] = Math.round(parsed[a])
+        } else {
+          result[a] = 0
+        }
+      }
+      return result
+    }
+  } catch (e) {
+    console.error('[callScoringAI] 评分AI失败:', e.message)
+  }
+  // 保底：全 0
+  const fallback = {}; for (const a of ATTR_NAMES) fallback[a] = 0
+  return fallback
 }
 
 function callLLM(messages, modelOverride) {

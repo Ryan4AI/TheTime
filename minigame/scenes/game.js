@@ -120,7 +120,6 @@ module.exports = {
       '文采': 0,
       '政绩': 0,
       '义行': 0,
-      '历史庇护': 0,
       items: items.map(i => ({ ...i })),
       legacy: '',
       alive: true,
@@ -276,7 +275,6 @@ function callAI(userInput) {
     '文采': state['文采'] || 0,
     '政绩': state['政绩'] || 0,
     '义行': state['义行'] || 0,
-    '历史庇护': state['历史庇护'] || 0,
     items: state.items.map(i => ({ id: i.id, name: i.name, desc: i.desc })),
     legacy: state.legacy,
     alive: state.alive,
@@ -694,7 +692,6 @@ function render(ctx) {
   // 长按时玉牒浮窗（drawJadeTablet）会盖住状态条展示更详细信息
   if (!statusHidden || isLongPressing) {
     drawStatusBar(ctx)
-    drawDangerIndicator(ctx)  // v2: 死神危险度提示
   }
 
   // 3. 月份变化提示（如有）
@@ -1097,109 +1094,6 @@ function drawStatusBar(ctx) {
   ctx.textBaseline = 'alphabetic'
 }
 
-// v2 新增：死神危险度视觉提示
-// 危·急（level=3）时屏幕边缘红色脉冲（v0.6.1 强化）
-function drawDangerIndicator(ctx) {
-  // 计算综合属性
-  var attrs = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
-  var total = 0
-  for (var i = 0; i < attrs.length; i++) total += (state[attrs[i]] || 0)
-  var avg = Math.floor(total / attrs.length)
-
-  // 危险等级
-  var level = 0  // 0=安全, 1=潜伏, 2=逼近, 3=紧迫
-  if (avg < 1000) level = 3
-  else if (avg < 3000) level = 2
-  else if (avg < 5000) level = 1
-
-  if (level === 0) return  // 安全时不显示
-
-  // 位置：状态栏右侧
-  var padding = layout.padding
-  var top = layout.safeTop + layout.topBarH
-  var h = layout.statusBarH
-  var cy = top + h / 2
-
-  var labels = ['', '危·微', '危·近', '危·急']
-  var colors = [
-    '',
-    'rgba(200,200,200,0.5)',  // 潜伏：灰色
-    'rgba(200,168,124,0.7)',  // 逼近：暗金
-    'rgba(220,60,60,1)',      // 紧迫：朱砂红（更亮）
-  ]
-
-  // 闪烁效果（紧迫时）
-  var alpha = 1
-  if (level === 3) {
-    alpha = 0.7 + 0.3 * Math.sin(Date.now() * 0.006)
-  } else if (level === 2) {
-    alpha = 0.85 + 0.15 * Math.sin(Date.now() * 0.004)
-  }
-
-  ctx.save()
-  ctx.globalAlpha = alpha
-  ctx.fillStyle = colors[level]
-  ctx.font = 'bold 11px ' + ui.fontFamily
-  ctx.textAlign = 'right'
-  ctx.textBaseline = 'middle'
-  // 紧迫时给文字加红色阴影
-  if (level === 3) {
-    ctx.shadowColor = 'rgba(220,60,60,0.9)'
-    ctx.shadowBlur = 8
-  }
-  ctx.fillText(labels[level], layout.windowW - padding - 4, cy)
-  ctx.shadowBlur = 0
-  ctx.restore()
-
-  // v0.6.1 强化：紧迫时屏幕边缘红色脉冲
-  if (level === 3) {
-    drawDangerPulse(ctx)
-  }
-}
-
-// v0.6.1 新增：屏幕边缘红色脉冲（死神追杀视觉）
-function drawDangerPulse(ctx) {
-  var now = Date.now()
-  // 脉冲周期 1.2s，越急越快
-  var period = 1100
-  var t = (now % period) / period
-  // 4 条边都画：上 / 下 / 左 / 右
-  var w = layout.windowW
-  var h = layout.windowH
-  // 边带宽度：6-14 像素渐变
-  var bandW = 4 + 10 * (1 - Math.abs(t - 0.5) * 2)
-  // 整体透明度：中间最亮 0.7，两端最暗 0.2
-  var pulseAlpha = 0.15 + 0.5 * (1 - Math.abs(t - 0.5) * 2)
-
-  ctx.save()
-  // 顶部边带
-  var grdTop = ctx.createLinearGradient(0, 0, 0, bandW)
-  grdTop.addColorStop(0, 'rgba(220,60,60,' + pulseAlpha + ')')
-  grdTop.addColorStop(1, 'rgba(220,60,60,0)')
-  ctx.fillStyle = grdTop
-  ctx.fillRect(0, 0, w, bandW)
-  // 底部边带
-  var grdBot = ctx.createLinearGradient(0, h - bandW, 0, h)
-  grdBot.addColorStop(0, 'rgba(220,60,60,0)')
-  grdBot.addColorStop(1, 'rgba(220,60,60,' + pulseAlpha + ')')
-  ctx.fillStyle = grdBot
-  ctx.fillRect(0, h - bandW, w, bandW)
-  // 左边带
-  var grdLeft = ctx.createLinearGradient(0, 0, bandW, 0)
-  grdLeft.addColorStop(0, 'rgba(220,60,60,' + pulseAlpha + ')')
-  grdLeft.addColorStop(1, 'rgba(220,60,60,0)')
-  ctx.fillStyle = grdLeft
-  ctx.fillRect(0, 0, bandW, h)
-  // 右边带
-  var grdRight = ctx.createLinearGradient(w - bandW, 0, w, 0)
-  grdRight.addColorStop(0, 'rgba(220,60,60,0)')
-  grdRight.addColorStop(1, 'rgba(220,60,60,' + pulseAlpha + ')')
-  ctx.fillStyle = grdRight
-  ctx.fillRect(w - bandW, 0, bandW, h)
-  ctx.restore()
-}
-
-// v0.2.2 — 月份变化提示（加大字号 + 朱砂色 + 楷体）
 function drawMonthNotice(ctx) {
   if (Date.now() - displayStartTime > 3000) return // 只显示3秒
 

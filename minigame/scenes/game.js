@@ -544,7 +544,7 @@ function handleAIResponse(result, action, userInput) {
     return
   }
 
-  // 1. 应用 AI 返回的 state 更新
+  // 1. 应用 AI 返回的 state 更新（含 AI₂ 评分的属性变化）
   if (newState) {
     if (newState.age) state.age = newState.age
     if (newState.health !== undefined) state.health = newState.health
@@ -552,33 +552,32 @@ function handleAIResponse(result, action, userInput) {
     if (newState.month) state.month = newState.month
     if (newState.year) state.year = newState.year
     if (newState.round !== undefined) state.round = newState.round
+    // v0.6.35: AI₂ 评分后的属性从 newState 读（patch 不再含属性）
+    const V2_ATTRS = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
+    for (const attr of V2_ATTRS) {
+      if (typeof newState[attr] === 'number') {
+        var oldVal = state[attr] || 0
+        var newVal = newState[attr]
+        var diff = newVal - oldVal
+        state[attr] = newVal
+        // 属性变化飘字（+50 暖金 / -50 朱砂）
+        if (diff !== 0) {
+          var sign = diff > 0 ? '+' : ''
+          var color = diff > 0 ? 'rgba(232,200,130,1)' : 'rgba(192,48,48,1)'
+          spawnFloater(attr + sign + diff, color)
+        }
+      }
+    }
   }
 
-  // 2. 应用 patch — 用 !== undefined 不用真值判断（修 0 falsy bug）
+  // 2. 基础 patch（coin/health — 来自 AI₁ 叙事 patch）
   const patch = branch.patch || {}
   if (patch.coin !== undefined) state.coin = Math.max(0, state.coin + (patch.coin || 0))
   if (patch.health !== undefined) state.health = Math.max(0, Math.min(100, state.health + (patch.health || 0)))
 
-  // v2 新增：9属性 patch + 飘字
-  const V2_ATTRS = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
-  for (const attr of V2_ATTRS) {
-    if (patch[attr] !== undefined && typeof patch[attr] === 'number' && patch[attr] !== 0) {
-      state[attr] = Math.max(0, Math.min(10000, (state[attr] || 0) + patch[attr]))
-      // v2: 属性变化飘字（+50 暖金 / -50 朱砂）
-      const sign = patch[attr] > 0 ? '+' : ''
-      const color = patch[attr] > 0 ? 'rgba(232,200,130,1)' : 'rgba(192,48,48,1)'  // 暖金/朱砂
-      spawnFloater(attr + sign + patch[attr], color)
-    } else if (patch[attr] !== undefined && typeof patch[attr] === 'number') {
-      // 0 也要写入状态（保持一致性），不飘字
-      state[attr] = Math.max(0, Math.min(10000, (state[attr] || 0) + patch[attr]))
-    }
-  }
-
-  // v2: 超越历史人物日志
-  if (patch.surpassed && Array.isArray(patch.surpassed)) {
-    for (const s of patch.surpassed) {
-      console.log(`[surpassed] ${s.board}: 超越 ${s.name}（第${s.rank}位）`)
-    }
+  // v0.6.35: 存储榜单接近度
+  if (result.closest_board) {
+    closestBoardInfo = result.closest_board
   }
 
   // 物品状态变化 — v10（D-1 改造）
@@ -693,6 +692,9 @@ function render(ctx) {
   if (!statusHidden || isLongPressing) {
     drawStatusBar(ctx)
   }
+
+  // v0.6.35: 榜单目标指示器
+  drawBoardTarget(ctx)
 
   // 3. 月份变化提示（如有）
   if (monthChanged) {
@@ -1006,9 +1008,9 @@ function drawSealTopBar(ctx) {
   // 4. 暗金细线分隔（顶栏底部）
   ui.drawClassicalDivider(ctx, padding, safeTop + topH - 1, layout.windowW - padding * 2, 0.6)
 
-  // 5. v2 新增：右侧"榜"按钮（朱砂色圆角矩形 + 暖金字）
+  // 5. v2 新增：右侧"榜"按钮（移回安全区域，避开微信右上角三点菜单）
   const btnSize = 28
-  const btnX = layout.windowW - padding - btnSize - 4
+  const btnX = Math.min(layout.windowW - 60, Math.floor(layout.windowW * 0.65))  // 避免与三点菜单重叠
   const btnY = safeTop + (topH - btnSize) / 2
   ctx.save()
   ctx.fillStyle = 'rgba(192,48,48,0.7)'
@@ -1094,6 +1096,31 @@ function drawStatusBar(ctx) {
   ctx.textBaseline = 'alphabetic'
 }
 
+// v0.6.35: 榜单目标指示器（状态栏下方）
+function drawBoardTarget(ctx) {
+  if (!closestBoardInfo) return
+  if (closestBoardInfo.on) return  // 已上榜不显示（榜单浮窗里能看到）
+
+  const padding = layout.padding
+  const top = (layout.safeTop || 0) + layout.topBarH + (layout.statusBarH || 0) + 2
+  const w = layout.windowW - padding * 2
+
+  ctx.save()
+  ctx.globalAlpha = 0.7
+  ctx.fillStyle = 'rgba(20,16,12,0.4)'
+  ctx.fillRect(padding, top, w, 16)
+
+  ctx.fillStyle = 'rgba(232,200,130,0.8)'
+  ctx.font = '9px ' + ui.fontFamily
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('🎯 ' + closestBoardInfo.name, padding + 4, top + 8)
+  ctx.fillStyle = 'rgba(200,168,124,0.6)'
+  ctx.textAlign = 'right'
+  ctx.fillText('还差 ' + closestBoardInfo.diff + ' 分', padding + w - 4, top + 8)
+  ctx.restore()
+}
+
 function drawMonthNotice(ctx) {
   if (Date.now() - displayStartTime > 3000) return // 只显示3秒
 
@@ -1136,6 +1163,8 @@ var showLeaderboard = false      // 是否显示榜单浮窗
 var currentBoardIndex = 0        // 当前选中榜单索引（0-9）
 var leaderboardData = null       // 榜单数据（从云函数获取）
 var leaderboardLoading = false   // 是否在加载榜单数据
+var closestBoardInfo = null      // v0.6.35: 最接近榜单信息 {name, diff, on}
+var boardTargetVisible = false   // v0.6.35: 是否显示榜单目标行
 const BOARD_LIST = ['名医榜', '名将榜', '富商榜', '文豪榜', '能臣榜', '义士榜', '全能榜', '长寿榜', '旅行家榜', '颜值榜']
 
 // v0.2.2 — 叙事区（去白底卡片 + 文字直渲染 + 卷首小印 + 楷体）

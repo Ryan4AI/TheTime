@@ -152,6 +152,17 @@ async function backgroundTask(request_id, payload) {
 
     const monthChanged = updated.month !== state.month || updated.year !== state.year
 
+    // 计算最接近榜单（注入前端展示用）
+    const closestBoard = computeClosestBoard(updated)
+    let closestBoardInfo = null
+    if (closestBoard) {
+      closestBoardInfo = {
+        name: closestBoard.name,
+        diff: closestBoard.diff,
+        on: closestBoard.on,
+      }
+    }
+
     const result = {
       success: true,
       branch: picked,
@@ -162,6 +173,7 @@ async function backgroundTask(request_id, payload) {
       new_year: monthChanged ? updated.year : null,
       event: monthEvent,
       system_messages: systemMessages,  // v0.1.80 — 前端拿来渲染 [system · XXX]
+      closest_board: closestBoardInfo,  // v0.6.35 — 前端展示榜单接近度
       is_retry: is_retry,
       debug: { system_prompt: systemPrompt, user_prompt: userPrompt, messages, raw_response: rawContent },
     }

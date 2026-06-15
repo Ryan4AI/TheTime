@@ -7,18 +7,6 @@ const db = cloud.database();
 exports.main = async (event) => {
   const results = [];
   
-  // 先尝试创建集合（如果不存在）
-  try {
-    await db.createCollection('leaderboards');
-    results.push('集合 leaderboards 创建成功');
-  } catch (e) {
-    if (e.message.includes('already exists') || e.message.includes('集合已存在')) {
-      results.push('集合 leaderboards 已存在');
-    } else {
-      results.push('创建集合失败: ' + e.message);
-    }
-  }
-  
   const meta = {
     '名医榜': { type: '专业', formula: '医术×0.7+声望×0.3', attr: '医术' },
     '名将榜': { type: '专业', formula: '战功×0.7+声望×0.3', attr: '战功' },
@@ -34,7 +22,6 @@ exports.main = async (event) => {
   
   for (const [name, chars] of Object.entries(leaderboards)) {
     const doc = {
-      _id: name,
       name,
       type: meta[name].type,
       formula: meta[name].formula,
@@ -43,18 +30,8 @@ exports.main = async (event) => {
       characters: chars
     };
     
-    // 检查是否存在
-    const existing = await db.collection('leaderboards').doc(name).get().catch(() => null);
-    
-    if (existing) {
-      // 更新
-      await db.collection('leaderboards').doc(name).update(doc);
-      results.push(`${name}: updated (${chars.length}人)`);
-    } else {
-      // 创建
-      await db.collection('leaderboards').add(doc);
-      results.push(`${name}: created (${chars.length}人)`);
-    }
+    await db.collection('leaderboards').doc(name).set({ data: doc });
+    results.push(`${name}: set (${chars.length}人)`);
   }
   
   return { success: true, results };

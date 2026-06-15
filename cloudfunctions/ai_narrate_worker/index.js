@@ -513,7 +513,7 @@ async function callAI(state, input, history, monthEvent, isRetry) {
     }
   }
   const content = response.choices?.[0]?.message?.content || ''
-  let cleaned = content.replace(/think[\s\S]*?\/think/g, '').replace(/```json\s*/gi, '').replace(/```\s*$/g, '').trim()
+  let cleaned = content.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json\s*/gi, '').replace(/```\s*$/g, '').trim()
   const firstBracket = cleaned.indexOf('[')
   const lastBracket = cleaned.lastIndexOf(']')
   if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
@@ -903,7 +903,7 @@ async function callScoringAI(content, prevState) {
 
   try {
     const response = await callLLM([{ role: 'system', content: scorePrompt }])
-    const raw = (response.choices?.[0]?.message?.content || '').replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+    const raw = (response.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
     const firstObj = raw.indexOf('{')
     const lastObj = raw.lastIndexOf('}')
     if (firstObj !== -1 && lastObj !== -1) {
@@ -930,7 +930,7 @@ async function callScoringAI(content, prevState) {
 function callLLM(messages, modelOverride) {
   return new Promise((resolve, reject) => {
     const useModel = modelOverride || DS_MODEL
-    const data = JSON.stringify({ model: useModel, messages, max_tokens: MAX_TOKENS, temperature: TEMPERATURE })
+    const data = JSON.stringify({ model: useModel, messages, max_tokens: MAX_TOKENS, temperature: TEMPERATURE, think: false })
     const url = new URL(DS_BASE_URL + '/chat/completions')
     const req = https.request({
       hostname: url.hostname, path: url.pathname, method: 'POST',

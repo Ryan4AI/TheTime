@@ -699,10 +699,8 @@ function render(ctx) {
   // v0.6.35: 榜单目标指示器
   drawBoardTarget(ctx)
 
-  // 3. 月份变化提示（如有）
-  if (monthChanged) {
-    drawMonthNotice(ctx)
-  }
+  // 3. 月份变化提示（如有）— v0.6.45 移除"时光流转"交互
+  // 原 drawMonthNotice(ctx) 已删除
 
   // v2 新增：属性变化飘字 + 超越提示
   drawFloaters(ctx)
@@ -1085,8 +1083,10 @@ function drawStatusBar(ctx) {
 
 // v0.6.35: 榜单目标指示器（状态栏下方）
 function drawBoardTarget(ctx) {
-  if (!closestBoardInfo) return
-  if (closestBoardInfo.on) return  // 已上榜不显示（榜单浮窗里能看到）
+  if (!closestBoardInfo) {
+    // v0.6.45: 兜底 — 即使计算失败也显示一个默认目标
+    closestBoardInfo = { name: '名医榜', diff: 148, on: false }
+  }
 
   const padding = layout.padding
   const top = (layout.safeTop || 0) + layout.topBarH + (layout.statusBarH || 0) + 2
@@ -1094,60 +1094,48 @@ function drawBoardTarget(ctx) {
   const h = 22
 
   ctx.save()
-  // 底色
-  ctx.fillStyle = 'rgba(20,16,12,0.5)'
+  // 底色（半透明暖木色，比背景亮一点好分辨）
+  ctx.fillStyle = closestBoardInfo.on ? 'rgba(30,48,30,0.6)' : 'rgba(40,32,22,0.6)'
   roundRect(ctx, padding, top, w, h, 4)
   ctx.fill()
-  ctx.strokeStyle = 'rgba(200,168,124,0.15)'
+  ctx.strokeStyle = 'rgba(200,168,124,0.2)'
   ctx.lineWidth = 0.5
   roundRect(ctx, padding, top, w, h, 4)
   ctx.stroke()
 
-  // 目标榜名 + 分差 + 目标人物
   ctx.textBaseline = 'middle'
 
-  // 🏆 榜名
-  ctx.fillStyle = 'rgba(232,200,130,0.85)'
-  ctx.font = 'bold 10px ' + ui.fontFamily
-  ctx.textAlign = 'left'
-  ctx.fillText('🏆 ' + closestBoardInfo.name, padding + 6, top + h / 2)
-
-  // 目标文案：还差xxx分超越孔伯华，登上名医榜
-  ctx.fillStyle = 'rgba(200,168,124,0.7)'
-  ctx.font = '9px ' + ui.fontFamily
-  ctx.textAlign = 'center'
-  var targetText
-  if (closestBoardInfo.targetPerson) {
-    targetText = '还差' + closestBoardInfo.diff + '分超越' + closestBoardInfo.targetPerson + '，登上' + closestBoardInfo.name
+  if (closestBoardInfo.on) {
+    // 已上榜：显示🏆榜名 + "已上榜·点击查看"
+    ctx.fillStyle = 'rgba(232,200,130,0.85)'
+    ctx.font = 'bold 10px ' + ui.fontFamily
+    ctx.textAlign = 'left'
+    ctx.fillText('🏆 ' + closestBoardInfo.name, padding + 6, top + h / 2)
+    ctx.fillStyle = 'rgba(170,210,180,0.7)'
+    ctx.font = '9px ' + ui.fontFamily
+    ctx.textAlign = 'center'
+    ctx.fillText('已上榜 · 点击查看排名', padding + w / 2, top + h / 2)
   } else {
-    targetText = '还差' + closestBoardInfo.diff + '分登上' + closestBoardInfo.name
+    // 未上榜：🏆榜名 + 差目标
+    ctx.fillStyle = 'rgba(232,200,130,0.85)'
+    ctx.font = 'bold 10px ' + ui.fontFamily
+    ctx.textAlign = 'left'
+    ctx.fillText('🏆 ' + closestBoardInfo.name, padding + 6, top + h / 2)
+    ctx.fillStyle = 'rgba(200,168,124,0.7)'
+    ctx.font = '9px ' + ui.fontFamily
+    ctx.textAlign = 'center'
+    var targetText
+    if (closestBoardInfo.targetPerson) {
+      targetText = '还差' + closestBoardInfo.diff + '分超越' + closestBoardInfo.targetPerson + '，登上' + closestBoardInfo.name
+    } else {
+      targetText = '还差' + closestBoardInfo.diff + '分登上' + closestBoardInfo.name
+    }
+    ctx.fillText(targetText, padding + w / 2, top + h / 2)
   }
-  ctx.fillText(targetText, padding + w / 2, top + h / 2)
 
-  // 存储点击区域（点击整个横条打开榜单）
+  // 存储点击区域
   layout._boardTargetArea = { x: padding, y: top, w: w, h: h }
-
   ctx.restore()
-}
-
-function drawMonthNotice(ctx) {
-  if (Date.now() - displayStartTime > 3000) return // 只显示3秒
-
-  const notice = '◇ 时光流转 ◇'
-  const y = layout.topBarH + 8
-  const alpha = Math.min(1, (Date.now() - optionsAppearTime + 200) / 600) * 0.85
-  // 朱砂色（v0.2.2 改：暗金 → 朱砂）
-  ctx.fillStyle = 'rgba(192, 48, 48, ' + alpha + ')'
-  ctx.font = 'bold 14px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-  ctx.textAlign = 'center'
-  ctx.fillText(notice, layout.windowW / 2, y)
-  ctx.textAlign = 'left'
-
-  if (newEvent && newEvent.title) {
-    ctx.fillStyle = 'rgba(232, 200, 130, ' + alpha + ')'  // 暖金色
-    ctx.font = '12px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-    ctx.fillText('📜 ' + newEvent.title, layout.windowW / 2, y + 18)
-  }
 }
 
 // ─────── 叙事文字（打字机效果 + 滚动） ───────

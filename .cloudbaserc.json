@@ -78,6 +78,11 @@
       "memorySize": 256,
       "params": {},
       "entryFile": "index.js"
+    },
+    {
+      "name": "leaderboard_query",
+      "timeout": 15,
+      "memorySize": 256
     }
   ]
 }

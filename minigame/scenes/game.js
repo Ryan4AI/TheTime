@@ -1166,9 +1166,16 @@ var closestBoardInfo = null      // v0.6.35: 最接近榜单信息 {name, diff, 
 
 // v0.6.43: 本地即时计算榜单接近度（不等云函数）
 const BOARD_THRESHOLDS = {
-  '名医榜': 148, '名将榜': 5200, '富商榜': 200,
-  '文豪榜': 2390, '能臣榜': 2300, '义士榜': 590,
-  '全能榜': 19000, '颜值榜': 8000,
+  // v0.6.46: 使用游戏内合理的实力门槛（非历史数据末位分）
+  // 玩家需要十几轮的专注培养才能首次上榜
+  '名医榜': 2000,   '名将榜': 5000,   '富商榜': 3000,
+  '文豪榜': 4000,   '能臣榜': 4000,   '义士榜': 2500,
+  '全能榜': 22000,  '颜值榜': 9000,
+}
+const BOARD_TARGET_PERSON = {
+  '名医榜': '张锡纯(民国)', '名将榜': '林冲(宋)', '富商榜': '伍崇曜(清)',
+  '文豪榜': '黄景仁(清)', '能臣榜': '赵高(秦)', '义士榜': '王光兴(明末)',
+  '全能榜': '关汉卿(元)', '颜值榜': '岳飞(南宋)',
 }
 function calcBoardScore(st, name) {
   var s = function(a) { return st[a] || 0 }
@@ -1191,7 +1198,7 @@ function computeClosestBoard(st) {
     var score = calcBoardScore(st, name)
     var diff = BOARD_THRESHOLDS[name] - score
     if (diff <= 0) return { name: name, diff: 0, on: true }
-    if (diff < bestDiff) { best = { name: name, diff: diff, on: false }; bestDiff = diff }
+    if (diff < bestDiff) { best = { name: name, diff: diff, on: false, targetPerson: BOARD_TARGET_PERSON[name] || null }; bestDiff = diff }
   }
   return best
 }

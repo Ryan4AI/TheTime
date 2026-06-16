@@ -720,6 +720,33 @@ function render(ctx) {
   // v0.6.35: 榜单目标指示器
   drawBoardTarget(ctx)
 
+  // v0.6.50n: 九边形格子雷达图（与榜单目标条设计在一起，右上角）
+  const radarR = 30
+  const radarCX = layout.windowW - layout.padding - 5 - radarR
+  const radarTop = (layout.safeTop || 0) + layout.topBarH + (layout.statusBarH || 0) + 2
+  const boardTargetH = 22
+  const radarCY = radarTop + boardTargetH + 4 + radarR
+  const radarAttrKeys = ['声望','财富','学识','颜值','医术','战功','文采','政绩','义行']
+  const radarVals = radarAttrKeys.map(k => state[k] || 0)
+  drawRadarGrid(ctx, radarCX, radarCY, radarR, radarVals)
+  // 雷达图标签
+  const labelChars = ['声','富','识','颜','医','战','文','政','义']
+  ctx.save()
+  for (let i = 0; i < 9; i++) {
+    const angle = -Math.PI / 2 + i * (Math.PI * 2) / 9
+    const lx = radarCX + (radarR + 8) * Math.cos(angle)
+    const ly = radarCY + (radarR + 8) * Math.sin(angle)
+    ctx.fillStyle = 'rgba(170,210,180,0.55)'
+    ctx.font = '7px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(labelChars[i], lx, ly - 3)
+    ctx.fillStyle = 'rgba(200,168,124,0.35)'
+    ctx.font = '5px sans-serif'
+    ctx.fillText(radarVals[i], lx, ly + 5)
+  }
+  ctx.restore()
+
   // 3. 月份变化提示（如有）— v0.6.45 移除"时光流转"交互
   // 原 drawMonthNotice(ctx) 已删除
 
@@ -2090,38 +2117,11 @@ function drawLeaderboard(ctx) {
     layout._boardTabs.push({ x: tx, y: ty, w: tabColW, h: tabH, index: i })
   }
 
-  // ⬡ 格子雷达图（v0.6.50m）
-  const radarR = 40
-  const radarCX = px + pw / 2
-  const radarCY = tabY + (tabH + tabGap) * 2 + 12 + radarR + 4
-  const radarAttrKeys = ['声望','财富','学识','颜值','医术','战功','文采','政绩','义行']
-  const radarVals = radarAttrKeys.map(k => state[k] || 0)
-  drawRadarGrid(ctx, radarCX, radarCY, radarR, radarVals)
-
-  // 雷达图标签（9个单字沿轴分布）
-  const labelChars = ['声','富','识','颜','医','战','文','政','义']
-  ctx.save()
-  for (let i = 0; i < 9; i++) {
-    const angle = -Math.PI / 2 + i * (Math.PI * 2) / 9
-    const lx = radarCX + (radarR + 10) * Math.cos(angle)
-    const ly = radarCY + (radarR + 10) * Math.sin(angle)
-    ctx.fillStyle = 'rgba(170,210,180,0.6)'
-    ctx.font = '8px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(labelChars[i], lx, ly - 4)
-    ctx.fillStyle = 'rgba(200,168,124,0.4)'
-    ctx.font = '6px sans-serif'
-    ctx.fillText(radarVals[i], lx, ly + 5)
-  }
-  ctx.restore()
-
-  // 内容区域（雷达图下方）
+  // 内容区域（tab下方）
   const contentX = px + 20
   const contentW = pw - 40
-  const radarAreaH = radarR * 2 + 28
-  const contentY = tabY + (tabH + tabGap) * 2 + 12 + radarAreaH
-  const contentH = ph - 120 - radarAreaH - 6
+  const contentY = tabY + (tabH + tabGap) * 2 + 12
+  const contentH = ph - 120
 
   // 分隔线
   ctx.strokeStyle = 'rgba(90,138,112,0.2)'

@@ -1687,32 +1687,54 @@ function drawItemBar(ctx) {
   ctx.fill()
   ctx.restore()
 
-  // 5. 行李标签 + 物品
+  // 5. 物品区（无文字说明，用托盘/槽位暗示）
+  const slotW = 52
+  const slotH = 30
+  const slotGap = 6
+  const itemEndX = layout.windowW - layout.padding
+  const maxSlots = Math.floor((itemEndX - dividerX - 10) / (slotW + slotGap))
+  const numSlots = Math.min(maxSlots, 5)
+  const totalW = numSlots * (slotW + slotGap) - slotGap
+  const slotStartX = Math.max(dividerX + 8, itemEndX - totalW)
+  const slotY = barY + (barH - slotH) / 2
+
+  // 物品区边框（木盒/托盘风格）
   ctx.save()
-  ctx.fillStyle = 'rgba(232, 200, 130, 0.75)'
-  ctx.font = '11px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'top'
-  ctx.fillText('⌜ 行李 ⌝', dividerX + 8, barY + 6)
+  ctx.strokeStyle = 'rgba(200,168,124,0.18)'
+  ctx.lineWidth = 0.5
+  roundRect(ctx, dividerX + 4, barY + 3, itemEndX - dividerX - 8, barH - 6, 4)
+  ctx.stroke()
+  ctx.strokeStyle = 'rgba(200,168,124,0.1)'
+  ctx.lineWidth = 0.3
+  roundRect(ctx, dividerX + 6, barY + 5, itemEndX - dividerX - 12, barH - 10, 3)
+  ctx.stroke()
   ctx.restore()
 
-  // 行李区右端 〗 装饰
-  ctx.save()
-  ctx.fillStyle = 'rgba(200,168,124,0.2)'
-  ctx.font = '10px sans-serif'
-  ctx.textAlign = 'right'
-  ctx.textBaseline = 'top'
-  ctx.fillText('〗', layout.windowW - layout.padding - 2, barY + barH - 13)
-  ctx.restore()
+  // 空槽位（始终显示：无物品时暗格，有物品时被覆盖）
+  for (let i = 0; i < numSlots; i++) {
+    const bx = slotStartX + i * (slotW + slotGap)
+    ctx.save()
+    ctx.fillStyle = items.length > 0 ? 'rgba(0,0,0,0)' : 'rgba(200,168,124,0.04)'
+    ctx.fill()
+    ctx.strokeStyle = 'rgba(200,168,124,0.12)'
+    ctx.lineWidth = 0.5
+    roundRect(ctx, bx, slotY, slotW, slotH, 3)
+    ctx.stroke()
+    ctx.strokeStyle = 'rgba(200,168,124,0.06)'
+    ctx.lineWidth = 0.3
+    roundRect(ctx, bx + 2, slotY + 2, slotW - 4, slotH - 4, 2)
+    ctx.stroke()
+    ctx.restore()
+  }
 
+  // 有物品时，覆盖在槽位上
   if (items.length > 0) {
-    const boxW = 56
-    const boxH = 32
-    const gap = 6
-    const itemEndX = layout.windowW - layout.padding
-    const totalW = items.length * (boxW + gap) - gap
-    const startX = Math.max(dividerX + 50, itemEndX - totalW)
-    const boxY = barY + (barH - boxH) / 2
+    const boxW = slotW
+    const boxH = slotH
+    const gap = slotGap
+    const totalItemW = items.length * (boxW + gap) - gap
+    const startX = Math.max(dividerX + 50, itemEndX - totalItemW)
+    const boxY = slotY
 
     items.forEach((item, i) => {
       const bx = startX + i * (boxW + gap)
@@ -1760,15 +1782,8 @@ function drawItemBar(ctx) {
       ctx.textBaseline = 'alphabetic'
       item._bounds = { x: bx, y: boxY, w: boxW, h: boxH }
     })
-  } else {
-    ctx.save()
-    ctx.fillStyle = 'rgba(245, 239, 224, 0.4)'
-    ctx.font = '12px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-    ctx.textAlign = 'left'
-    ctx.textBaseline = 'middle'
-    ctx.fillText('空囊而来', dividerX + 10, barY + barH / 2)
-    ctx.restore()
   }
+
 }// ─────── 玉牒浮窗（长按状态） ───────
 function drawJadeTablet(ctx) {
   const w = layout.windowW

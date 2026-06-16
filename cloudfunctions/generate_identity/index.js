@@ -161,7 +161,7 @@ async function findNearestEraMeta(targetYear) {
  * 用 AI 生成穿越身份名字（v0.6.6：移除名人彩蛋，避免与排行榜冲突）
  * 玩家永远不直接成为历史名人——名人只在排行榜里作为"够榜目标"存在
  */
-async function generateName({ targetYear, selectedCity, figures, eraMeta, isMale, socialClass }) {
+async function generateName({ targetYear, selectedCity, figures, eraMeta, isMale, socialClass, age = 25 }) {
   // v0.6.6 移除名人彩蛋：直接用 AI 生成平民名字
   // 原因：玩家穿越成"华佗"会和排行榜"华佗"数据冲突，不如让名人只在榜上做参考
 
@@ -172,17 +172,20 @@ async function generateName({ targetYear, selectedCity, figures, eraMeta, isMale
   const surnames = eraMeta.surnames || ['无']
   const surnamePool = surnames.join('、')
 
-  const systemPrompt = '你是一位精通中国历代取名文化和职业体系的历史学者。根据用户给出的时代、地点、阶层，生成一个符合时代特征和历史背景的平民姓名及其适合的职业。回复格式：姓名|职业。只回复格式内容，不要任何解释、标点或多余文字。'
+  const systemPrompt = '你是一位精通中国历代取名文化的历史学者。根据用户给出的时代、地点、阶层、年龄，生成一个符合时代特征和历史背景的平民姓名。幼儿（<12岁）只有姓名没有职业。只回复格式内容，不要任何解释、标点或多余文字。'
 
   const userPrompt = [
     `时代：${dynasty}（${eraLabel}），在位君主：${emperor}`,
     `年份：${targetYear}年`,
     `城市：${selectedCity.city}`,
     `性别：${isMale ? '男' : '女'}`,
+    `年龄：${age}岁`,
     socialClass ? `社会阶层：${socialClass}` : '',
     `姓氏来源：${surnamePool}`,
     // v0.6.6 移除"参考名人"行——避免 AI 借鉴名人的名字
-    `要求：生成1个${isMale ? '男性' : '女性'}名字（姓+名，名可为1-2字）及1个适合该时代、该性别、该阶层的职业。职业需真实历史存在（如农夫、织工、木匠、铁匠、陶工、渔夫、猎户、脚夫、伙夫、裁缝、军户、货郎、茶役、医工、文书等），不得使用现代职业。回复格式：姓名|职业。例如：张三|农夫`,
+    age < 12
+      ? `要求：生成1个${isMale ? '男性' : '女性'}幼儿名字（姓+名，名可为1-2字）。此人为${age}岁幼儿，无需职业。回复格式：姓名。例如：狗蛋`
+      : `要求：生成1个${isMale ? '男性' : '女性'}名字（姓+名，名可为1-2字）及1个适合该时代、该性别、该阶层、该年龄的职业。职业需真实历史存在（如农夫、织工、木匠、铁匠、陶工、渔夫、猎户、脚夫、伙夫、裁缝、军户、货郎、茶役、医工、文书等），不得使用现代职业。回复格式：姓名|职业。例如：张三|农夫`,
   ].filter(Boolean).join('\n')
 
   try {
@@ -434,6 +437,7 @@ async function _generateIdentity(event, context) {
       eraMeta: meta,
       isMale,
       socialClass,
+      age,
     })
     // AI返回的职业覆盖之前的占位（如果AI返回了的话）
     if (nameResult.occupation) {

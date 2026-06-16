@@ -61,6 +61,14 @@ function onTouch(x, y, type) {
   var l = layout
   var btnX = Math.floor(l.cx - l.btnW / 2)
   if (hitTest(x, y, btnX, l.btnY, l.btnW, l.btnH)) {
+    // 存储轮回数据（下一世继承）
+    if (typeof wx !== 'undefined' && wx.setStorageSync) {
+      wx.setStorageSync('rebirth', {
+        life_number: (deathState.life_number || 1) + 1,
+        historical_shelter: (deathState.historical_shelter || 0) + 1,
+        legacy: deathState.epitaph || '',
+      })
+    }
     // 返回入口页，开始新一世
     return { scene: 'entry' }
   }
@@ -110,12 +118,13 @@ function render(ctx) {
     })
   }
 
-  // 姓名
+  // 姓名 + 第几世
   var nOp = anims.name.update(now)
   if (nOp > 0) {
     var name = deathState.name || '无名'
-    var age = deathState.age || '?'
-    drawText(ctx, name + ' · ' + age + '岁', cx, l.nameY, {
+    var age = deathState.age != null ? deathState.age : '?'
+    var lifeNum = deathState.life_number || 1
+    drawText(ctx, name + ' · ' + age + '岁 · 第' + lifeNum + '世', cx, l.nameY, {
       fontSize: 16,
       color: COLORS.paper,
       align: 'center', baseline: 'middle',

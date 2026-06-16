@@ -96,7 +96,7 @@ function init(items, identity) {
     const sc = identity.socialClass || identity.social_class || '庶人'
     const occ = identity.occupation || ''
     const canRead = !!identity.canRead
-    const age = identity.age || 25
+    const age = identity.age != null ? identity.age : 25  // v0.6.50: 0岁不摔进 || 陷阱
 
     var ALL_ATTRS = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
 
@@ -235,6 +235,16 @@ function init(items, identity) {
       dynasty: '北宋',
       marital: '',
       literacy: '',
+    }
+  }
+
+  // v0.6.50j: 注入轮回数据（死亡页存储，下一世继承）
+  if (typeof wx !== 'undefined' && wx.getStorageSync) {
+    var rebirth = wx.getStorageSync('rebirth')
+    if (rebirth) {
+      IDENTITY.life_number = rebirth.life_number || 1
+      IDENTITY.historical_shelter = rebirth.historical_shelter || 0
+      IDENTITY.legacy = rebirth.legacy || ''
     }
   }
 

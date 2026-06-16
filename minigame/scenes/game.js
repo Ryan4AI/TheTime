@@ -34,6 +34,7 @@ var newEvent = null          // 新事件
 var itemDetail = null        // 物品详情浮窗（点击物品后弹出）
 var bgImage = null           // 当前背景图（云函数返回 URL）
 var bgImageLoading = false   // 是否在加载
+var imageRevealStart = 0     // v0.6.50g: 画像从上到下展开动画时间戳
 
 // ─── 统一色彩常量（v0.2.5-X 审美统一）───
 // 之前版本散落在各处的颜色字面量，现在统一收口到 C 对象
@@ -98,7 +99,7 @@ module.exports = {
       life_number: id.life_number || 1,
       name: id.name || '无名',
       gender: id.gender || '男',
-      age: id.age || 20,
+      age: id.age != null ? id.age : 20,  // v0.6.50: 0岁不摔进 || 陷阱
       occupation: id.occupation || '庶民',
       // P1.4 字段名对齐 generate_identity 实际返回（camelCase）
       socialClass: id.socialClass || id.social_class || '庶人',
@@ -121,8 +122,12 @@ module.exports = {
       '政绩': 0,
       '义行': 0,
       items: items.map(i => ({ ...i })),
-      legacy: '',
+      legacy: id.legacy || '',
       alive: true,
+      // v0.6.50j 新增：寿限 + 轮回数据
+      lifespan: 55 + Math.floor(Math.random() * 26),  // 55~80 岁隐藏寿限
+      historical_shelter: id.historical_shelter || 0,
+      epitaph: id.epitaph || '',
     }
 
     currentItems = items
@@ -177,7 +182,7 @@ function initLayout() {
   // 顶栏(52) → 状态栏(26) → 文字面板(自适应 narrative 行数) → 选项(3×40+gap 4+输入 32 = 160) → 物品栏(64)
   const topBarH = 52
   // v0.2.5-J（先生 2026-06-13 11:03 拍板）：状态栏常显，statusBarH 永远生效
-  const statusBarH = 26  // 状态条高度（气血/金银/身份/年月）
+  const statusBarH = 42  // v0.6.49: 状态条高度（含 9 属性双行）
   // v0.2.5-Q（先生 2026-06-13 15:33 拍板）：自由输入从选项区移到画区右上角图标
   // 选项区只剩 3 个选项，optBlockH 不再算 freeInputH
   const itemBarH = 64
@@ -217,13 +222,13 @@ function initLayout() {
     padding: 14,
     topBarH: topBarH,
     itemBarH: itemBarH,
-    sceneY: topOffset + topBarH + 4,
-    sceneH: sceneVisible ? sceneH : 0,
-    sceneVisible: sceneVisible,
-    textY: topOffset + topBarH + statusBarH + 4 + (sceneVisible ? sceneH : 0) + 8,
+    sceneY: topOffset + topBarH + statusBarH + 2 + 22 + 4,
+    sceneH: 130,  // v0.6.50g: 始终预留
+    sceneVisible: true,
+    textY: topOffset + topBarH + statusBarH + 4 + 130 + 8,
     statusBarH: statusBarH,  // v0.1.82 (D008 显示)
     textH: finalTextH,
-    optionY: topOffset + topBarH + statusBarH + 4 + (sceneVisible ? sceneH : 0) + 8 + finalTextH + 6,
+    optionY: topOffset + topBarH + statusBarH + 4 + 130 + 8 + finalTextH + 2, // v0.6.50g: 紧贴文字
     optionH: optH,
     optionGap: optGap,
     freeInputH: freeInputH,
@@ -238,6 +243,14 @@ function initLayout() {
 //   1. submit（< 2 秒返回 request_id）
 //   2. 每 5 秒轮询一次 get_result，直到 done/error
 function callAI(userInput) {
+  // v0.6.50j 寿限检测：寿限已至 → 注入临终 system message
+  if (state.alive && state.lifespan && state.age >= state.lifespan && (state.health || 100) > 0) {
+    narrativeHistory.push({
+      role: 'system',
+      content: '⚠ 寿限已至。这一轮玩家将自然离世。请在叙事中描写临终场景，结尾生成一句墓志铭写入 epitaph 字段。',
+    })
+  }
+
   loading = true
   loadingStart = Date.now()
   narrative = ''  // v0.2.5-AF: 清空上一轮叙事，让 loading 动画能显示（先生 20:33 反馈第二次选选项后 loading 不动画）
@@ -282,6 +295,8 @@ function callAI(userInput) {
     items: state.items.map(i => ({ id: i.id, name: i.name, desc: i.desc })),
     legacy: state.legacy,
     alive: state.alive,
+    lifespan: state.lifespan,
+    historical_shelter: state.historical_shelter,
   }
 
   const data = {
@@ -578,6 +593,8 @@ function handleAIResponse(result, action, userInput) {
   const patch = branch.patch || {}
   if (patch.coin !== undefined) state.coin = Math.max(0, state.coin + (patch.coin || 0))
   if (patch.health !== undefined) state.health = Math.max(0, Math.min(100, state.health + (patch.health || 0)))
+  // v0.6.50j: AI 可选生成墓志铭
+  if (patch.epitaph) state.epitaph = patch.epitaph
 
   // v0.6.43: 本地即时刷新榜单接近度（同步）+ 云函数后台刷新
   closestBoardInfo = computeClosestBoard(state)
@@ -619,6 +636,11 @@ function handleAIResponse(result, action, userInput) {
     }
   }
 
+  // v0.6.50j 寿限覆盖：寿限已到 → health 归零触发死亡
+  if (state.lifespan && state.age >= state.lifespan && state.health > 0) {
+    state.health = 0
+  }
+
   // 3. 死亡判定
   if (state.health <= 0 || newState && newState.alive === false) {
     state.alive = false
@@ -649,11 +671,10 @@ function handleAIResponse(result, action, userInput) {
   fetchBgImage(branch.content || '')
 
   // 6. 准备显示
-  // v0.2.5-J（先生 2026-06-13 11:03 拍板·规则 3）：删掉 sysPrefix 拼接
   // 系统状态变化不进 narrative 字符串（前端不显示 [system · XXX] 文字）
   // system message 仍然进 narrativeHistory（给 LLM 看）
   narrative = (branch.content || '').slice(0, MAX_NARRATIVE_CHARS)
-  systemLineCount = 0  // 前端不再渲染 system 行
+  systemLineCount = 0  // 前端不渲染 system 行
   displayedChars = 0
   displayStartTime = Date.now()
   options = (branch.options || []).slice(0, 3).map(label => ({ label, key: label }))
@@ -676,7 +697,7 @@ function render(ctx) {
     ctx.fillStyle = 'rgba(0,0,0,' + p + ')'
     ctx.fillRect(0, 0, layout.windowW, layout.windowH)
     if (p >= 1) {
-      module.exports.autoNext = { scene: 'death', state: state }
+      module.exports.autoNext = { scene: 'death', identity: state }
       return
     }
   }
@@ -706,6 +727,14 @@ function render(ctx) {
   drawFloaters(ctx)
   drawSurpassNotice(ctx)
 
+  // v0.6.50l: 格子雷达图（右上角常驻）
+  const ATTR_KEYS = ['声望','财富','学识','颜值','医术','战功','文采','政绩','义行']
+  const attrVals = ATTR_KEYS.map(k => state[k] || 0)
+  const radarR = 34
+  const radarCX = layout.windowW - layout.padding - 5 - radarR
+  const radarCY = layout.sceneY + 10 + radarR
+  drawRadarGrid(ctx, radarCX, radarCY, radarR, attrVals)
+
   // 4. 叙事文字（题跋·下半屏，v0.1.63 改版）
   drawNarrative(ctx)
 
@@ -719,7 +748,10 @@ function render(ctx) {
     drawOptions(ctx)
   }
 
-  // 7. 自由输入按钮 — v0.2.5-T 挪到顶栏右侧（drawSealTopBar 画），不在这里画
+  // 7. 自由输入按钮（v0.6.50: 补回——之前被误删的 render 调用）
+  if (Date.now() >= optionsAppearTime && options.length > 0) {
+    drawFreeInputButton(ctx)
+  }
 
   // 8. 底部物品栏（极简）
   drawItemBar(ctx)
@@ -760,7 +792,7 @@ function adjustFluidLayout() {
   const topBarH = layout.topBarH
   const itemBarH = layout.itemBarH       // 钉死底部 64px
   const safeTop = layout.safeTop || 0
-  const availableH = layout.windowH - safeTop - topBarH - itemBarH
+  const availableH = layout.windowH - safeTop - topBarH - (layout.statusBarH || 0) - itemBarH
   // v0.2.5-Z（先生 2026-06-13 19:47 拍板·方案C：缩字号+换行）：
   // 优先缩字号(15→12)，放不下就换行，按钮高度动态：单行36px/双行52px
   const optH_single = 36
@@ -814,25 +846,27 @@ function adjustFluidLayout() {
   const neededTextH = lineCount * lineHeight + textPadding
 
   // v0.1.67 修复：画区总是显示（不依赖 typingDone）
-  // 先生要"画板随文字展开"——所以图片加载好就显示
-  const sceneImgReady = !!bgImgEl && bgImgEl.complete && bgImgEl.width > 0
-  const showScene = sceneImgReady
-  const sceneH = showScene ? 130 : 0  // 固定 130 高
+  // v0.6.50g: 画像区始终预留 130px 空间，避免文字跳位
+  const sceneH = 130
+  layout.sceneH = sceneH
+  layout.sceneVisible = true
 
   // 文字区高度 = 剩余 - 画区 - 选项块 - 间距
   let finalTextH = availableH - sceneH - optReserveH - optionGap - 12
   finalTextH = Math.max(100, finalTextH)  // 不限上限
 
   layout.sceneH = sceneH
-  layout.sceneVisible = showScene
+  layout.sceneVisible = true
+  // v0.6.50: sceneY 同步更新（在状态栏+榜单提示条下方）
+  layout.sceneY = safeTop + topBarH + (layout.statusBarH || 0) + 2 + 22 + 4
   // v0.2.5-M（先生 2026-06-13 11:15 拍板·修"叠在一起"）：textY 加上 statusBarH
   // 之前漏算 statusBarH 导致文字起点在顶栏下方，但状态栏（26 高）也画在那里 → 文字和状态栏重叠
   // v0.6.41: 再加上榜单目标条高度（24px），避免 drawBoardTarget 与叙事区重叠
   const boardTargetOffset = 24  // 榜单目标条高度（22px + 2px margin）
   layout.textY = safeTop + topBarH + (layout.statusBarH || 0) + 4 + sceneH + 8 + boardTargetOffset
   layout.textH = finalTextH
-  // v0.1.67: 文字面板底部 + 6px 缓冲后再放选项（解决按钮紧贴文字面板的"下溢"感）
-  layout.optionY = layout.textY + finalTextH + 6
+  // v0.6.50g: 选项紧贴叙事文字底部（2px 微距代替原来 6px）
+  layout.optionY = layout.textY + finalTextH + 2
   layout.optionFadeIn = typingDone ? 1 : 0
   layout.optionH = 36                       // v0.1.67: 38 → 36 缩 2px
   layout.optionGap = optionGap
@@ -899,6 +933,7 @@ function fetchBgImage(narrativeText) {
   bgImgEl.onload = () => {
     bgImageLoading = false
     bgImage = url
+    imageRevealStart = Date.now()  // v0.6.50g: 开始从上到下展开
   }
   bgImgEl.onerror = () => {
     bgImageLoading = false
@@ -913,32 +948,48 @@ function drawBgImage(ctx) {
   const sw = layout.windowW - layout.padding * 2
   const sh = layout.sceneH
 
-  // v0.2.5-I（先生 2026-06-13 10:43 拍板·方案 A）：
-  // 图没加载好时只画纯暗色背景，不画任何 UI 组件（卷轴框/边框/暗金线/朱砂印）
-  // 等图加载完成才统一画 UI —— 避免"空卷轴框"显得突兀
-  // 加载提示由 narrative 区的"史官正在落笔…"承担，不在这里重复
+  // v0.6.50h: 画像区始终预留 130px，加载时显示水墨加载提示
   if (!bgImgEl || !bgImgEl.complete || bgImgEl.width === 0) {
     ctx.save()
     ctx.fillStyle = 'rgba(15,12,8,0.95)'
     ctx.fillRect(sx, sy, sw, sh)
+    // 水墨加载提示（呼吸动画）
+    const pulse = 0.3 + 0.15 * Math.sin(Date.now() / 1200)
+    ctx.fillStyle = 'rgba(200,168,124,' + pulse + ')'
+    ctx.font = '16px ' + ui.fontFamily
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('🎨', sx + sw / 2, sy + sh / 2 - 6)
+    ctx.fillStyle = 'rgba(170,210,180,' + (pulse * 0.6) + ')'
+    ctx.font = '9px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+    ctx.fillText('画卷生成中…', sx + sw / 2, sy + sh / 2 + 14)
     ctx.restore()
-    return  // ← 直接返回，跳过所有 UI 组件绘制
+    return
   }
 
-  // 1. 卷轴底框（深木色，模拟画轴卷起感）
+  // v0.6.50g: 从上向下展开（300ms）
+  let revealH = sh
+  if (imageRevealStart > 0) {
+    const elapsed = Date.now() - imageRevealStart
+    const progress = Math.min(1, elapsed / 300)
+    revealH = sh * progress
+    if (progress >= 1) imageRevealStart = 0
+  }
+
+  // 1. 卷轴底框
   ctx.save()
   ctx.fillStyle = 'rgba(20,16,10,0.85)'
   ctx.fillRect(sx - 4, sy - 4, sw + 8, sh + 8)
   ctx.restore()
 
-  // 2. 画主体（cover 模式，1.0 透明度 = 主体）
+  // 2. 画主体（revealH 限制可见高度 = 展开动画）
   ctx.save()
   ctx.beginPath()
-  ctx.rect(sx, sy, sw, sh)
-  ctx.clip()  // 限制在卷轴框内
+  ctx.rect(sx, sy, sw, revealH)
+  ctx.clip()
   const imgW = bgImgEl.width
   const imgH = bgImgEl.height
-  const scale = Math.max(sw / imgW, sh / imgH)
+  const scale = Math.max(sw / imgW, sh / imgH)  // 用全高算出图 scale
   const drawW = imgW * scale
   const drawH = imgH * scale
   const drawX = sx + (sw - drawW) / 2
@@ -1019,7 +1070,7 @@ function drawSealTopBar(ctx) {
 
 // ─────── 月份变化提示 ───────
 function drawStatusBar(ctx) {
-  // v2: 显示4个通用属性（声望/财富/学识/颜值）
+  // v0.6.49: 显示全部 9 属性双行（通用四维 + 专属五艺）
   const padding = layout.padding
   const top = layout.safeTop + layout.topBarH
   const h = layout.statusBarH
@@ -1030,7 +1081,7 @@ function drawStatusBar(ctx) {
   ctx.fillStyle = 'rgba(20,16,12,0.6)'
   ctx.fillRect(padding, top, w, h)
 
-  // 上下细线
+  // 边框 + 中间分隔线
   ctx.strokeStyle = 'rgba(200,168,124,0.25)'
   ctx.lineWidth = 0.5
   ctx.beginPath()
@@ -1038,44 +1089,41 @@ function drawStatusBar(ctx) {
   ctx.lineTo(padding + w, top + 0.5)
   ctx.moveTo(padding, top + h - 0.5)
   ctx.lineTo(padding + w, top + h - 0.5)
+  // 中间分隔线（较短，左右留白）
+  const midY = top + 21
+  ctx.moveTo(padding + 8, midY)
+  ctx.lineTo(padding + w - 8, midY)
   ctx.stroke()
   ctx.restore()
 
-  // 2. 4 段属性：声望 / 财富 / 学识 / 颜值
   ctx.font = '10px ' + ui.fontFamily
   ctx.textBaseline = 'middle'
 
-  const segW = w / 4
-  const cy = top + h / 2
+  // ───── 第1行：通用四维 ─────
+  const row1Y = top + 11
+  const ROW1 = ['声望', '财富', '学识', '颜值']
+  const segW1 = w / 4
+  for (var i = 0; i < 4; i++) {
+    var sx = padding + segW1 * i
+    ctx.textAlign = 'left'
+    ctx.fillStyle = 'rgba(200,168,124,0.7)'  // 暖金
+    ctx.fillText(ROW1[i], sx + 4, row1Y)
+    ctx.fillStyle = 'rgba(245,239,224,0.9)'   // 米白
+    ctx.fillText(state[ROW1[i]] || 0, sx + 30, row1Y)
+  }
 
-  // 段 1：声望
-  const seg1X = padding
-  ctx.textAlign = 'left'
-  ctx.fillStyle = 'rgba(200,168,124,0.7)'
-  ctx.fillText('声望', seg1X + 3, cy)
-  ctx.fillStyle = 'rgba(245,239,224,0.9)'
-  ctx.fillText(state['声望'] || 0, seg1X + 30, cy)
-
-  // 段 2：财富
-  const seg2X = padding + segW
-  ctx.fillStyle = 'rgba(200,168,124,0.7)'
-  ctx.fillText('财富', seg2X + 3, cy)
-  ctx.fillStyle = 'rgba(245,239,224,0.9)'
-  ctx.fillText(state['财富'] || 0, seg2X + 30, cy)
-
-  // 段 3：学识
-  const seg3X = padding + segW * 2
-  ctx.fillStyle = 'rgba(200,168,124,0.7)'
-  ctx.fillText('学识', seg3X + 3, cy)
-  ctx.fillStyle = 'rgba(245,239,224,0.9)'
-  ctx.fillText(state['学识'] || 0, seg3X + 30, cy)
-
-  // 段 4：颜值
-  const seg4X = padding + segW * 3
-  ctx.fillStyle = 'rgba(200,168,124,0.7)'
-  ctx.fillText('颜值', seg4X + 3, cy)
-  ctx.fillStyle = 'rgba(245,239,224,0.9)'
-  ctx.fillText(state['颜值'] || 0, seg4X + 30, cy)
+  // ───── 第2行：专属五艺 ─────
+  const row2Y = top + 31
+  const ROW2 = ['医术', '战功', '文采', '政绩', '义行']
+  const segW2 = w / 5
+  for (var i = 0; i < 5; i++) {
+    var sx = padding + segW2 * i
+    ctx.textAlign = 'left'
+    ctx.fillStyle = 'rgba(130,175,140,0.75)'  // 青绿
+    ctx.fillText(ROW2[i], sx + 4, row2Y)
+    ctx.fillStyle = 'rgba(245,239,224,0.9)'   // 米白
+    ctx.fillText(state[ROW2[i]] || 0, sx + 30, row2Y)
+  }
 
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
@@ -1166,10 +1214,10 @@ var closestBoardInfo = null      // v0.6.35: 最接近榜单信息 {name, diff, 
 
 // v0.6.43: 本地即时计算榜单接近度（不等云函数）
 const BOARD_THRESHOLDS = {
-  // v0.6.47: 各榜单末位历史人物的实际综合分（数据已重算到游戏量级）
-  '名医榜': 2000,   '名将榜': 5200,   '富商榜': 3000,
-  '文豪榜': 2390,   '能臣榜': 2300,   '义士榜': 2500,
-  '全能榜': 19000,  '颜值榜': 8000,
+  // v0.6.48: 统一标准重算，底层历史人物属性正常化
+  '名医榜': 2550,   '名将榜': 5200,   '富商榜': 3000,
+  '文豪榜': 4350,   '能臣榜': 3445,   '义士榜': 2700,
+  '全能榜': 19978,  '颜值榜': 8000,
 }
 const BOARD_TARGET_PERSON = {
   '名医榜': '孔伯华(民国)', '名将榜': '林冲(宋)', '富商榜': '伍崇曜(清)',
@@ -1364,8 +1412,8 @@ function drawScrollIndicator(ctx) {
   if (contentH <= viewH + 20) return
 
   const barX = layout.windowW - 6
-  // v0.2.5-J：barY 起点改成 statusBarH 下方（状态栏常显后画滚动条位置要重新算）
-  const barY = (layout.safeTop || 0) + layout.topBarH + (layout.statusBarH || 0) + 32  // +24 boardTarget + 8 gap
+  // v0.6.50f: barY 用 layout.textY 替代旧的 statusBarH+32 计算
+  const barY = layout.textY + 4
   const barH = viewH - 16
   const thumbH = Math.max(14, barH * (viewH / contentH))
   const maxOff = Math.max(1, contentH - viewH)
@@ -1516,6 +1564,94 @@ function drawFreeInputButton(ctx) {
   layout._freeInputBtn = { x: optX, y: freeY, w: optW, h: freeH }
 }
 
+// v0.6.50l — 格子填充式雷达图（9轴×5格，高亮格子而非连线）
+function drawRadarGrid(ctx, cx, cy, r, values) {
+  const n = 9
+  const cellsPerAxis = 5
+  const angleStep = (Math.PI * 2) / n
+  const startAngle = -Math.PI / 2
+  const labels = ['声','富','识','颜','医','战','文','政','义']
+
+  const maxVal = Math.max(...values, 1)
+
+  ctx.save()
+
+  // 0. 淡色背景圆环
+  ctx.beginPath()
+  ctx.arc(cx, cy, r, 0, Math.PI * 2)
+  ctx.fillStyle = 'rgba(15,12,8,0.5)'
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(200,168,124,0.2)'
+  ctx.lineWidth = 0.5
+  ctx.stroke()
+
+  // 1. 同心圆环参考
+  for (let lvl = 1; lvl <= cellsPerAxis; lvl++) {
+    const ringR = (r - 4) * lvl / cellsPerAxis
+    ctx.beginPath()
+    ctx.arc(cx, cy, ringR, 0, Math.PI * 2)
+    ctx.strokeStyle = lvl === cellsPerAxis ? 'rgba(200,168,124,0.3)' : 'rgba(200,168,124,0.08)'
+    ctx.lineWidth = lvl === cellsPerAxis ? 0.8 : 0.3
+    ctx.stroke()
+  }
+
+  // 2. 轴线（极细）
+  for (let i = 0; i < n; i++) {
+    const angle = startAngle + i * angleStep
+    ctx.beginPath()
+    ctx.moveTo(cx, cy)
+    ctx.lineTo(cx + r * Math.cos(angle), cy + r * Math.sin(angle))
+    ctx.strokeStyle = 'rgba(200,168,124,0.15)'
+    ctx.lineWidth = 0.3
+    ctx.stroke()
+  }
+
+  // 3. 格子填充（每个轴一列格子，从内到外点亮）
+  for (let i = 0; i < n; i++) {
+    const angle = startAngle + i * angleStep
+    const level = Math.min(cellsPerAxis, Math.max(0, Math.round((values[i] / maxVal) * cellsPerAxis)))
+
+    for (let j = 0; j < cellsPerAxis; j++) {
+      const t = (j + 0.6) / cellsPerAxis  // 0.12, 0.32, 0.52, 0.72, 0.92
+      const dist = t * (r - 4)
+      const px = cx + dist * Math.cos(angle)
+      const py = cy + dist * Math.sin(angle)
+      const cellSize = 4
+
+      // 与轴垂直的小矩形
+      ctx.save()
+      ctx.translate(px, py)
+      ctx.rotate(angle + Math.PI / 2)
+
+      if (j < level) {
+        // 亮格
+        const brightness = 0.6 + 0.4 * (j / cellsPerAxis)  // 从内到外渐变亮
+        ctx.fillStyle = 'rgba(232,200,130,' + brightness + ')'
+        ctx.fillRect(-cellSize / 2, -2, cellSize, 4)
+        ctx.strokeStyle = 'rgba(200,168,124,0.6)'
+        ctx.lineWidth = 0.3
+        ctx.strokeRect(-cellSize / 2, -2, cellSize, 4)
+      } else {
+        // 暗格
+        ctx.strokeStyle = 'rgba(200,168,124,0.15)'
+        ctx.lineWidth = 0.3
+        ctx.strokeRect(-cellSize / 2, -2, cellSize, 4)
+      }
+
+      ctx.restore()
+    }
+  }
+
+  // 4. 中心点
+  ctx.beginPath()
+  ctx.arc(cx, cy, 2, 0, Math.PI * 2)
+  ctx.fillStyle = 'rgba(200,168,124,0.3)'
+  ctx.fill()
+
+  ctx.restore()
+}
+
+// v0.2.2 — 底部物品栏（药匣样式 + 暖色 + 楷体）
 // v0.2.2 — 底部物品栏（药匣样式 + 暖色 + 楷体）
 function drawItemBar(ctx) {
   const barY = layout.itemBarY
@@ -1524,16 +1660,14 @@ function drawItemBar(ctx) {
 
   // 1. 底板（暗木色 + 顶部暗金边 + 朱砂点装饰）
   ctx.save()
-  ctx.fillStyle = 'rgba(20, 16, 12, 0.75)'  // 比 v0.1.62 略深一档
+  ctx.fillStyle = 'rgba(20, 16, 12, 0.75)'
   ctx.fillRect(0, barY, layout.windowW, barH)
-  // 顶部暗金线（更亮）
   ctx.strokeStyle = 'rgba(200, 168, 124, 0.45)'
   ctx.lineWidth = 0.8
   ctx.beginPath()
   ctx.moveTo(layout.padding, barY + 0.5)
   ctx.lineTo(layout.windowW - layout.padding, barY + 0.5)
   ctx.stroke()
-  // 左下/右下 朱砂红小点
   ctx.fillStyle = 'rgba(192, 48, 48, 0.7)'
   ctx.beginPath()
   ctx.arc(layout.padding + 4, barY + barH - 4, 2, 0, Math.PI * 2)
@@ -1543,9 +1677,9 @@ function drawItemBar(ctx) {
   ctx.fill()
   ctx.restore()
 
-  // 2. 行李标签（左侧，v0.2.2 改：楷体 + "⌜ 行李 ⌝"）
+  // 2. 行李标签（左侧）
   ctx.save()
-  ctx.fillStyle = 'rgba(232, 200, 130, 0.75)'  // 暖金色
+  ctx.fillStyle = 'rgba(232, 200, 130, 0.75)'
   ctx.font = '11px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
   ctx.textAlign = 'left'
   ctx.textBaseline = 'top'
@@ -1553,7 +1687,6 @@ function drawItemBar(ctx) {
   ctx.restore()
 
   if (items.length === 0) {
-    // 空状态
     ctx.save()
     ctx.fillStyle = 'rgba(245, 239, 224, 0.4)'
     ctx.font = '12px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
@@ -1576,7 +1709,6 @@ function drawItemBar(ctx) {
     const bx = startX + i * (boxW + gap)
 
     ctx.save()
-    // 药匣底（暗木色 + 朱砂描边）
     ctx.fillStyle = 'rgba(35, 28, 22, 0.85)'
     roundRect(ctx, bx, boxY, boxW, boxH, 3)
     ctx.fill()
@@ -1584,38 +1716,29 @@ function drawItemBar(ctx) {
     ctx.lineWidth = 0.8
     roundRect(ctx, bx, boxY, boxW, boxH, 3)
     ctx.stroke()
-    // 内细线
     ctx.strokeStyle = 'rgba(192, 48, 48, 0.3)'
     ctx.lineWidth = 0.5
     roundRect(ctx, bx + 2, boxY + 2, boxW - 4, boxH - 4, 2)
     ctx.stroke()
     ctx.restore()
 
-    // emoji 图标（左侧，暖金色）
-    // v0.2.5-O（先生 11:38 拍板）：图标居中位置从 bx+11 改成 bx+14，避开 box 左边缘
-    // 之前 emoji 14px 字号 + boxW=56 + bx+11 = 图标左边缘 bx+3（紧贴内细线 bx+2）
-    // 复合 emoji（4 字节）渲染时实际视觉宽度更大，可能溢出 box 右边框
-    // 修复：图标水平位置右移 3px（bx+14），字号 14→13 减小字号留更多空间
-    ctx.fillStyle = 'rgba(232, 200, 130, 0.95)'  // 暖金
+    ctx.fillStyle = 'rgba(232, 200, 130, 0.95)'
     ctx.font = '13px ' + ui.fontFamily
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(item.icon || '📦', bx + 14, boxY + boxH / 2)
 
-    // 物品名（右侧，楷体）—— v0.2.5-D：字号自适应 + 截断避免溢出 boxW
     ctx.fillStyle = 'rgba(245, 239, 224, 0.9)'
     const name = item.name || ''
-    const nameMaxW = boxW - 24  // bx+22 起算，到 boxW 右边界留 2px
+    const nameMaxW = boxW - 24
     let nameFontSize = 10
     ctx.font = nameFontSize + 'px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
     let nameW = ctx.measureText(name).width
-    // 缩字号：每缩 1px 测一次，最小 8px
     while (nameW > nameMaxW && nameFontSize > 8) {
       nameFontSize--
       ctx.font = nameFontSize + 'px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
       nameW = ctx.measureText(name).width
     }
-    // 还不够就截断
     let displayName = name
     if (nameW > nameMaxW) {
       for (let len = name.length - 1; len > 0; len--) {
@@ -1963,7 +2086,7 @@ function drawLeaderboard(ctx) {
     layout._boardTabs.push({ x: tx, y: ty, w: tabColW, h: tabH, index: i })
   }
 
-  // 内容区域
+  // 内容区域（tab下方）
   const contentY = tabY + (tabH + tabGap) * 2 + 12
   const contentH = ph - 120
   const contentX = px + 20
@@ -2239,10 +2362,11 @@ function drawDebugPanel(ctx) {
   if (debugLog.length === 0) return
 
   if (!debugOpen) {
-    // 折叠态：右上角小图标
-    const iconSize = 36
-    const iconX = layout.windowW - iconSize - 8
-    const iconY = 8
+    // 折叠态：右上角小图标（v0.6.50: 移入状态栏右侧，避免与系统···叠一起）
+    const iconSize = 24
+    const rightPad = 8
+    const iconX = layout.windowW - layout.padding - rightPad - iconSize
+    const iconY = layout.safeTop + layout.topBarH + 1
     // 半透明背景（深色）
     ctx.fillStyle = 'rgba(40,20,60,0.85)'
     roundRect(ctx, iconX, iconY, iconSize, iconSize, 6)
@@ -2262,11 +2386,11 @@ function drawDebugPanel(ctx) {
     if (lastRoundBadge && lastRoundBadge.resultError) {
       ctx.fillStyle = '#e04040'
       ctx.beginPath()
-      ctx.arc(iconX + iconSize - 6, iconY + 6, 8, 0, Math.PI * 2)
+      ctx.arc(iconX + iconSize - 5, iconY + 5, 5, 0, Math.PI * 2)
       ctx.fill()
       ctx.fillStyle = '#fff'
-      ctx.font = 'bold 10px sans-serif'
-      ctx.fillText('!', iconX + iconSize - 6, iconY + 7)
+      ctx.font = 'bold 8px sans-serif'
+      ctx.fillText('!', iconX + iconSize - 5, iconY + 6)
     }
     ctx.textAlign = 'left'
     ctx.textBaseline = 'alphabetic'
@@ -2588,10 +2712,11 @@ function handleTouch(x, y, type) {
   // 浮窗区域：右上角图标（折叠态）/ 全屏覆盖（展开态）
   if (debugLog.length > 0) {
     if (!debugOpen) {
-      // 折叠态：右上角小图标
-      const iconSize = 36
-      const iconX = layout.windowW - iconSize - 8
-      const iconY = 8
+      // 折叠态：右上角小图标（v0.6.50: 移入状态栏右侧，避免与系统···叠一起）
+      const iconSize = 24
+      const rightPad = 8
+      const iconX = layout.windowW - layout.padding - rightPad - iconSize
+      const iconY = layout.safeTop + layout.topBarH + 1
       if (hitTest(x, y, iconX, iconY, iconSize, iconSize)) {
         if (type === 'end') {
           debugOpen = true
@@ -2809,8 +2934,8 @@ function handleTouch(x, y, type) {
     }
   }
 
-  // 检查自由输入（v0.2.5-T：✎ 图标挪到顶栏右侧，bounds 用 layout._topFreeIcon）
-  if (layout._topFreeIcon && hitTest(x, y, layout._topFreeIcon.x, layout._topFreeIcon.y, layout._topFreeIcon.w, layout._topFreeIcon.h)) {
+  // 检查自由输入（v0.6.50g: 用 _freeInputBtn 替代旧版 _topFreeIcon）
+  if (layout._freeInputBtn && hitTest(x, y, layout._freeInputBtn.x, layout._freeInputBtn.y, layout._freeInputBtn.w, layout._freeInputBtn.h)) {
     handleFreeInput()
     return null
   }

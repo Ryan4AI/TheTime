@@ -50,6 +50,16 @@
       "memorySize": 256,
       "installDependency": true,
       "handler": "index.main"
+    },
+    {
+      "name": "generate_identity",
+      "timeout": 30,
+      "memorySize": 256,
+      "envVariables": {
+        "DS_API_KEY": "sk-26d0e090ed7b4d90803aae706d9b7247"
+      },
+      "installDependency": true,
+      "handler": "index.main"
     }
   ]
 }

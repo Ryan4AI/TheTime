@@ -56,9 +56,9 @@ const LLM_TIMEOUT_MS = 110000
 // 榜单阈值（硬编码，从 data/leaderboards.json 预计算，数据不变）
 // v0.6.47: 各榜单末位历史人物的实际综合分（数据已重算到游戏量级）
 const BOARD_THRESHOLDS = {
-  '名医榜': 2000,   '名将榜': 5200,   '富商榜': 3000,
-  '文豪榜': 2390,   '能臣榜': 2300,   '义士榜': 2500,
-  '全能榜': 19000,  '颜值榜': 8000,
+  '名医榜': 2550,   '名将榜': 5200,   '富商榜': 3000,
+  '文豪榜': 4350,   '能臣榜': 3445,   '义士榜': 2700,
+  '全能榜': 19978,  '颜值榜': 8000,
 }
 const BOARD_TARGET_PERSON = {
   '名医榜': '孔伯华(民国)', '名将榜': '林冲(宋)', '富商榜': '伍崇曜(清)',
@@ -369,6 +369,9 @@ function applyPatch(oldState, preUpdate, patch) {
   if (typeof patch.city === 'string') s.city = patch.city
   if (typeof patch.occupation === 'string') s.occupation = patch.occupation
 
+  // 5.5) epitaph（墓志铭）
+  if (typeof patch.epitaph === 'string') s.epitaph = patch.epitaph
+
   // 6) alive 判定
   s.alive = s.health > 0
 
@@ -388,75 +391,51 @@ function applyPatch(oldState, preUpdate, patch) {
  * 返回 system message 列表，角色 system，前端识别后特殊样式
  */
 function emitSystemMessages(oldState, newState) {
-  const msgs = []
+  const lines = []
   const seasonNames = ['正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '冬月', '腊月']
 
-  // 1) 时间 — 显示新状态
+  // v0.6.50h: 统一合并为一条 system message，去掉 [system · X] 前缀
+  // 1) 时间
   if (newState.year !== (oldState.year || newState.year) ||
       newState.month !== (oldState.month || 1)) {
     const monthStr = seasonNames[(newState.month || 1) - 1]
-    msgs.push({
-      role: 'system',
-      content: `[system · 时间] ${oldState.year || newState.year}年${seasonNames[(oldState.month || 1) - 1] || ''} → ${newState.year || ''}年${monthStr || ''}`,
-    })
+    lines.push(`时间: ${oldState.year || newState.year}年${seasonNames[(oldState.month || 1) - 1] || ''} → ${newState.year || ''}年${monthStr || ''}`)
   }
 
   // 2) 地点
   const oldLoc = oldState.city || oldState.location || ''
   const newLoc = newState.city || newState.location || ''
   if (newLoc && newLoc !== oldLoc) {
-    msgs.push({
-      role: 'system',
-      content: oldLoc ? `[system · 地点] ${oldLoc} → ${newLoc}` : `[system · 地点] ${newLoc}`,
-    })
+    lines.push(oldLoc ? `地点: ${oldLoc} → ${newLoc}` : `地点: ${newLoc}`)
   }
 
-  // 3) 身份/职业
+  // 3) 身份
   if (oldState.occupation && newState.occupation && newState.occupation !== oldState.occupation) {
-    msgs.push({
-      role: 'system',
-      content: `[system · 身份] ${oldState.occupation} → ${newState.occupation}`,
-    })
+    lines.push(`身份: ${oldState.occupation} → ${newState.occupation}`)
   }
 
-  // 4) 健康 — 显示新状态（先生原话："包含当前变化后的新状态"）
+  // 4) 气血
   const healthDelta = (newState.health || 0) - (oldState.health || 0)
-  if (Math.abs(healthDelta) >= 1) {  // v0.1.82: 阈值从10→1，任何变化都显示
-    msgs.push({
-      role: 'system',
-      content: `[system · 气血] ${oldState.health || 0} → ${newState.health || 0}`,
-    })
+  if (Math.abs(healthDelta) >= 1) {
+    lines.push(`气血: ${oldState.health || 0} → ${newState.health || 0}`)
   }
 
-  // 5) 财富 — 显示新状态
-  const oldCoin = oldState.coin || 0
-  const newCoin = newState.coin || 0
-  if (oldCoin !== newCoin) {
-    msgs.push({
-      role: 'system',
-      content: `[system · 金银] ${oldCoin} → ${newCoin} 文`,
-    })
-  }
-
-  // 6) v2 新增：属性变化检测
+  // 5) 九属性 — 任一变化时输出全部当前值
   const ATTRS = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
-  const attrChanges = []
+  let anyAttrChanged = false
   for (const attr of ATTRS) {
-    const old = oldState[attr] || 0
-    const cur = newState[attr] || 0
-    if (old !== cur) {
-      const sign = cur > old ? '+' : ''
-      attrChanges.push(`${attr}${sign}${cur - old}`)
+    if ((oldState[attr] || 0) !== (newState[attr] || 0)) {
+      anyAttrChanged = true
+      break
     }
   }
-  if (attrChanges.length > 0) {
-    msgs.push({
-      role: 'system',
-      content: `[system · 属性] ${attrChanges.join(' / ')}`,
-    })
+  if (anyAttrChanged) {
+    lines.push(ATTRS.map(a => `${a}:${newState[a] || 0}`).join('  '))
   }
 
-  return msgs
+  // 合并成一条 system message
+  if (lines.length === 0) return []
+  return [{ role: 'system', content: lines.join('\n') }]
 }
 
 async function queryMonthEvent(state) {
@@ -473,6 +452,49 @@ async function queryMonthEvent(state) {
   } catch (e) { return null }
 }
 
+/**
+ * v0.6.50: AI 输出中 content/options 的对话可能含英文双引号"破坏JSON结构
+ * 用状态机找出字符串内裸引号，替换为 CJK 右引号」
+ */
+function fixJSONContentQuotes(text) {
+  // 快速路径：已经合法
+  try { JSON.parse(text); return text } catch (e) {}
+
+  var result = ''
+  var inStr = false
+  for (var i = 0; i < text.length; i++) {
+    var ch = text[i]
+    // 跳过转义字符
+    if (ch === '\\') {
+      result += ch
+      if (i + 1 < text.length) { result += text[++i] }
+      continue
+    }
+    if (ch === '"') {
+      if (!inStr) {
+        inStr = true  // JSON 字符串开始
+        result += ch
+      } else {
+        // 字符串内，检查这个"是结束符还是内容中的引号
+        var j = i + 1
+        while (j < text.length && text[j] === ' ') j++
+        var next = text[j] || ''
+        // 如果下一个非空格字符是 JSON 结构分隔符，则是真正的结束引号
+        if (':,}],\n'.indexOf(next) !== -1) {
+          inStr = false
+          result += ch
+        } else {
+          // 内容中的对话引号 → 替换为 CJK 右引号
+          result += '」'
+        }
+      }
+    } else {
+      result += ch
+    }
+  }
+  return result
+}
+
 async function callAI(state, input, history, monthEvent, isRetry) {
   const systemPrompt = buildSystemPrompt(state, monthEvent)
   const userPrompt = buildUserPrompt(input, history)
@@ -481,10 +503,9 @@ async function callAI(state, input, history, monthEvent, isRetry) {
     const recent = history  // v0.1.84: 全量 history（不截断），prompt 长度不是瓶颈，叙事连贯性优先
     for (const msg of recent) {
       // v0.1.86: system 消息以 user 角色喂给 LLM（避免 MiniMax 2013 多 system 报错）
-      // AI 能感知时间/状态脉络（"758年正月 → 现在"），但 system 字面前缀让它知道这不是玩家台词
-      // 前端识别 system 角色单独渲染（淡灰、不计入叙事字数）
+      // v0.6.50: DeepSeek 无此限制，改回 role: 'system'（先生指示）
       if (msg.role === 'ai') messages.push({ role: 'assistant', content: msg.content })
-      else if (msg.role === 'system') messages.push({ role: 'user', content: msg.content })  // 标 user 喂进去
+      else if (msg.role === 'system') messages.push({ role: 'system', content: msg.content })
       else messages.push({ role: 'user', content: msg.content })
     }
   }
@@ -523,7 +544,27 @@ async function callAI(state, input, history, monthEvent, isRetry) {
 
   let branches
   let parseError = null
-  try {
+
+  // v0.6.50: AI 常用英文双引号"写叙事对话，破坏JSON结构，试一次自动修复
+  if (!cleaned) {
+    // 空字符串
+  } else try {
+    branches = JSON.parse(cleaned)
+  } catch (e) {
+    // 第一次 parse 失败：尝试自动修复 content 中的裸引号
+    const fixed = fixJSONContentQuotes(cleaned)
+    try {
+      branches = JSON.parse(fixed)
+    } catch (e2) {
+      // 修复后仍失败才走原始错误路径
+    }
+    if (branches) {
+      // 修复成功，用修复后的
+      cleaned = fixed
+    }
+  }
+
+  if (!branches) try {
     branches = JSON.parse(cleaned)
     if (!Array.isArray(branches)) {
       if (branches.items && Array.isArray(branches.items)) branches = branches.items
@@ -574,13 +615,9 @@ function buildSystemPrompt(state, monthEvent) {
   if (monthEvent) {
     eventsContext = [`本月发生的历史事件：`, `标题：${monthEvent.title || ''}`, `描述：${monthEvent.desc || monthEvent.description || ''}`, `影响范围：${monthEvent.scope || monthEvent.impact || '城市'}`].join('\n')
   }
-  let healthDesc = ''
-  if (state.health >= 80) healthDesc = '精力充沛'
-  else if (state.health >= 60) healthDesc = '还算硬朗'
-  else if (state.health >= 40) healthDesc = '时有小病'
-  else if (state.health >= 20) healthDesc = '体弱多病'
-  else healthDesc = '病入膏肓'
-
+  const age = state.age || 25
+  // v0.6.50: 不再输出健康描述（先生指示不需要这些描述）
+  
   // 计算最接近榜单
   const board = computeClosestBoard(state)
   let closestBoardStr = '暂无榜单接近数据'
@@ -711,6 +748,26 @@ function buildSystemPrompt(state, monthEvent) {
     `  - 合（收束）：回到日常生活，1 句话收尾。`,
     `- 国家级事件月（5-10 轮）：遵循"历史事件段"的进度，不强行套起承转合。`,
     ``,
+    `# 输出格式`,
+    `‼️ 只输出一个JSON数组，禁止输出JSON之外的任何内容。不要写前言后语、不要写注释、不要写"我已自检".`,
+    `输出必须是合法JSON数组，格式如下：`,
+    `⚠ content和options中的对话使用「」而非英文双引号"（防止破坏JSON结构）`,
+    `[`,
+    `  {`,
+    `    "p": 0.65,`,
+    `    "content": "白话文剧情，150~400字，直接进入场景",`,
+    `    "options": ["选项A（有真实差异）", "选项B", "选项C（可选）"],`,
+    `    "patch": {`,
+    `      "coin": -200,`,
+    `      "health": -5,`,
+    `      "items": {`,
+    `        "茶包": -15`,
+    `      }`,
+    `      "epitaph": "寿限已至时，在临终叙事中生成墓志铭（可选）"`,
+    `    }`,
+    `  }`,
+    `]`,
+    ``,
     `# 质量自检`,
     ``,
     `生成完每个分支的 content / options / patch 后、输出 JSON 之前，按以下 20 条逐条自检。任何 1 条不满足，回到 content 重写那一分支。`,
@@ -719,7 +776,7 @@ function buildSystemPrompt(state, monthEvent) {
     `1. 声音契约：NPC 台词符合其身份（粗人不讲商业术语，7 岁孩子不懂"分包"等现代词汇，商人关心行情但不议论朝政，女人不议论丈夫）。`,
     `2. 戏剧张力：3 个选项不能有"明显最优"——每个选项都要让玩家犹豫。不能让玩家一眼看出"哪个最安全"或"哪个最危险"。3 个选项都"有代价"（只是代价不同）——选 A 损耗 health 30 / 选 B 损耗 50 / 选 C 损耗 80 但回报高。玩家必须"权衡"而不是"判断对错"。关键动词不重复 >2 次。`,
     `3. 物品一致：content 中提到的物品 ⊆ state.items。要写"丢失/损毁"必须在 patch.items 显式声明。`,
-    `4. 阶层一致：庶人进不了皇宫、考场、官署、道观；商人不能穿绸缎；7 岁不能喝酒、不能上赌桌；女人不能进考场。`,
+    `4. 阶层一致：庶人进不了皇宫、考场、官署、道观；商人不能穿绸缎；7 岁不能喝酒、不能上赌桌；女人不能进考场。年龄一致：幼童（<8岁）不识字不行医不争功名，少年（<15岁）学识有限。`,
     `5. 具体细节：至少出现 1 件具体实物（物件名/菜名/地名/动作），禁止 3 个以上连续形容词堆砌。`,
     `6. 戏剧问题：本分支能回答 1 个"这一刻玩家要决定什么"的具体问题。写不出来说明本分支没意义。`,
     `7. 场景动 2 件事：要么推进剧情+深化角色，要么推进角色+切换情绪，要么揭示信息+复杂化。`,
@@ -739,7 +796,7 @@ function buildSystemPrompt(state, monthEvent) {
     ``,
     `# 当前状态`,
     `- 世数：第${state.life_number || 1}世`,
-    `- 姓名：${state.name || '无名'}，${state.gender || '男'}，${state.age}岁（${healthDesc}）`,
+    `- 姓名：${state.name || '无名'}，${state.gender || '男'}，${state.age}岁` + (state.lifespan && state.age >= state.lifespan ? '（⚠ 寿限已至）' : ''),
     `- 职业：${state.occupation || '庶民'}，阶层：${state.socialClass || '庶人'}`,
     `- 朝代：${state.dynasty || '?'} · ${state.eraDisplay || ''}`,
     `- 位置：${state.city || state.city_name || '?'} · ${monthStr}`,
@@ -756,128 +813,54 @@ function buildSystemPrompt(state, monthEvent) {
     `事件分成影响全国和影响城市2种。对于影响全国的历史事件，需要5-10轮对话完成。对于影响城市的历史事件，需要3-5轮对话完成。`,
     `如果玩家在事件中的行为影响了历史走向（蝴蝶效应），可以改编事件细节，不一定完全贴合真实。`,
     ``,
-    `# 输出格式`,
-    `输出必须是合法JSON数组，格式如下：`,
-    `[`,
-    `  {`,
-    `    "p": 0.65,`,
-    `    "content": "白话文剧情，150~400字，直接进入场景",`,
-    `    "options": ["选项A（有真实差异）", "选项B", "选项C（可选）"],`,
-    `    "patch": {`,
-    `      "coin": -200,`,
-    `      "health": -5,`,
-    `      "items": {`,
-    `        "茶包": -15`,
-    `      }`,
-    `    }`,
-    `  }`,
-    `]`,
+    `# 叙事中的属性体现`,
     ``,
-    `# 属性参考`,
+    `玩家属性影响剧情方向——声望高被人认、文采高能看懂告示、战功高被老兵认出来。`,
+    `你的任务是在叙事中自然体现这些差异，而不是在 patch 里改数值（评分系统自动算）。`,
     ``,
-    `玩家拥有 9 项属性（范围 0-10000），是上榜竞争和剧情方向的根基。`,
-    `属性变化必须"有叙事依据"——不是凭空加减，而是剧情结果的自然呈现。`,
-    `如何"在叙事中体现属性"是区分高质量剧情的核心标准。`,
-    ``,
-    `## 声望（名气、人望、口碑）`,
-    `- 数值层含义：0=无名小卒 / 100=乡里知名 / 500=全县闻名 / 2000=一州名士 / 5000+=天下皆知`,
+    `## 声望`,
     `- 叙事体现：路人认出你、有人打你的名号、被请为座上宾、官府注意到你`,
-    `- 如何获得：救人传名（医术→声望）、战场立功（战功→声望）、写诗传唱（文采→声望）、`,
-    `  政绩被夸（政绩→声望）、义举被赞（义行→声望）、美貌催生传说（颜值→声望）`,
-    `- 如何失去：恶名在外、得罪权贵被压制、被诬陷而百口莫辩`,
-    `- 故事引擎：高声望带来"机会"（被举荐、被求婚、被拉拢），但也带来"风险"（被妒忌、被盯上、被利用名声）`,
+    `- 故事方向：高声望→机会（被举荐/被拉拢），也→风险（被妒忌/被利用）`,
     ``,
-    `## 财富（金钱、资产、生活条件）`,
-    `- 数值层含义：0=赤贫 / 100=温饱 / 500=小康 / 2000=富户 / 5000+=豪绅巨贾`,
-    `- 叙事体现：能租好房子、穿什么衣服、请得起大夫、吃饭是粗粮还是酒肉`,
-    `- 如何获得：经商盈利、高额赏赐、收租、采矿、典当、嫁娶得嫁妆`,
-    `- 如何失去：买昂贵物品、被抢被盗、赔钱官司、天灾人祸破财、被骗`,
-    `- 故事引擎：缺钱推动"铤而走险"（接危险差事、借高利贷、硬而走险）；`,
-    `  富裕带来"新选择"（买官、投资、雇佣、低调隐退），也招来"觊觎"`,
+    `## 财富`,
+    `- 叙事体现：租房、衣着、请大夫、粗粮还是酒肉——不说"穷""富"，写具体场景`,
+    `- 故事方向：缺钱→铤而走险；富裕→新选择（买官/投资/隐退），也招觊觎`,
     ``,
-    `## 学识（知识积累、文化修养）`,
-    `- 数值层含义：0=目不识丁 / 200=粗通文字 / 500=能读能写 / 2000=饱读诗书 / 5000+=博学鸿儒`,
-    `- 叙事体现：能读懂告示和书信、懂得节气农事、懂得礼仪规矩、能引经据典`,
-    `- 如何获得：拜师求学、私塾听讲、与人切磋、游历见闻、研读古籍`,
-    `- 如何失去：记忆力衰退（年老）、生病损伤脑子、很少读书日渐生疏`,
-    `- 故事引擎：学识是"知识门槛"——某些选项/对话需要足够学识才能解锁；`,
-    `  高学识让人"看懂"别人看不懂的东西（告示背后的意思、诗句的暗指、古器的来历）`,
+    `## 学识`,
+    `- 叙事体现：能读懂告示、知节气礼仪、引经据典——学识低就是"看了看告示，只认得几个字"`,
+    `- 故事方向：学识是知识门槛→某些选项/对话需要学识解锁；高学识能看懂别人看不懂的东西`,
     ``,
-    `## 颜值（外貌、魅力、气质）`,
-    `- 数值层含义：0=丑陋 / 300=普通 / 800=端正 / 2000=出众 / 5000+=倾国倾城`,
-    `- 叙事体现：旁人看你的眼神、被人搭讪的频率、说媒的人多不多、走在路上的回头率`,
-    `- 如何获得：天生因素为主；注意保养/打扮/气质修炼可小幅提升（年龄影响极大）`,
-    `- 如何失去：衰老、毁容（受伤、瘟疫、火灾留疤——剧情驱动）`,
-    `- 故事引擎：高颜值是"社交利器"——更容易让人产生好感、更容易开门路；`,
-    `  也是"双刃剑"——引来纠缠、被权贵觊觎、被嫉妒陷害`,
+    `## 颜值`,
+    `- 叙事体现：旁人看你的眼神、搭讪频率、说媒、回头率——不写"好看"，写效果`,
+    `- 故事方向：高颜值是社交利器（好感+门路），也是双刃剑（纠缠/觊觎/嫉妒）`,
     ``,
-    `## 医术（医疗技能、草药知识、急救能力）`,
-    `- 数值层含义：0=不懂 / 200=识常见草药 / 800=能治小病 / 3000=一县名医 / 6000+=神医`,
-    `- 叙事体现：采药、号脉、开方、施针、劝人忌口——不写"他医术高超"而写他做了哪些具体的事`,
-    `- 如何获得：拜师学医、家传医书、多年行医积累经验、收集药方手抄本`,
-    `- 如何失去：久不行医手生（极罕见，通常只增不减）`,
-    `- 故事引擎：医术是"救人"的主要渠道——可救人致富（名医收入颇丰），也可因治死人惹祸；`,
-    `  疫情/战乱中医术价值暴增（资源稀缺，一药难求）`,
+    `## 医术`,
+    `- 叙事体现：采药、号脉、开方、施针——不写"医术高超"，写具体操作`,
+    `- 故事方向：救人可致富成名，也可因治死人惹祸；疫情战乱中医术价值暴增`,
     ``,
-    `## 战功（军事能力、征战功绩、武力表现）`,
-    `- 数值层含义：0=没摸过刀 / 200=能打仗 / 800=战场老兵 / 3000=将才 / 6000+=名将`,
-    `- 叙事体现：操练、守城、冲锋、布阵、军中威望——不写"他很能打"而写具体战局表现`,
-    `- 如何获得：从军打仗立功、斩首敌将、守城成功、练兵有方`,
-    `- 如何失去：战败失势、被削职、年迈体力不支`,
-    `- 故事引擎：战功是乱世的"通行证"——从大头兵到将军到诸侯，都需要实打实的战功；`,
-    `  战功需要"战场"来实现——和平时代难积战功，乱世中高风险高回报`,
+    `## 战功`,
+    `- 叙事体现：操练、守城、冲锋、布阵、军中威望——不写"很能打"，写具体战局表现`,
+    `- 故事方向：乱世中战功是通行证（士兵到将军），和平时代难积战功`,
     ``,
-    `## 文采（文学才华、诗文创作、书法才艺）`,
-    `- 数值层含义：0=文盲 / 200=能写书信 / 800=能作诗 / 3000=一方才子 / 6000+=文豪`,
-    `- 叙事体现：赋诗、题字、写文章、对对子——让作品本身被看见，不是标榜"他才华横溢"`,
-    `- 如何获得：读书作诗、与文人交流、拜名师、游历山川激发灵感`,
-    `- 如何失去：极少失去（除非手废了不能写）`,
-    `- 故事引擎：文采是"文路"的关键——科举入仕、被达官赏识、名篇传世、文会交友；`,
-    `  文采好也可能惹祸（诗文字句被曲解为"反诗"、"谤政"）`,
+    `## 文采`,
+    `- 叙事体现：赋诗、题字、写文章、对对子——让作品被看见，不是标榜"才华横溢"`,
+    `- 故事方向：科举入仕、被赏识、名篇传世；也可能惹祸（文字被曲解）`,
     ``,
-    `## 政绩（行政管理能力、治民成效）`,
-    `- 数值层含义：0=不管事 / 200=能处理日常 / 800=一县能吏 / 3000=一方良臣 / 6000+=能臣`,
-    `- 叙事体现：断案、收税、修水利、赈灾、维持治安——做实事，不是喊口号`,
-    `- 如何获得：为官做事、治理有方、百姓安居、上官嘉奖`,
-    `- 如何失去：被贬、被罢官、治下出事（流民造反、粮仓起火——你负责的地盘出事就算你头上）`,
-    `- 故事引擎：政绩是"官路"的基础——没有真政绩升不了官；`,
-    `  乱世中治理更难（赈灾、维稳、筹粮），但政绩含金量也更高`,
+    `## 政绩`,
+    `- 叙事体现：断案、收税、修水利、赈灾——做实事，不喊口号`,
+    `- 故事方向：政绩是官路基础；乱世治理更难，但政绩含金量更高`,
     ``,
-    `## 义行（侠义行为、为他人挺身而出的记录）`,
-    `- 数值层含义：0=自私自利 / 200=偶尔帮人 / 800=乐善好施 / 3000=一方义士 / 6000+=侠之大者`,
-    `- 叙事体现：路见不平拔刀相助、散财济贫、替人申冤、收养孤儿——行动，不是"善良"标签`,
-    `- 如何获得：主动帮助别人、做好事不求回报、替弱者出头`,
-    `- 如何失去：见死不救（失义）、做坏事（负面义行）、背信弃义`,
-    `- 故事引擎：义行积累到一定程度触发"义士叙事"——被求援、被追随、江湖名气；`,
-    `  高义行也可能被"道德绑架"——有人慕名来投、有人求你办事、有人用"义气"裹挟你`,
+    `## 义行`,
+    `- 叙事体现：路见不平、散财济贫、替人申冤、收养孤儿——行动，不是"善良"标签`,
+    `- 故事方向：高义行→被求援/被追随；也可能被"道德绑架"（有人用义气裹挟你）`,
     ``,
-    `## 属性间的联动关系（重要）`,
-    `- 医术↔声望：救人传名，但声望太高被权贵征用当私人医生`,
-    `- 战功↔声望：战场立功显名，但功高震主引来杀机`,
-    `- 文采↔学识：文采需要学识打底，高学识孕育好文采`,
-    `- 政绩↔声望：治民闻名天下，但树大招风`,
-    `- 颜值↔财富：美貌可换取财富（嫁富/被包养），也招来觊觎和麻烦`,
-    `- 义行↔声望：义举传名，是"正面声望"的最佳来源`,
-    `- 财富→一切：有钱能买学识（请先生）、能提升医术（买好药）、`,
-    `  能提高生活品质（间接利好颜值和健康）`,
-    `- 以上"联动"不是自动发生的——需要你在剧情中自然地体现。`,
-    `  不要写"声望增加了"，而是写"你治好的那位病人帮你四处传名"`,
-    ``,
-    `## 如何在叙事中体现属性（示例）`,
-    `- 低学识："你看了看墙上的告示，只认得几个字"（不是"你不识字"）`,
-    `- 高医术："你搭上那人的脉，觉得脉象浮紧，是外感风寒"（不是"你医术高"）`,
-    `- 低财富："你数了数怀里仅剩的三十文钱"（不是"你没钱"）`,
-    `- 高战功："老兵认出了你，低声说' 当年攻潼关时你带先锋队'"（不是"你打仗厉害"）`,
-    `- 高颜值的后果："邻家妇人打水时会多看你两眼，她丈夫脸色不太好看"`,
-    `- 低声望："你在衙门门口站了一上午，没人问你找谁"`,
-    ``,
-    `## 属性变化的原则`,
-    `- 变化必须有叙事依据——不能凭空加/减`,
-    `- 变化幅度匹配剧情强度：闲聊不加属性 / 救人一命可加医术10-30 / 一场大战加战功100-500`,
-    `- 削属性比加属性更难触发——但一旦触发，效果要显著（断手=文采归零，毁容=颜值暴跌）`,
-    `- 系统会自动根据剧情计算属性微调（AI₂评分），你只需在 patch 里写 coin/health/items 的变动`,
-    `  ——属性的数值变化由评分系统接管，你不需要在 patch 里写声望+/-10。`,
-    `- 你的核心任务：在**叙事层**自然地展示/暗示属性和它们的变化，让数值变化在故事中"有根"`,
+    `## 叙事示例`,
+    `- 低学识→"你看了看墙上的告示，只认得几个字"（不是"你不识字"）`,
+    `- 高医术→"你搭上那人的脉，觉得脉象浮紧，是外感风寒"（不是"你医术高"）`,
+    `- 低财富→"你数了数怀里仅剩的三十文钱"（不是"你没钱"）`,
+    `- 高战功→"老兵认出了你，低声说' 当年攻潼关时你带先锋队'"（不是"你打仗厉害"）`,
+    `- 高颜值→"邻家妇人打水时会多看你两眼，她丈夫脸色不太好看"`,
+    `- 低声望→"你在衙门门口站了一上午，没人问你找谁"`,
     ``,
     `# 历史名人榜`,
     ``,
@@ -945,7 +928,7 @@ function buildSystemPrompt(state, monthEvent) {
 }
 
 function buildUserPrompt(input, history) {
-  if (!history || history.length === 0) return ''
+  // v0.6.50: 去掉 history 判空（round 0 也有 input，不应返回空字符串）
   return String(input || '继续')
 }
 
@@ -968,10 +951,12 @@ async function callScoringAI(content, prevState) {
   const prevAttrs = {}
   for (const a of ATTR_NAMES) prevAttrs[a] = prevState[a] || 0
   const currAttrsStr = ATTR_NAMES.map(a => `${a}:${prevAttrs[a]}`).join(' ')
+  const age = prevState.age || 0
 
   const scorePrompt = [
     `你是一位历史模拟游戏属性记分员。根据玩家在以下剧情中经历的事件，评估其各项属性的变化。`,
     ``,
+    `玩家年龄：${age}岁`,
     `玩家当前属性：`,
     currAttrsStr,
     ``,
@@ -997,6 +982,7 @@ async function callScoringAI(content, prevState) {
     `- 重大事件（战争/上任/成名/致富/受伤）：±100~500`,
     `- 已有高属性更难增长（5000 以上回 0.5，8000 以上回 0.2）`,
     `- 没有相关行为的属性 = 0（不要无中生有）`,
+    `- 年龄约束：${age < 8 ? '玩家不足8岁，学识/医术/战功/文采/政绩/义行/财富均只能为0（幼儿不可能获得这些成就类属性）。声望最多±5。' : age < 15 ? '玩家不足15岁（少年），学识/文采最多±10；医术/战功/政绩最多±5；义行最多±10；财富最多±5。' : '成年玩家无额外年龄约束。'}`,
     `- 只返回 JSON 对象，不要任何其他文字`,
     `例：{"声望":30,"财富":-200,"学识":10,"颜值":0,"医术":0,"战功":0,"文采":0,"政绩":0,"义行":50}`,
   ].join('\n')

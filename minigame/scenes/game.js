@@ -1519,12 +1519,13 @@ function drawFreeInputButton(ctx) {
 }
 
 // v0.6.50l — 格子填充式雷达图（9边形×5格，高亮格子而非连线）
-// v0.6.50s: 扇面雷达图（扇形填充，取代格子填充）
-function drawRadarFan(ctx, cx, cy, r, values, maxVal) {
+// v0.6.50t: 九边形三角雷达图（按实际属性值，直线连接相邻顶点）
+function drawRadarTriangles(ctx, cx, cy, r, values) {
   const n = 9
   const step = (Math.PI * 2) / n
   const startAngle = -Math.PI / 2
-  const maxV = maxVal || 5
+  const maxV = Math.max(...values, 1)  // 按实际最大值等比例缩放
+  const innerR = r - 3  // 留边缘
 
   ctx.save()
 
@@ -1540,9 +1541,9 @@ function drawRadarFan(ctx, cx, cy, r, values, maxVal) {
   ctx.fillStyle = 'rgba(15,12,8,0.6)'
   ctx.fill()
 
-  // 同心参考环（5层九边形）
+  // 同心参考环（5等分九边形）
   for (let lvl = 1; lvl <= 5; lvl++) {
-    const lr = (r - 3) * lvl / 5
+    const lr = innerR * lvl / 5
     ctx.beginPath()
     for (let i = 0; i <= n; i++) {
       const a = startAngle + (i % n) * step
@@ -1567,29 +1568,48 @@ function drawRadarFan(ctx, cx, cy, r, values, maxVal) {
     ctx.stroke()
   }
 
-  // 扇面填充（每个属性一条扇形，从中心到值对应的外层）
+  // 九边形三角填充（相邻两轴的值点连线到中心）
+  // values[i] = 轴i的值，values[(i+1)%n] = 下一轴的值
+  // 三角形 = 中心 → 轴i值点 → 轴i+1值点 → 中心
   for (let i = 0; i < n; i++) {
-    const val = Math.min(values[i] || 0, maxV)
-    const outerR = (val / maxV) * (r - 3)
-    if (outerR < 0.5) continue
+    const v0 = values[i] || 0
+    const v1 = values[(i + 1) % n] || 0
+    const r0 = (v0 / maxV) * innerR
+    const r1 = (v1 / maxV) * innerR
+    if (r0 < 0.5 && r1 < 0.5) continue  // 两个都接近0不画
 
-    const gap = 0.04  // 扇面间小间隙
-    const a0 = startAngle + i * step - step / 2 + gap
-    const a1 = startAngle + i * step + step / 2 - gap
+    const a0 = startAngle + i * step
+    const a1 = startAngle + ((i + 1) % n) * step
 
     ctx.beginPath()
     ctx.moveTo(cx, cy)
-    ctx.lineTo(cx + outerR * Math.cos(a0), cy + outerR * Math.sin(a0))
-    ctx.arc(cx, cy, outerR, a0, a1)
+    ctx.lineTo(cx + r0 * Math.cos(a0), cy + r0 * Math.sin(a0))
+    ctx.lineTo(cx + r1 * Math.cos(a1), cy + r1 * Math.sin(a1))
     ctx.closePath()
 
-    const intensity = 0.15 + (val / maxV) * 0.4
+    const avg = (v0 + v1) / 2 / maxV
+    const intensity = 0.2 + avg * 0.45
     ctx.fillStyle = 'rgba(220,182,100,' + intensity + ')'
     ctx.fill()
     ctx.strokeStyle = 'rgba(220,182,100,' + Math.min(intensity + 0.15, 0.6) + ')'
     ctx.lineWidth = 0.5
     ctx.stroke()
   }
+
+  // 数据连线（高亮轮廓，沿值点走一圈）
+  ctx.beginPath()
+  for (let i = 0; i <= n; i++) {
+    const v = values[i % n] || 0
+    const rv = (v / maxV) * innerR
+    const a = startAngle + (i % n) * step
+    const x = cx + rv * Math.cos(a)
+    const y = cy + rv * Math.sin(a)
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+  }
+  ctx.closePath()
+  ctx.strokeStyle = 'rgba(232,200,130,0.5)'
+  ctx.lineWidth = 1
+  ctx.stroke()
 
   // 外缘九边形边框
   ctx.beginPath()
@@ -1655,7 +1675,7 @@ function drawItemBar(ctx) {
   const rcy = barY + barH / 2
   const rKeys = ['声望','财富','学识','颜值','医术','战功','文采','政绩','义行']
   const rVals = rKeys.map(k => state[k] || 0)
-  drawRadarFan(ctx, rcx, rcy, radarR, rVals, 5)
+  drawRadarTriangles(ctx, rcx, rcy, radarR, rVals)
 
   // 全称标签 + 数值（8/7px清晰字体）
   ctx.save()

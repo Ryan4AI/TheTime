@@ -727,14 +727,6 @@ function render(ctx) {
   drawFloaters(ctx)
   drawSurpassNotice(ctx)
 
-  // v0.6.50l: 格子雷达图（右上角常驻）
-  const ATTR_KEYS = ['声望','财富','学识','颜值','医术','战功','文采','政绩','义行']
-  const attrVals = ATTR_KEYS.map(k => state[k] || 0)
-  const radarR = 34
-  const radarCX = layout.windowW - layout.padding - 5 - radarR
-  const radarCY = layout.sceneY + 10 + radarR
-  drawRadarGrid(ctx, radarCX, radarCY, radarR, attrVals)
-
   // 4. 叙事文字（题跋·下半屏，v0.1.63 改版）
   drawNarrative(ctx)
 
@@ -2098,11 +2090,38 @@ function drawLeaderboard(ctx) {
     layout._boardTabs.push({ x: tx, y: ty, w: tabColW, h: tabH, index: i })
   }
 
-  // 内容区域（tab下方）
-  const contentY = tabY + (tabH + tabGap) * 2 + 12
-  const contentH = ph - 120
+  // ⬡ 格子雷达图（v0.6.50m）
+  const radarR = 40
+  const radarCX = px + pw / 2
+  const radarCY = tabY + (tabH + tabGap) * 2 + 12 + radarR + 4
+  const radarAttrKeys = ['声望','财富','学识','颜值','医术','战功','文采','政绩','义行']
+  const radarVals = radarAttrKeys.map(k => state[k] || 0)
+  drawRadarGrid(ctx, radarCX, radarCY, radarR, radarVals)
+
+  // 雷达图标签（9个单字沿轴分布）
+  const labelChars = ['声','富','识','颜','医','战','文','政','义']
+  ctx.save()
+  for (let i = 0; i < 9; i++) {
+    const angle = -Math.PI / 2 + i * (Math.PI * 2) / 9
+    const lx = radarCX + (radarR + 10) * Math.cos(angle)
+    const ly = radarCY + (radarR + 10) * Math.sin(angle)
+    ctx.fillStyle = 'rgba(170,210,180,0.6)'
+    ctx.font = '8px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(labelChars[i], lx, ly - 4)
+    ctx.fillStyle = 'rgba(200,168,124,0.4)'
+    ctx.font = '6px sans-serif'
+    ctx.fillText(radarVals[i], lx, ly + 5)
+  }
+  ctx.restore()
+
+  // 内容区域（雷达图下方）
   const contentX = px + 20
   const contentW = pw - 40
+  const radarAreaH = radarR * 2 + 28
+  const contentY = tabY + (tabH + tabGap) * 2 + 12 + radarAreaH
+  const contentH = ph - 120 - radarAreaH - 6
 
   // 分隔线
   ctx.strokeStyle = 'rgba(90,138,112,0.2)'

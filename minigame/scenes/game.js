@@ -1564,7 +1564,7 @@ function drawFreeInputButton(ctx) {
   layout._freeInputBtn = { x: optX, y: freeY, w: optW, h: freeH }
 }
 
-// v0.6.50l — 格子填充式雷达图（9轴×5格，高亮格子而非连线）
+// v0.6.50l — 格子填充式雷达图（9边形×5格，高亮格子而非连线）
 function drawRadarGrid(ctx, cx, cy, r, values) {
   const n = 9
   const cellsPerAxis = 5
@@ -1576,21 +1576,33 @@ function drawRadarGrid(ctx, cx, cy, r, values) {
 
   ctx.save()
 
-  // 0. 淡色背景圆环
+  // 0. 淡色背景多边形
   ctx.beginPath()
-  ctx.arc(cx, cy, r, 0, Math.PI * 2)
-  ctx.fillStyle = 'rgba(15,12,8,0.5)'
+  for (let i = 0; i <= n; i++) {
+    const angle = startAngle + (i % n) * angleStep
+    const x = cx + r * Math.cos(angle)
+    const y = cy + r * Math.sin(angle)
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+  }
+  ctx.closePath()
+  ctx.fillStyle = 'rgba(15,12,8,0.6)'
   ctx.fill()
-  ctx.strokeStyle = 'rgba(200,168,124,0.2)'
+  ctx.strokeStyle = 'rgba(200,168,124,0.25)'
   ctx.lineWidth = 0.5
   ctx.stroke()
 
-  // 1. 同心圆环参考
+  // 1. 同心九边形参考
   for (let lvl = 1; lvl <= cellsPerAxis; lvl++) {
     const ringR = (r - 4) * lvl / cellsPerAxis
     ctx.beginPath()
-    ctx.arc(cx, cy, ringR, 0, Math.PI * 2)
-    ctx.strokeStyle = lvl === cellsPerAxis ? 'rgba(200,168,124,0.3)' : 'rgba(200,168,124,0.08)'
+    for (let i = 0; i <= n; i++) {
+      const angle = startAngle + (i % n) * angleStep
+      const x = cx + ringR * Math.cos(angle)
+      const y = cy + ringR * Math.sin(angle)
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+    }
+    ctx.closePath()
+    ctx.strokeStyle = lvl === cellsPerAxis ? 'rgba(200,168,124,0.35)' : 'rgba(200,168,124,0.1)'
     ctx.lineWidth = lvl === cellsPerAxis ? 0.8 : 0.3
     ctx.stroke()
   }

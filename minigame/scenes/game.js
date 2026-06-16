@@ -745,34 +745,8 @@ function render(ctx) {
     drawFreeInputButton(ctx)
   }
 
-  // 8. 底部物品栏（极简）
+  // 8. 底部物品栏（极简）  // v0.6.50p: 右侧并排格子雷达图
   drawItemBar(ctx)
-
-  // v0.6.50o: 九边形格子雷达图（与物品栏一起在底部，右上）
-  {
-    const rr = 34
-    const rcx = layout.windowW - layout.padding - 4 - rr
-    const rcy = layout.itemBarY - 4 - rr
-    const rKeys = ['声望','财富','学识','颜值','医术','战功','文采','政绩','义行']
-    const rVals = rKeys.map(k => state[k] || 0)
-    drawRadarGrid(ctx, rcx, rcy, rr, rVals)
-    // 全称标签 + 数值
-    ctx.save()
-    for (let i = 0; i < 9; i++) {
-      const a = -Math.PI / 2 + i * (Math.PI * 2) / 9
-      const lx = rcx + (rr + 10) * Math.cos(a)
-      const ly = rcy + (rr + 10) * Math.sin(a)
-      ctx.fillStyle = 'rgba(170,210,180,0.6)'
-      ctx.font = '8px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(rKeys[i], lx, ly - 4)
-      ctx.fillStyle = 'rgba(200,168,124,0.45)'
-      ctx.font = '6px sans-serif'
-      ctx.fillText(rVals[i], lx, ly + 5)
-    }
-    ctx.restore()
-  }
 
   // 9. 加载中（v0.2.5-D：去掉 drawLoading 调用，"画在生成中" 跟 narrative 重复且常重叠）
   // 加载状态改由 narrative 区域显示"史官正在落笔..."提示（drawNarrative 内部处理）
@@ -1644,10 +1618,18 @@ function drawRadarGrid(ctx, cx, cy, r, values) {
 
 // v0.2.2 — 底部物品栏（药匣样式 + 暖色 + 楷体）
 // v0.2.2 — 底部物品栏（药匣样式 + 暖色 + 楷体）
+// v0.6.50p: 右侧并排九边形格子雷达图
 function drawItemBar(ctx) {
   const barY = layout.itemBarY
   const items = currentItems || []
   const barH = layout.itemBarH
+
+  // 右侧留位给雷达图
+  const radarR = 26
+  const radarLabelOff = 8
+  const radarAreaW = (radarR + radarLabelOff) * 2 + 8  // ~76px
+  const itemEndX = layout.windowW - layout.padding - radarAreaW - 4
+  const itemAreaW = itemEndX - layout.padding
 
   // 1. 底板（暗木色 + 顶部暗金边 + 朱砂点装饰）
   ctx.save()
@@ -1663,9 +1645,6 @@ function drawItemBar(ctx) {
   ctx.beginPath()
   ctx.arc(layout.padding + 4, barY + barH - 4, 2, 0, Math.PI * 2)
   ctx.fill()
-  ctx.beginPath()
-  ctx.arc(layout.windowW - layout.padding - 4, barY + barH - 4, 2, 0, Math.PI * 2)
-  ctx.fill()
   ctx.restore()
 
   // 2. 行李标签（左侧）
@@ -1677,76 +1656,92 @@ function drawItemBar(ctx) {
   ctx.fillText('⌜ 行李 ⌝', layout.padding, barY + 6)
   ctx.restore()
 
-  if (items.length === 0) {
+  if (items.length > 0) {
+    // 物品药匣（横排，右对齐到物品区域右边界）
+    const boxW = 56
+    const boxH = 32
+    const gap = 6
+    const totalW = items.length * (boxW + gap) - gap
+    const startX = itemEndX - totalW
+    const boxY = barY + 22
+
+    items.forEach((item, i) => {
+      const bx = startX + i * (boxW + gap)
+      ctx.save()
+      ctx.fillStyle = 'rgba(35, 28, 22, 0.85)'
+      roundRect(ctx, bx, boxY, boxW, boxH, 3)
+      ctx.fill()
+      ctx.strokeStyle = 'rgba(192, 48, 48, 0.7)'
+      ctx.lineWidth = 0.8
+      roundRect(ctx, bx, boxY, boxW, boxH, 3)
+      ctx.stroke()
+      ctx.strokeStyle = 'rgba(192, 48, 48, 0.3)'
+      ctx.lineWidth = 0.5
+      roundRect(ctx, bx + 2, boxY + 2, boxW - 4, boxH - 4, 2)
+      ctx.stroke()
+      ctx.restore()
+      ctx.fillStyle = 'rgba(232, 200, 130, 0.95)'
+      ctx.font = '13px ' + ui.fontFamily
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(item.icon || '📦', bx + 14, boxY + boxH / 2)
+      ctx.fillStyle = 'rgba(245, 239, 224, 0.9)'
+      const name = item.name || ''
+      const nameMaxW = boxW - 24
+      let nameFontSize = 10
+      ctx.font = nameFontSize + 'px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+      let nameW = ctx.measureText(name).width
+      while (nameW > nameMaxW && nameFontSize > 8) {
+        nameFontSize--
+        ctx.font = nameFontSize + 'px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+        nameW = ctx.measureText(name).width
+      }
+      let displayName = name
+      if (nameW > nameMaxW) {
+        for (let len = name.length - 1; len > 0; len--) {
+          displayName = name.slice(0, len) + '…'
+          if (ctx.measureText(displayName).width <= nameMaxW) break
+        }
+      }
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(displayName, bx + 22, boxY + boxH / 2)
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'alphabetic'
+      item._bounds = { x: bx, y: boxY, w: boxW, h: boxH }
+    })
+  } else {
     ctx.save()
     ctx.fillStyle = 'rgba(245, 239, 224, 0.4)'
     ctx.font = '12px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-    ctx.textAlign = 'center'
+    ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
-    ctx.fillText('空囊而来', layout.windowW / 2, barY + barH / 2 + 4)
+    ctx.fillText('空囊而来', layout.padding + 10, barY + barH / 2 + 4)
     ctx.restore()
-    return
   }
 
-  // 3. 物品药匣（横排，右侧对齐）
-  const boxW = 56
-  const boxH = 32
-  const gap = 6
-  const totalW = items.length * (boxW + gap) - gap
-  const startX = layout.windowW - layout.padding - totalW
-  const boxY = barY + 22
-
-  items.forEach((item, i) => {
-    const bx = startX + i * (boxW + gap)
-
-    ctx.save()
-    ctx.fillStyle = 'rgba(35, 28, 22, 0.85)'
-    roundRect(ctx, bx, boxY, boxW, boxH, 3)
-    ctx.fill()
-    ctx.strokeStyle = 'rgba(192, 48, 48, 0.7)'
-    ctx.lineWidth = 0.8
-    roundRect(ctx, bx, boxY, boxW, boxH, 3)
-    ctx.stroke()
-    ctx.strokeStyle = 'rgba(192, 48, 48, 0.3)'
-    ctx.lineWidth = 0.5
-    roundRect(ctx, bx + 2, boxY + 2, boxW - 4, boxH - 4, 2)
-    ctx.stroke()
-    ctx.restore()
-
-    ctx.fillStyle = 'rgba(232, 200, 130, 0.95)'
-    ctx.font = '13px ' + ui.fontFamily
+  // ⬡ 右侧雷达图（v0.6.50p）
+  const rcx = layout.windowW - layout.padding - 4 - radarR
+  const rcy = barY + barH / 2
+  const rKeys = ['声望','财富','学识','颜值','医术','战功','文采','政绩','义行']
+  const rVals = rKeys.map(k => state[k] || 0)
+  drawRadarGrid(ctx, rcx, rcy, radarR, rVals)
+  // 全称标签 + 数值
+  ctx.save()
+  for (let i = 0; i < 9; i++) {
+    const a = -Math.PI / 2 + i * (Math.PI * 2) / 9
+    const lx = rcx + (radarR + radarLabelOff) * Math.cos(a)
+    const ly = rcy + (radarR + radarLabelOff) * Math.sin(a)
+    ctx.fillStyle = 'rgba(170,210,180,0.55)'
+    ctx.font = '7px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(item.icon || '📦', bx + 14, boxY + boxH / 2)
-
-    ctx.fillStyle = 'rgba(245, 239, 224, 0.9)'
-    const name = item.name || ''
-    const nameMaxW = boxW - 24
-    let nameFontSize = 10
-    ctx.font = nameFontSize + 'px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-    let nameW = ctx.measureText(name).width
-    while (nameW > nameMaxW && nameFontSize > 8) {
-      nameFontSize--
-      ctx.font = nameFontSize + 'px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-      nameW = ctx.measureText(name).width
-    }
-    let displayName = name
-    if (nameW > nameMaxW) {
-      for (let len = name.length - 1; len > 0; len--) {
-        displayName = name.slice(0, len) + '…'
-        if (ctx.measureText(displayName).width <= nameMaxW) break
-      }
-    }
-    ctx.textAlign = 'left'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(displayName, bx + 22, boxY + boxH / 2)
-
-    ctx.textAlign = 'left'
-    ctx.textBaseline = 'alphabetic'
-
-    // 触摸热区
-    item._bounds = { x: bx, y: boxY, w: boxW, h: boxH }
-  })
+    ctx.fillText(rKeys[i], lx, ly - 3)
+    ctx.fillStyle = 'rgba(200,168,124,0.35)'
+    ctx.font = '5px sans-serif'
+    ctx.fillText(rVals[i], lx, ly + 4)
+  }
+  ctx.restore()
 }
 
 // ─────── 玉牒浮窗（长按状态） ───────

@@ -1618,20 +1618,20 @@ function drawRadarGrid(ctx, cx, cy, r, values) {
 
 // v0.2.2 — 底部物品栏（药匣样式 + 暖色 + 楷体）
 // v0.2.2 — 底部物品栏（药匣样式 + 暖色 + 楷体）
-// v0.6.50p: 右侧并排九边形格子雷达图
+// v0.6.50q: 右侧并排格子雷达图（分隔线区分左右）
 function drawItemBar(ctx) {
   const barY = layout.itemBarY
   const items = currentItems || []
   const barH = layout.itemBarH
 
-  // 右侧留位给雷达图
+  // 右侧命格区宽度
   const radarR = 26
   const radarLabelOff = 8
-  const radarAreaW = (radarR + radarLabelOff) * 2 + 8  // ~76px
-  const itemEndX = layout.windowW - layout.padding - radarAreaW - 4
-  const itemAreaW = itemEndX - layout.padding
+  const fateW = (radarR + radarLabelOff) * 2 + 24  // ~92px
+  const dividerX = layout.windowW - layout.padding - fateW  // 分隔线位置
+  const itemEndX = dividerX - 6  // 物品右边界
 
-  // 1. 底板（暗木色 + 顶部暗金边 + 朱砂点装饰）
+  // 1. 底板（全宽暗木色 + 顶部暗金边 + 朱砂点）
   ctx.save()
   ctx.fillStyle = 'rgba(20, 16, 12, 0.75)'
   ctx.fillRect(0, barY, layout.windowW, barH)
@@ -1645,9 +1645,36 @@ function drawItemBar(ctx) {
   ctx.beginPath()
   ctx.arc(layout.padding + 4, barY + barH - 4, 2, 0, Math.PI * 2)
   ctx.fill()
+  ctx.beginPath()
+  ctx.arc(layout.windowW - layout.padding - 4, barY + barH - 4, 2, 0, Math.PI * 2)
+  ctx.fill()
   ctx.restore()
 
-  // 2. 行李标签（左侧）
+  // 2. 命格区底色（稍浅，与行李区区分）
+  ctx.save()
+  ctx.fillStyle = 'rgba(30, 24, 18, 0.5)'
+  ctx.fillRect(dividerX, barY, layout.windowW - dividerX, barH)
+  ctx.restore()
+
+  // 3. 竖向分隔线
+  ctx.save()
+  ctx.strokeStyle = 'rgba(200,168,124,0.25)'
+  ctx.lineWidth = 0.5
+  ctx.beginPath()
+  ctx.moveTo(dividerX, barY + 6)
+  ctx.lineTo(dividerX, barY + barH - 6)
+  ctx.stroke()
+  // 分隔线两端装饰点
+  ctx.fillStyle = 'rgba(200,168,124,0.3)'
+  ctx.beginPath()
+  ctx.arc(dividerX, barY + 6, 1.5, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.beginPath()
+  ctx.arc(dividerX, barY + barH - 6, 1.5, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+
+  // 4. 行李标签 + 物品
   ctx.save()
   ctx.fillStyle = 'rgba(232, 200, 130, 0.75)'
   ctx.font = '11px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
@@ -1657,16 +1684,17 @@ function drawItemBar(ctx) {
   ctx.restore()
 
   if (items.length > 0) {
-    // 物品药匣（横排，右对齐到物品区域右边界）
     const boxW = 56
     const boxH = 32
     const gap = 6
     const totalW = items.length * (boxW + gap) - gap
-    const startX = itemEndX - totalW
+    const startX = Math.max(layout.padding + 50, itemEndX - totalW)  // 从标签后开始或在右边界结束
     const boxY = barY + 22
 
     items.forEach((item, i) => {
       const bx = startX + i * (boxW + gap)
+      if (bx + boxW > itemEndX) return  // 放不下就跳过
+      if (bx < layout.padding + 50) return  // 放不下就跳过
       ctx.save()
       ctx.fillStyle = 'rgba(35, 28, 22, 0.85)'
       roundRect(ctx, bx, boxY, boxW, boxH, 3)
@@ -1720,9 +1748,19 @@ function drawItemBar(ctx) {
     ctx.restore()
   }
 
-  // ⬡ 右侧雷达图（v0.6.50p）
-  const rcx = layout.windowW - layout.padding - 4 - radarR
-  const rcy = barY + barH / 2
+  // 5. 命格标题（始终显示）
+  ctx.save()
+  ctx.fillStyle = 'rgba(170,210,180,0.55)'
+  ctx.font = '8px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'top'
+  const fateCX = dividerX + (layout.windowW - dividerX - layout.padding) / 2
+  ctx.fillText('命 格', fateCX, barY + 4)
+  ctx.restore()
+
+  // 6. ⬡ 右侧雷达图
+  const rcx = fateCX
+  const rcy = barY + barH / 2 + 3  // 略偏下（给顶部标题留空间）
   const rKeys = ['声望','财富','学识','颜值','医术','战功','文采','政绩','义行']
   const rVals = rKeys.map(k => state[k] || 0)
   drawRadarGrid(ctx, rcx, rcy, radarR, rVals)
@@ -1732,12 +1770,12 @@ function drawItemBar(ctx) {
     const a = -Math.PI / 2 + i * (Math.PI * 2) / 9
     const lx = rcx + (radarR + radarLabelOff) * Math.cos(a)
     const ly = rcy + (radarR + radarLabelOff) * Math.sin(a)
-    ctx.fillStyle = 'rgba(170,210,180,0.55)'
-    ctx.font = '7px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+    ctx.fillStyle = 'rgba(170,210,180,0.5)'
+    ctx.font = '6px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(rKeys[i], lx, ly - 3)
-    ctx.fillStyle = 'rgba(200,168,124,0.35)'
+    ctx.fillStyle = 'rgba(200,168,124,0.3)'
     ctx.font = '5px sans-serif'
     ctx.fillText(rVals[i], lx, ly + 4)
   }

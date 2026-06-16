@@ -1520,12 +1520,12 @@ function drawFreeInputButton(ctx) {
 
 // v0.6.50l — 格子填充式雷达图（9边形×5格，高亮格子而非连线）
 // v0.6.50t: 九边形三角雷达图（按实际属性值，直线连接相邻顶点）
-function drawRadarTriangles(ctx, cx, cy, r, values) {
+function drawRadarEdges(ctx, cx, cy, r, values) {
   const n = 9
   const step = (Math.PI * 2) / n
   const startAngle = -Math.PI / 2
-  const maxV = Math.max(...values, 1)  // 按实际最大值等比例缩放
-  const innerR = r - 3  // 留边缘
+  const maxV = Math.max(...values, 1)
+  const innerR = r - 3
 
   ctx.save()
 
@@ -1557,59 +1557,28 @@ function drawRadarTriangles(ctx, cx, cy, r, values) {
     ctx.stroke()
   }
 
-  // 轴线
+  // 边填充：每个九边形边对应一个属性，从中心到值所在位置的三角形
   for (let i = 0; i < n; i++) {
-    const a = startAngle + i * step
-    ctx.beginPath()
-    ctx.moveTo(cx, cy)
-    ctx.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a))
-    ctx.strokeStyle = 'rgba(200,168,124,0.12)'
-    ctx.lineWidth = 0.3
-    ctx.stroke()
-  }
-
-  // 九边形三角填充（相邻两轴的值点连线到中心）
-  // values[i] = 轴i的值，values[(i+1)%n] = 下一轴的值
-  // 三角形 = 中心 → 轴i值点 → 轴i+1值点 → 中心
-  for (let i = 0; i < n; i++) {
-    const v0 = values[i] || 0
-    const v1 = values[(i + 1) % n] || 0
-    const r0 = (v0 / maxV) * innerR
-    const r1 = (v1 / maxV) * innerR
-    if (r0 < 0.5 && r1 < 0.5) continue  // 两个都接近0不画
+    const v = values[i] || 0
+    const rv = (v / maxV) * innerR
+    if (rv < 0.5) continue
 
     const a0 = startAngle + i * step
     const a1 = startAngle + ((i + 1) % n) * step
 
     ctx.beginPath()
     ctx.moveTo(cx, cy)
-    ctx.lineTo(cx + r0 * Math.cos(a0), cy + r0 * Math.sin(a0))
-    ctx.lineTo(cx + r1 * Math.cos(a1), cy + r1 * Math.sin(a1))
+    ctx.lineTo(cx + rv * Math.cos(a0), cy + rv * Math.sin(a0))
+    ctx.lineTo(cx + rv * Math.cos(a1), cy + rv * Math.sin(a1))
     ctx.closePath()
 
-    const avg = (v0 + v1) / 2 / maxV
-    const intensity = 0.2 + avg * 0.45
+    const intensity = 0.2 + (v / maxV) * 0.45
     ctx.fillStyle = 'rgba(220,182,100,' + intensity + ')'
     ctx.fill()
-    ctx.strokeStyle = 'rgba(220,182,100,' + Math.min(intensity + 0.15, 0.6) + ')'
+    ctx.strokeStyle = 'rgba(220,182,100,' + Math.min(intensity + 0.2, 0.6) + ')'
     ctx.lineWidth = 0.5
     ctx.stroke()
   }
-
-  // 数据连线（高亮轮廓，沿值点走一圈）
-  ctx.beginPath()
-  for (let i = 0; i <= n; i++) {
-    const v = values[i % n] || 0
-    const rv = (v / maxV) * innerR
-    const a = startAngle + (i % n) * step
-    const x = cx + rv * Math.cos(a)
-    const y = cy + rv * Math.sin(a)
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
-  }
-  ctx.closePath()
-  ctx.strokeStyle = 'rgba(232,200,130,0.5)'
-  ctx.lineWidth = 1
-  ctx.stroke()
 
   // 外缘九边形边框
   ctx.beginPath()
@@ -1631,59 +1600,66 @@ function drawRadarTriangles(ctx, cx, cy, r, values) {
   ctx.restore()
 }
 
-// v0.2.2 — 底部物品栏（药匣样式 + 暖色 + 楷体）
-// v0.6.50r: 左侧命格区+右侧行李区
+// v0.6.50u: 边雷达图+大字标签+装饰
 function drawItemBar(ctx) {
   const barY = layout.itemBarY
   const items = currentItems || []
   const barH = layout.itemBarH
 
-  // 左侧命格区（含标签等高于物品栏）
-  const radarR = 26
-  const radarLabelOff = 10
-  const fateW = (radarR + radarLabelOff) * 2 + 26  // 98px
-  const dividerX = layout.padding + fateW  // 分隔线位置（左侧）
-  const fateCX = dividerX - fateW / 2  // 雷达图中心 x
+  // 左侧命格区
+  const radarR = 24
+  const radarLabelOff = 8
+  const fateW = (radarR + radarLabelOff) * 2 + 26  // 90px
+  const dividerX = layout.padding + fateW
+  const fateCX = dividerX - fateW / 2
 
-  // 1. 底板（全宽暗木色 + 顶部暗金边 + 朱砂点）
+  // 1. 底板暗木色
   ctx.save()
-  ctx.fillStyle = 'rgba(20, 16, 12, 0.75)'
+  ctx.fillStyle = 'rgba(20, 16, 12, 0.78)'
   ctx.fillRect(0, barY, layout.windowW, barH)
-  ctx.strokeStyle = 'rgba(200, 168, 124, 0.45)'
-  ctx.lineWidth = 0.8
+
+  // 顶部双线装饰
+  ctx.strokeStyle = 'rgba(200, 168, 124, 0.5)'
+  ctx.lineWidth = 0.5
   ctx.beginPath()
   ctx.moveTo(layout.padding, barY + 0.5)
   ctx.lineTo(layout.windowW - layout.padding, barY + 0.5)
   ctx.stroke()
-  ctx.fillStyle = 'rgba(192, 48, 48, 0.7)'
+  ctx.strokeStyle = 'rgba(200, 168, 124, 0.25)'
+  ctx.lineWidth = 0.3
   ctx.beginPath()
-  ctx.arc(layout.padding + 4, barY + barH - 4, 2, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.beginPath()
-  ctx.arc(layout.windowW - layout.padding - 4, barY + barH - 4, 2, 0, Math.PI * 2)
-  ctx.fill()
+  ctx.moveTo(layout.padding, barY + 2.5)
+  ctx.lineTo(layout.windowW - layout.padding, barY + 2.5)
+  ctx.stroke()
   ctx.restore()
 
-  // 2. 命格区底色（稍浅）
+  // 2. 命格区底板
   ctx.save()
   ctx.fillStyle = 'rgba(30, 24, 18, 0.5)'
   ctx.fillRect(layout.padding, barY, fateW, barH)
+
+  // 命格区左下角 〖 装饰
+  ctx.fillStyle = 'rgba(200,168,124,0.2)'
+  ctx.font = '10px sans-serif'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'top'
+  ctx.fillText('〖', layout.padding + 2, barY + barH - 13)
   ctx.restore()
 
-  // 3. 左侧命格区：扇面雷达图（垂直居中）
+  // 3. 边雷达图（每条边=一个属性，标签在中点）
   const rcx = fateCX
   const rcy = barY + barH / 2
   const rKeys = ['声望','财富','学识','颜值','医术','战功','文采','政绩','义行']
   const rVals = rKeys.map(k => state[k] || 0)
-  drawRadarTriangles(ctx, rcx, rcy, radarR, rVals)
+  drawRadarEdges(ctx, rcx, rcy, radarR, rVals)
 
-  // 全称标签 + 数值（8/7px清晰字体）
   ctx.save()
   for (let i = 0; i < 9; i++) {
-    const a = -Math.PI / 2 + i * (Math.PI * 2) / 9
-    const lx = rcx + (radarR + radarLabelOff) * Math.cos(a)
-    const ly = rcy + (radarR + radarLabelOff) * Math.sin(a)
-    ctx.fillStyle = 'rgba(170,210,180,0.6)'
+    const a = -Math.PI / 2 + (i + 0.5) * (Math.PI * 2) / 9
+    const labelDist = radarR + radarLabelOff
+    const lx = rcx + labelDist * Math.cos(a)
+    const ly = rcy + labelDist * Math.sin(a)
+    ctx.fillStyle = 'rgba(170,210,180,0.65)'
     ctx.font = '8px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
@@ -1694,30 +1670,39 @@ function drawItemBar(ctx) {
   }
   ctx.restore()
 
-  // 4. 竖向分隔线
+  // 4. 竖向分隔线（红+上下红点）
   ctx.save()
-  ctx.strokeStyle = 'rgba(200,168,124,0.25)'
+  ctx.strokeStyle = 'rgba(192, 48, 48, 0.6)'
   ctx.lineWidth = 0.5
   ctx.beginPath()
-  ctx.moveTo(dividerX, barY + 6)
-  ctx.lineTo(dividerX, barY + barH - 6)
+  ctx.moveTo(dividerX, barY + 4)
+  ctx.lineTo(dividerX, barY + barH - 4)
   ctx.stroke()
-  ctx.fillStyle = 'rgba(200,168,124,0.3)'
+  ctx.fillStyle = 'rgba(192, 48, 48, 0.7)'
   ctx.beginPath()
-  ctx.arc(dividerX, barY + 6, 1.5, 0, Math.PI * 2)
+  ctx.arc(dividerX, barY + 3, 1.5, 0, Math.PI * 2)
   ctx.fill()
   ctx.beginPath()
-  ctx.arc(dividerX, barY + barH - 6, 1.5, 0, Math.PI * 2)
+  ctx.arc(dividerX, barY + barH - 3, 1.5, 0, Math.PI * 2)
   ctx.fill()
   ctx.restore()
 
-  // 5. 行李标签 + 物品（右侧）
+  // 5. 行李标签 + 物品
   ctx.save()
   ctx.fillStyle = 'rgba(232, 200, 130, 0.75)'
   ctx.font = '11px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
   ctx.textAlign = 'left'
   ctx.textBaseline = 'top'
   ctx.fillText('⌜ 行李 ⌝', dividerX + 8, barY + 6)
+  ctx.restore()
+
+  // 行李区右端 〗 装饰
+  ctx.save()
+  ctx.fillStyle = 'rgba(200,168,124,0.2)'
+  ctx.font = '10px sans-serif'
+  ctx.textAlign = 'right'
+  ctx.textBaseline = 'top'
+  ctx.fillText('〗', layout.windowW - layout.padding - 2, barY + barH - 13)
   ctx.restore()
 
   if (items.length > 0) {
@@ -1727,7 +1712,7 @@ function drawItemBar(ctx) {
     const itemEndX = layout.windowW - layout.padding
     const totalW = items.length * (boxW + gap) - gap
     const startX = Math.max(dividerX + 50, itemEndX - totalW)
-    const boxY = barY + (barH - boxH) / 2  // 物品框垂直居中
+    const boxY = barY + (barH - boxH) / 2
 
     items.forEach((item, i) => {
       const bx = startX + i * (boxW + gap)
@@ -1784,9 +1769,7 @@ function drawItemBar(ctx) {
     ctx.fillText('空囊而来', dividerX + 10, barY + barH / 2)
     ctx.restore()
   }
-}
-
-// ─────── 玉牒浮窗（长按状态） ───────
+}// ─────── 玉牒浮窗（长按状态） ───────
 function drawJadeTablet(ctx) {
   const w = layout.windowW
   const h = layout.windowH
@@ -1938,7 +1921,7 @@ var floaters = []  // [{ text, color, startTime, x, y, dy }]
 
 function spawnFloater(text, color) {
   // 起点：底部雷达图中央（v0.6.50r：从顶部改到底部）
-  const fateCX = layout.padding + 49  // 雷达图中心 x（对应 fateW=98）
+  const fateCX = layout.padding + 45  // 雷达图中心 x（对应 fateW=90）
   floaters.push({
     text: text,
     color: color || 'rgba(200,168,124,1)',  // 默认暖金色

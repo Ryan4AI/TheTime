@@ -185,7 +185,7 @@ function initLayout() {
   const statusBarH = 8  // v0.6.50o: 去掉9属性数字（雷达图替代），缩为装饰线
   // v0.2.5-Q（先生 2026-06-13 15:33 拍板）：自由输入从选项区移到画区右上角图标
   // 选项区只剩 3 个选项，optBlockH 不再算 freeInputH
-  const itemBarH = 64
+  const itemBarH = 72  // v0.6.50s: 72px（给雷达图+标签等高留空间）
   const optH = 40
   const optGap = 4
   const freeInputH = 30  // 图标尺寸（圆形）
@@ -1519,97 +1519,92 @@ function drawFreeInputButton(ctx) {
 }
 
 // v0.6.50l — 格子填充式雷达图（9边形×5格，高亮格子而非连线）
-function drawRadarGrid(ctx, cx, cy, r, values) {
+// v0.6.50s: 扇面雷达图（扇形填充，取代格子填充）
+function drawRadarFan(ctx, cx, cy, r, values, maxVal) {
   const n = 9
-  const cellsPerAxis = 5
-  const angleStep = (Math.PI * 2) / n
+  const step = (Math.PI * 2) / n
   const startAngle = -Math.PI / 2
-
-  const maxVal = Math.max(...values, 1)
+  const maxV = maxVal || 5
 
   ctx.save()
 
-  // 0. 淡色背景多边形
+  // 淡色背景九边形
   ctx.beginPath()
   for (let i = 0; i <= n; i++) {
-    const angle = startAngle + (i % n) * angleStep
-    const x = cx + r * Math.cos(angle)
-    const y = cy + r * Math.sin(angle)
+    const a = startAngle + (i % n) * step
+    const x = cx + r * Math.cos(a)
+    const y = cy + r * Math.sin(a)
     i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
   }
   ctx.closePath()
   ctx.fillStyle = 'rgba(15,12,8,0.6)'
   ctx.fill()
-  ctx.strokeStyle = 'rgba(200,168,124,0.25)'
-  ctx.lineWidth = 0.5
-  ctx.stroke()
 
-  // 1. 同心九边形参考
-  for (let lvl = 1; lvl <= cellsPerAxis; lvl++) {
-    const ringR = (r - 4) * lvl / cellsPerAxis
+  // 同心参考环（5层九边形）
+  for (let lvl = 1; lvl <= 5; lvl++) {
+    const lr = (r - 3) * lvl / 5
     ctx.beginPath()
     for (let i = 0; i <= n; i++) {
-      const angle = startAngle + (i % n) * angleStep
-      const x = cx + ringR * Math.cos(angle)
-      const y = cy + ringR * Math.sin(angle)
+      const a = startAngle + (i % n) * step
+      const x = cx + lr * Math.cos(a)
+      const y = cy + lr * Math.sin(a)
       i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
     }
     ctx.closePath()
-    ctx.strokeStyle = lvl === cellsPerAxis ? 'rgba(200,168,124,0.35)' : 'rgba(200,168,124,0.1)'
-    ctx.lineWidth = lvl === cellsPerAxis ? 0.8 : 0.3
+    ctx.strokeStyle = lvl === 5 ? 'rgba(200,168,124,0.3)' : 'rgba(200,168,124,0.08)'
+    ctx.lineWidth = lvl === 5 ? 0.8 : 0.3
     ctx.stroke()
   }
 
-  // 2. 轴线（极细）
+  // 轴线
   for (let i = 0; i < n; i++) {
-    const angle = startAngle + i * angleStep
+    const a = startAngle + i * step
     ctx.beginPath()
     ctx.moveTo(cx, cy)
-    ctx.lineTo(cx + r * Math.cos(angle), cy + r * Math.sin(angle))
-    ctx.strokeStyle = 'rgba(200,168,124,0.15)'
+    ctx.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a))
+    ctx.strokeStyle = 'rgba(200,168,124,0.12)'
     ctx.lineWidth = 0.3
     ctx.stroke()
   }
 
-  // 3. 格子填充（每个轴一列格子，从内到外点亮）
+  // 扇面填充（每个属性一条扇形，从中心到值对应的外层）
   for (let i = 0; i < n; i++) {
-    const angle = startAngle + i * angleStep
-    const level = Math.min(cellsPerAxis, Math.max(0, Math.round((values[i] / maxVal) * cellsPerAxis)))
+    const val = Math.min(values[i] || 0, maxV)
+    const outerR = (val / maxV) * (r - 3)
+    if (outerR < 0.5) continue
 
-    for (let j = 0; j < cellsPerAxis; j++) {
-      const t = (j + 0.6) / cellsPerAxis  // 0.12, 0.32, 0.52, 0.72, 0.92
-      const dist = t * (r - 4)
-      const px = cx + dist * Math.cos(angle)
-      const py = cy + dist * Math.sin(angle)
-      const cellSize = 4
+    const gap = 0.04  // 扇面间小间隙
+    const a0 = startAngle + i * step - step / 2 + gap
+    const a1 = startAngle + i * step + step / 2 - gap
 
-      // 与轴垂直的小矩形
-      ctx.save()
-      ctx.translate(px, py)
-      ctx.rotate(angle + Math.PI / 2)
+    ctx.beginPath()
+    ctx.moveTo(cx, cy)
+    ctx.lineTo(cx + outerR * Math.cos(a0), cy + outerR * Math.sin(a0))
+    ctx.arc(cx, cy, outerR, a0, a1)
+    ctx.closePath()
 
-      if (j < level) {
-        // 亮格
-        const brightness = 0.6 + 0.4 * (j / cellsPerAxis)  // 从内到外渐变亮
-        ctx.fillStyle = 'rgba(232,200,130,' + brightness + ')'
-        ctx.fillRect(-cellSize / 2, -2, cellSize, 4)
-        ctx.strokeStyle = 'rgba(200,168,124,0.6)'
-        ctx.lineWidth = 0.3
-        ctx.strokeRect(-cellSize / 2, -2, cellSize, 4)
-      } else {
-        // 暗格
-        ctx.strokeStyle = 'rgba(200,168,124,0.15)'
-        ctx.lineWidth = 0.3
-        ctx.strokeRect(-cellSize / 2, -2, cellSize, 4)
-      }
-
-      ctx.restore()
-    }
+    const intensity = 0.15 + (val / maxV) * 0.4
+    ctx.fillStyle = 'rgba(220,182,100,' + intensity + ')'
+    ctx.fill()
+    ctx.strokeStyle = 'rgba(220,182,100,' + Math.min(intensity + 0.15, 0.6) + ')'
+    ctx.lineWidth = 0.5
+    ctx.stroke()
   }
 
-  // 4. 中心点
+  // 外缘九边形边框
   ctx.beginPath()
-  ctx.arc(cx, cy, 2, 0, Math.PI * 2)
+  for (let i = 0; i <= n; i++) {
+    const a = startAngle + (i % n) * step
+    ctx.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a))
+  }
+  ctx.closePath()
+  ctx.strokeStyle = 'rgba(200,168,124,0.4)'
+  ctx.lineWidth = 1
+  ctx.stroke()
+
+  // 中心点
+  ctx.beginPath()
+  ctx.arc(cx, cy, 1.5, 0, Math.PI * 2)
   ctx.fillStyle = 'rgba(200,168,124,0.3)'
   ctx.fill()
 
@@ -1623,10 +1618,10 @@ function drawItemBar(ctx) {
   const items = currentItems || []
   const barH = layout.itemBarH
 
-  // 左侧命格区宽（与物品栏等高：radarR=30 → 60px直径）
-  const radarR = 30
-  const radarLabelOff = 8
-  const fateW = (radarR + radarLabelOff) * 2 + 24  // ~100px
+  // 左侧命格区（含标签等高于物品栏）
+  const radarR = 26
+  const radarLabelOff = 10
+  const fateW = (radarR + radarLabelOff) * 2 + 26  // 98px
   const dividerX = layout.padding + fateW  // 分隔线位置（左侧）
   const fateCX = dividerX - fateW / 2  // 雷达图中心 x
 
@@ -1655,26 +1650,27 @@ function drawItemBar(ctx) {
   ctx.fillRect(layout.padding, barY, fateW, barH)
   ctx.restore()
 
-  // 3. 左侧命格区：九边形格子雷达图（垂直居中）
+  // 3. 左侧命格区：扇面雷达图（垂直居中）
   const rcx = fateCX
   const rcy = barY + barH / 2
   const rKeys = ['声望','财富','学识','颜值','医术','战功','文采','政绩','义行']
   const rVals = rKeys.map(k => state[k] || 0)
-  drawRadarGrid(ctx, rcx, rcy, radarR, rVals)
-  // 全称标签 + 数值
+  drawRadarFan(ctx, rcx, rcy, radarR, rVals, 5)
+
+  // 全称标签 + 数值（8/7px清晰字体）
   ctx.save()
   for (let i = 0; i < 9; i++) {
     const a = -Math.PI / 2 + i * (Math.PI * 2) / 9
     const lx = rcx + (radarR + radarLabelOff) * Math.cos(a)
     const ly = rcy + (radarR + radarLabelOff) * Math.sin(a)
-    ctx.fillStyle = 'rgba(170,210,180,0.5)'
-    ctx.font = '6px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+    ctx.fillStyle = 'rgba(170,210,180,0.6)'
+    ctx.font = '8px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(rKeys[i], lx, ly - 3)
-    ctx.fillStyle = 'rgba(200,168,124,0.3)'
-    ctx.font = '5px sans-serif'
-    ctx.fillText(rVals[i], lx, ly + 4)
+    ctx.fillText(rKeys[i], lx, ly - 4)
+    ctx.fillStyle = 'rgba(200,168,124,0.4)'
+    ctx.font = '7px sans-serif'
+    ctx.fillText(rVals[i], lx, ly + 5)
   }
   ctx.restore()
 
@@ -1711,11 +1707,11 @@ function drawItemBar(ctx) {
     const itemEndX = layout.windowW - layout.padding
     const totalW = items.length * (boxW + gap) - gap
     const startX = Math.max(dividerX + 50, itemEndX - totalW)
-    const boxY = barY + 22
+    const boxY = barY + (barH - boxH) / 2  // 物品框垂直居中
 
     items.forEach((item, i) => {
       const bx = startX + i * (boxW + gap)
-      if (bx + boxW > itemEndX || bx + boxW > layout.windowW - layout.padding) return
+      if (bx + boxW > itemEndX) return
       ctx.save()
       ctx.fillStyle = 'rgba(35, 28, 22, 0.85)'
       roundRect(ctx, bx, boxY, boxW, boxH, 3)
@@ -1765,7 +1761,7 @@ function drawItemBar(ctx) {
     ctx.font = '12px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
-    ctx.fillText('空囊而来', dividerX + 10, barY + barH / 2 + 4)
+    ctx.fillText('空囊而来', dividerX + 10, barY + barH / 2)
     ctx.restore()
   }
 }
@@ -1922,7 +1918,7 @@ var floaters = []  // [{ text, color, startTime, x, y, dy }]
 
 function spawnFloater(text, color) {
   // 起点：底部雷达图中央（v0.6.50r：从顶部改到底部）
-  const fateCX = layout.padding + ((30 + 8) * 2 + 24) / 2  // 雷达图中心 x
+  const fateCX = layout.padding + 49  // 雷达图中心 x（对应 fateW=98）
   floaters.push({
     text: text,
     color: color || 'rgba(200,168,124,1)',  // 默认暖金色

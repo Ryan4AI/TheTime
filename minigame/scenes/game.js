@@ -182,7 +182,7 @@ function initLayout() {
   // 顶栏(52) → 状态栏(26) → 文字面板(自适应 narrative 行数) → 选项(3×40+gap 4+输入 32 = 160) → 物品栏(64)
   const topBarH = 52
   // v0.2.5-J（先生 2026-06-13 11:03 拍板）：状态栏常显，statusBarH 永远生效
-  const statusBarH = 42  // v0.6.49: 状态条高度（含 9 属性双行）
+  const statusBarH = 8  // v0.6.50o: 去掉9属性数字（雷达图替代），缩为装饰线
   // v0.2.5-Q（先生 2026-06-13 15:33 拍板）：自由输入从选项区移到画区右上角图标
   // 选项区只剩 3 个选项，optBlockH 不再算 freeInputH
   const itemBarH = 64
@@ -720,33 +720,6 @@ function render(ctx) {
   // v0.6.35: 榜单目标指示器
   drawBoardTarget(ctx)
 
-  // v0.6.50n: 九边形格子雷达图（与榜单目标条设计在一起，右上角）
-  const radarR = 30
-  const radarCX = layout.windowW - layout.padding - 5 - radarR
-  const radarTop = (layout.safeTop || 0) + layout.topBarH + (layout.statusBarH || 0) + 2
-  const boardTargetH = 22
-  const radarCY = radarTop + boardTargetH + 4 + radarR
-  const radarAttrKeys = ['声望','财富','学识','颜值','医术','战功','文采','政绩','义行']
-  const radarVals = radarAttrKeys.map(k => state[k] || 0)
-  drawRadarGrid(ctx, radarCX, radarCY, radarR, radarVals)
-  // 雷达图标签
-  const labelChars = ['声','富','识','颜','医','战','文','政','义']
-  ctx.save()
-  for (let i = 0; i < 9; i++) {
-    const angle = -Math.PI / 2 + i * (Math.PI * 2) / 9
-    const lx = radarCX + (radarR + 8) * Math.cos(angle)
-    const ly = radarCY + (radarR + 8) * Math.sin(angle)
-    ctx.fillStyle = 'rgba(170,210,180,0.55)'
-    ctx.font = '7px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(labelChars[i], lx, ly - 3)
-    ctx.fillStyle = 'rgba(200,168,124,0.35)'
-    ctx.font = '5px sans-serif'
-    ctx.fillText(radarVals[i], lx, ly + 5)
-  }
-  ctx.restore()
-
   // 3. 月份变化提示（如有）— v0.6.45 移除"时光流转"交互
   // 原 drawMonthNotice(ctx) 已删除
 
@@ -774,6 +747,32 @@ function render(ctx) {
 
   // 8. 底部物品栏（极简）
   drawItemBar(ctx)
+
+  // v0.6.50o: 九边形格子雷达图（与物品栏一起在底部，右上）
+  {
+    const rr = 34
+    const rcx = layout.windowW - layout.padding - 4 - rr
+    const rcy = layout.itemBarY - 4 - rr
+    const rKeys = ['声望','财富','学识','颜值','医术','战功','文采','政绩','义行']
+    const rVals = rKeys.map(k => state[k] || 0)
+    drawRadarGrid(ctx, rcx, rcy, rr, rVals)
+    // 全称标签 + 数值
+    ctx.save()
+    for (let i = 0; i < 9; i++) {
+      const a = -Math.PI / 2 + i * (Math.PI * 2) / 9
+      const lx = rcx + (rr + 10) * Math.cos(a)
+      const ly = rcy + (rr + 10) * Math.sin(a)
+      ctx.fillStyle = 'rgba(170,210,180,0.6)'
+      ctx.font = '8px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(rKeys[i], lx, ly - 4)
+      ctx.fillStyle = 'rgba(200,168,124,0.45)'
+      ctx.font = '6px sans-serif'
+      ctx.fillText(rVals[i], lx, ly + 5)
+    }
+    ctx.restore()
+  }
 
   // 9. 加载中（v0.2.5-D：去掉 drawLoading 调用，"画在生成中" 跟 narrative 重复且常重叠）
   // 加载状态改由 narrative 区域显示"史官正在落笔..."提示（drawNarrative 内部处理）
@@ -1089,63 +1088,25 @@ function drawSealTopBar(ctx) {
 
 // ─────── 月份变化提示 ───────
 function drawStatusBar(ctx) {
-  // v0.6.49: 显示全部 9 属性双行（通用四维 + 专属五艺）
+  // v0.6.50o: 去掉9属性数字（雷达图已替代），仅留装饰细线
   const padding = layout.padding
   const top = layout.safeTop + layout.topBarH
-  const h = layout.statusBarH
-  const w = layout.windowW - padding * 2
+  const h = layout.statusBarH || 0
+  if (h < 4) return
 
-  // 1. 底色（暗木色半透）
+  // 暗木色底 + 边框
   ctx.save()
   ctx.fillStyle = 'rgba(20,16,12,0.6)'
-  ctx.fillRect(padding, top, w, h)
-
-  // 边框 + 中间分隔线
+  ctx.fillRect(padding, top, layout.windowW - padding * 2, h)
   ctx.strokeStyle = 'rgba(200,168,124,0.25)'
   ctx.lineWidth = 0.5
   ctx.beginPath()
   ctx.moveTo(padding, top + 0.5)
-  ctx.lineTo(padding + w, top + 0.5)
+  ctx.lineTo(padding + layout.windowW - padding * 2, top + 0.5)
   ctx.moveTo(padding, top + h - 0.5)
-  ctx.lineTo(padding + w, top + h - 0.5)
-  // 中间分隔线（较短，左右留白）
-  const midY = top + 21
-  ctx.moveTo(padding + 8, midY)
-  ctx.lineTo(padding + w - 8, midY)
+  ctx.lineTo(padding + layout.windowW - padding * 2, top + h - 0.5)
   ctx.stroke()
   ctx.restore()
-
-  ctx.font = '10px ' + ui.fontFamily
-  ctx.textBaseline = 'middle'
-
-  // ───── 第1行：通用四维 ─────
-  const row1Y = top + 11
-  const ROW1 = ['声望', '财富', '学识', '颜值']
-  const segW1 = w / 4
-  for (var i = 0; i < 4; i++) {
-    var sx = padding + segW1 * i
-    ctx.textAlign = 'left'
-    ctx.fillStyle = 'rgba(200,168,124,0.7)'  // 暖金
-    ctx.fillText(ROW1[i], sx + 4, row1Y)
-    ctx.fillStyle = 'rgba(245,239,224,0.9)'   // 米白
-    ctx.fillText(state[ROW1[i]] || 0, sx + 30, row1Y)
-  }
-
-  // ───── 第2行：专属五艺 ─────
-  const row2Y = top + 31
-  const ROW2 = ['医术', '战功', '文采', '政绩', '义行']
-  const segW2 = w / 5
-  for (var i = 0; i < 5; i++) {
-    var sx = padding + segW2 * i
-    ctx.textAlign = 'left'
-    ctx.fillStyle = 'rgba(130,175,140,0.75)'  // 青绿
-    ctx.fillText(ROW2[i], sx + 4, row2Y)
-    ctx.fillStyle = 'rgba(245,239,224,0.9)'   // 米白
-    ctx.fillText(state[ROW2[i]] || 0, sx + 30, row2Y)
-  }
-
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'alphabetic'
 }
 
 // v0.6.35: 榜单目标指示器（状态栏下方）
@@ -1589,7 +1550,6 @@ function drawRadarGrid(ctx, cx, cy, r, values) {
   const cellsPerAxis = 5
   const angleStep = (Math.PI * 2) / n
   const startAngle = -Math.PI / 2
-  const labels = ['声','富','识','颜','医','战','文','政','义']
 
   const maxVal = Math.max(...values, 1)
 

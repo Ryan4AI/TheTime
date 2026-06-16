@@ -232,7 +232,7 @@ function initLayout() {
     optionH: optH,
     optionGap: optGap,
     freeInputH: freeInputH,
-    itemBarY: windowHeight - itemBarH,
+    itemBarY: windowHeight - itemBarH - 10,  // v0.6.50r: 底部留白10px
   }
 }
 
@@ -862,7 +862,7 @@ function adjustFluidLayout() {
   layout.optionFadeIn = typingDone ? 1 : 0
   layout.optionH = 36                       // v0.1.67: 38 → 36 缩 2px
   layout.optionGap = optionGap
-  layout.itemBarY = layout.windowH - itemBarH
+  layout.itemBarY = layout.windowH - itemBarH - 10
 }
 
 // ─────── 生图背景（v0.1.69：前端直连 Pollinations.ai，跳过云函数） ───────
@@ -1617,19 +1617,18 @@ function drawRadarGrid(ctx, cx, cy, r, values) {
 }
 
 // v0.2.2 — 底部物品栏（药匣样式 + 暖色 + 楷体）
-// v0.2.2 — 底部物品栏（药匣样式 + 暖色 + 楷体）
-// v0.6.50q: 右侧并排格子雷达图（分隔线区分左右）
+// v0.6.50r: 左侧命格区+右侧行李区
 function drawItemBar(ctx) {
   const barY = layout.itemBarY
   const items = currentItems || []
   const barH = layout.itemBarH
 
-  // 右侧命格区宽度
-  const radarR = 26
+  // 左侧命格区宽（与物品栏等高：radarR=30 → 60px直径）
+  const radarR = 30
   const radarLabelOff = 8
-  const fateW = (radarR + radarLabelOff) * 2 + 24  // ~92px
-  const dividerX = layout.windowW - layout.padding - fateW  // 分隔线位置
-  const itemEndX = dividerX - 6  // 物品右边界
+  const fateW = (radarR + radarLabelOff) * 2 + 24  // ~100px
+  const dividerX = layout.padding + fateW  // 分隔线位置（左侧）
+  const fateCX = dividerX - fateW / 2  // 雷达图中心 x
 
   // 1. 底板（全宽暗木色 + 顶部暗金边 + 朱砂点）
   ctx.save()
@@ -1650,13 +1649,36 @@ function drawItemBar(ctx) {
   ctx.fill()
   ctx.restore()
 
-  // 2. 命格区底色（稍浅，与行李区区分）
+  // 2. 命格区底色（稍浅）
   ctx.save()
   ctx.fillStyle = 'rgba(30, 24, 18, 0.5)'
-  ctx.fillRect(dividerX, barY, layout.windowW - dividerX, barH)
+  ctx.fillRect(layout.padding, barY, fateW, barH)
   ctx.restore()
 
-  // 3. 竖向分隔线
+  // 3. 左侧命格区：九边形格子雷达图（垂直居中）
+  const rcx = fateCX
+  const rcy = barY + barH / 2
+  const rKeys = ['声望','财富','学识','颜值','医术','战功','文采','政绩','义行']
+  const rVals = rKeys.map(k => state[k] || 0)
+  drawRadarGrid(ctx, rcx, rcy, radarR, rVals)
+  // 全称标签 + 数值
+  ctx.save()
+  for (let i = 0; i < 9; i++) {
+    const a = -Math.PI / 2 + i * (Math.PI * 2) / 9
+    const lx = rcx + (radarR + radarLabelOff) * Math.cos(a)
+    const ly = rcy + (radarR + radarLabelOff) * Math.sin(a)
+    ctx.fillStyle = 'rgba(170,210,180,0.5)'
+    ctx.font = '6px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(rKeys[i], lx, ly - 3)
+    ctx.fillStyle = 'rgba(200,168,124,0.3)'
+    ctx.font = '5px sans-serif'
+    ctx.fillText(rVals[i], lx, ly + 4)
+  }
+  ctx.restore()
+
+  // 4. 竖向分隔线
   ctx.save()
   ctx.strokeStyle = 'rgba(200,168,124,0.25)'
   ctx.lineWidth = 0.5
@@ -1664,7 +1686,6 @@ function drawItemBar(ctx) {
   ctx.moveTo(dividerX, barY + 6)
   ctx.lineTo(dividerX, barY + barH - 6)
   ctx.stroke()
-  // 分隔线两端装饰点
   ctx.fillStyle = 'rgba(200,168,124,0.3)'
   ctx.beginPath()
   ctx.arc(dividerX, barY + 6, 1.5, 0, Math.PI * 2)
@@ -1674,27 +1695,27 @@ function drawItemBar(ctx) {
   ctx.fill()
   ctx.restore()
 
-  // 4. 行李标签 + 物品
+  // 5. 行李标签 + 物品（右侧）
   ctx.save()
   ctx.fillStyle = 'rgba(232, 200, 130, 0.75)'
   ctx.font = '11px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
   ctx.textAlign = 'left'
   ctx.textBaseline = 'top'
-  ctx.fillText('⌜ 行李 ⌝', layout.padding, barY + 6)
+  ctx.fillText('⌜ 行李 ⌝', dividerX + 8, barY + 6)
   ctx.restore()
 
   if (items.length > 0) {
     const boxW = 56
     const boxH = 32
     const gap = 6
+    const itemEndX = layout.windowW - layout.padding
     const totalW = items.length * (boxW + gap) - gap
-    const startX = Math.max(layout.padding + 50, itemEndX - totalW)  // 从标签后开始或在右边界结束
+    const startX = Math.max(dividerX + 50, itemEndX - totalW)
     const boxY = barY + 22
 
     items.forEach((item, i) => {
       const bx = startX + i * (boxW + gap)
-      if (bx + boxW > itemEndX) return  // 放不下就跳过
-      if (bx < layout.padding + 50) return  // 放不下就跳过
+      if (bx + boxW > itemEndX || bx + boxW > layout.windowW - layout.padding) return
       ctx.save()
       ctx.fillStyle = 'rgba(35, 28, 22, 0.85)'
       roundRect(ctx, bx, boxY, boxW, boxH, 3)
@@ -1744,42 +1765,9 @@ function drawItemBar(ctx) {
     ctx.font = '12px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
-    ctx.fillText('空囊而来', layout.padding + 10, barY + barH / 2 + 4)
+    ctx.fillText('空囊而来', dividerX + 10, barY + barH / 2 + 4)
     ctx.restore()
   }
-
-  // 5. 命格标题（始终显示）
-  ctx.save()
-  ctx.fillStyle = 'rgba(170,210,180,0.55)'
-  ctx.font = '8px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'top'
-  const fateCX = dividerX + (layout.windowW - dividerX - layout.padding) / 2
-  ctx.fillText('命 格', fateCX, barY + 4)
-  ctx.restore()
-
-  // 6. ⬡ 右侧雷达图
-  const rcx = fateCX
-  const rcy = barY + barH / 2 + 3  // 略偏下（给顶部标题留空间）
-  const rKeys = ['声望','财富','学识','颜值','医术','战功','文采','政绩','义行']
-  const rVals = rKeys.map(k => state[k] || 0)
-  drawRadarGrid(ctx, rcx, rcy, radarR, rVals)
-  // 全称标签 + 数值
-  ctx.save()
-  for (let i = 0; i < 9; i++) {
-    const a = -Math.PI / 2 + i * (Math.PI * 2) / 9
-    const lx = rcx + (radarR + radarLabelOff) * Math.cos(a)
-    const ly = rcy + (radarR + radarLabelOff) * Math.sin(a)
-    ctx.fillStyle = 'rgba(170,210,180,0.5)'
-    ctx.font = '6px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(rKeys[i], lx, ly - 3)
-    ctx.fillStyle = 'rgba(200,168,124,0.3)'
-    ctx.font = '5px sans-serif'
-    ctx.fillText(rVals[i], lx, ly + 4)
-  }
-  ctx.restore()
 }
 
 // ─────── 玉牒浮窗（长按状态） ───────
@@ -1933,14 +1921,15 @@ function drawJadeTablet(ctx) {
 var floaters = []  // [{ text, color, startTime, x, y, dy }]
 
 function spawnFloater(text, color) {
-  // 起点：状态栏下方居中
+  // 起点：底部雷达图中央（v0.6.50r：从顶部改到底部）
+  const fateCX = layout.padding + ((30 + 8) * 2 + 24) / 2  // 雷达图中心 x
   floaters.push({
     text: text,
     color: color || 'rgba(200,168,124,1)',  // 默认暖金色
     startTime: Date.now(),
-    x: layout.windowW / 2,
-    y: layout.topBarH + layout.statusBarH + 60,
-    dy: 90,  // 往上飘的距离
+    x: fateCX,
+    y: layout.itemBarY + layout.itemBarH / 2,  // 雷达图中心 y
+    dy: 70,  // 往上飘的距离
   })
 }
 

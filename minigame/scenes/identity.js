@@ -46,7 +46,7 @@ function calcLayout() {
 
   // 5. 底部纪年（只出现一次）+ 按钮
   var tailS = Math.min(10, Math.floor(w * 0.028))
-  var tailY = cardY + cardH - Math.floor(cardH * 0.18)
+  var tailY = cardY + cardH - Math.floor(cardH * 0.20)  // v0.6.68: 给命签诗腾空间
 
   // 6. 落笔按钮
   var btnH = Math.floor(cardH * 0.10)
@@ -445,32 +445,19 @@ function render(ctx) {
     ctx.restore()
   }
 
-  // v0.6.66: 命格评价（雷达图下方）
+  // v0.6.68: 命签诗（雷达图下方）
   if (iOp > 0 && l.radarR > 0) {
-    var evalText = generateFateEval(rVals)
-    // 限制长度，防止溢出
-    if (evalText.length > 40) evalText = evalText.slice(0, 40) + '…'
-    drawText(ctx, evalText, cx, l.radarCY + l.radarR + l.labelDist + 12, {
-      fontSize: 9,
-      color: 'rgba(200,168,124,0.45)',
-      align: 'center', baseline: 'top',
-      opacity: iOp * 0.65,
-      maxWidth: l.cardW - 80,
-    })
-  }
-
-  // v0.6.66: 命格评价（雷达图下方）
-  if (iOp > 0 && l.radarR > 0) {
-    var evalText = generateFateEval(rVals)
-    // 限制长度，防止溢出
-    if (evalText.length > 40) evalText = evalText.slice(0, 40) + '…'
-    drawText(ctx, evalText, cx, l.radarCY + l.radarR + l.labelDist + 12, {
-      fontSize: 9,
-      color: 'rgba(200,168,124,0.45)',
-      align: 'center', baseline: 'top',
-      opacity: iOp * 0.65,
-      maxWidth: l.cardW - 80,
-    })
+    var poemLines = genFatePoem(rVals)
+    var poemY0 = l.radarCY + l.radarR + l.labelDist + 14
+    for (var pi = 0; pi < 4; pi++) {
+      drawText(ctx, poemLines[pi], cx, poemY0 + pi * 12, {
+        fontSize: 9,
+        color: 'rgba(200,168,124,0.35)',
+        align: 'center', baseline: 'top',
+        opacity: iOp * 0.6 - pi * 0.05,
+        fontFamily: '"STKaiti", "KaiTi", "楷体", ' + ui.fontFamily,
+      })
+    }
   }
 
   // 段 5：底部纪年（只出现一次）
@@ -534,8 +521,8 @@ function render(ctx) {
 }
 
 // v0.6.66: 命格评价（算命式，根据9属性生成）
-function generateFateEval(attrs) {
-  // v0.6.67: 算命式命格评价——文采、韵脚、意象全面提升
+function genFatePoem(attrs) {
+  // v0.6.68: 五言命签诗（根据9属性选择诗体，每体2-3首变体）
   var sorted = []
   var attrNames = ['声望','财富','学识','颜值','医术','战功','文采','政绩','义行']
   for (var fi = 0; fi < 9; fi++) {
@@ -546,205 +533,92 @@ function generateFateEval(attrs) {
   var top = sorted[0]
   var top2 = sorted[1]
   var bot = sorted[8]
-
-  // ── 强属性辞赋 ──（各6种，带意象和典故）
-  var strongPhrases = {
-    '声望': [
-      '威名如雷，四海俱惊',
-      '一呼百应，天下景从',
-      '声振屋瓦，名动公卿',
-      '德高望重，泰山北斗',
-      '桃李不言，下自成蹊',
-      '一言既出，满座皆惊',
-    ],
-    '财富': [
-      '金玉满堂，富埒王侯',
-      '铜山金穴，用之不竭',
-      '千金散尽，复又重来',
-      '堆金积玉，富甲一方',
-      '财源广进，日进斗金',
-      '珍珠如土，金玉如尘',
-    ],
-    '学识': [
-      '学贯天人之际，通古今之变',
-      '才高八斗，胸藏万卷',
-      '博闻强识，无所不知',
-      '腹有诗书，气度自华',
-      '过目成诵，通晓百家',
-      '皓首穷经，学问精深',
-    ],
-    '颜值': [
-      '面若冠玉，目若朗星',
-      '清姿玉质，出尘脱俗',
-      '容光焕发，顾盼生辉',
-      '月华为肤，冰雪为骨',
-      '一颦一笑，倾倒众生',
-      '仪态万方，世所罕见',
-    ],
-    '医术': [
-      '妙手回春，起死回生',
-      '望色而知症，切脉可断命',
-      '岐黄妙术，通鬼神之机',
-      '药到病除，针到痛止',
-      '君臣佐使，配伍精妙',
-      '悬壶济世，杏林春暖',
-    ],
-    '战功': [
-      '百战百胜，未尝一败',
-      '铁马金戈，气吞万里',
-      '沙场宿将，威震边关',
-      '挽弓三百斤，射石没羽',
-      '运筹帷幄，决胜千里',
-      '一夫当关，万夫莫开',
-    ],
-    '文采': [
-      '下笔千言，倚马可待',
-      '锦绣文章，字字珠玑',
-      '诗成惊天地，赋就泣鬼神',
-      '文章本天成，妙手偶得之',
-      '洛阳纸贵，天下传诵',
-      '笔落惊风雨，诗成泣鬼神',
-    ],
-    '政绩': [
-      '经天纬地，治世之才',
-      '明镜高悬，政通人和',
-      '运筹帷幄，安邦定国',
-      '察秋毫之末，断如神之案',
-      '抚民如子，治下昇平',
-      '拨乱反正，功在社稷',
-    ],
-    '义行': [
-      '侠肝义胆，路见不平拔刀助',
-      '仗义疏财，千金散尽济苍生',
-      '一诺千金，片言重于九鼎',
-      '路不拾遗，夜不闭户',
-      '急公好义，扶危济困',
-      '舍生取义，杀身成仁',
-    ],
-  }
-
-  // ── 弱属性警语 ──
-  var weakPhrases = {
-    '声望': [
-      '门可罗雀，无人问津',
-      '声名狼藉，为世不齿',
-      '籍籍无名，泯然众人',
-      '墙倒众人推',
-      '人微言轻，不足道也',
-      '落毛凤凰不如鸡',
-    ],
-    '财富': [
-      '身无分文，家徒四壁',
-      '贫无立锥，衣不蔽体',
-      '囊中羞涩，赊借度日',
-      '瓦灶绳床，箪食瓢饮',
-      '断炊绝粮，朝不保夕',
-      '赤贫如洗，一无所余',
-    ],
-    '学识': [
-      '目不识丁，蒙昧无知',
-      '胸无点墨，浅薄鄙陋',
-      '学疏才浅，孤陋寡闻',
-      '井底之蛙，不知天地之大',
-      '浑浑噩噩，不辨菽麦',
-      '朽木不可雕也',
-    ],
-    '颜值': [
-      '其貌不扬，见之忘俗都难',
-      '面目可憎，言语无味',
-      '形貌猥琐，不修边幅',
-      '獐头鼠目，不堪入目',
-      '蓬头垢面，憔悴枯槁',
-      '粗服乱头，不掩其陋',
-    ],
-    '医术': [
-      '庸医误诊，草菅人命',
-      '药石无功，徒呼奈何',
-      '医理不通，歧黄门外',
-      '望闻问切，一窍不通',
-      '以药试病，十死九伤',
-      '认错了是救命，认对了是催命',
-    ],
-    '战功': [
-      '手无缚鸡之力',
-      '闻鼓而逃，望风披靡',
-      '纸上谈兵，不堪一战',
-      '临阵磨枪，仓皇无措',
-      '身不能扛，弓不能开',
-      '未战先怯，懦弱如鼠',
-    ],
-    '文采': [
-      '文笔拙劣，词不达意',
-      '才疏学浅，文墨不通',
-      '拾人牙慧，了无新意',
-      '言之无物，味同嚼蜡',
-      '下笔如钝刀割肉',
-      '寻章摘句，老雕虫耳',
-    ],
-    '政绩': [
-      '碌碌无为，寸功未立',
-      '尸位素餐，徒耗俸禄',
-      '管窥蠡测，难当大任',
-      '上行下效，政令不通',
-      '疮痍满目，民不聊生',
-      '昏聩无能，一事无成',
-    ],
-    '义行': [
-      '各扫门前雪，休管他人瓦上霜',
-      '见利忘义，刻薄寡恩',
-      '独善其身，不问世事',
-      '自私自利，雁过拔毛',
-      '事不关己，高高挂起',
-      '落井下石，小人行径',
-    ],
-  }
-
-  // ── 生成评价 ──
-  var parts = []
-
-  // 最强属性
-  if (top.val >= 7000) {
-    var tp = strongPhrases[top.name]
-    var ti = Math.floor(Math.abs(top.val * 13 + 41) % tp.length)
-    parts.push(tp[ti])
-  } else if (top.val >= 5000) {
-    parts.push('「' + top.name + '」略有根基')
-  }
-
-  // 次强
-  if (top2.val >= 6500 && top2.name !== top.name) {
-    var t2p = strongPhrases[top2.name]
-    var t2i = Math.floor(Math.abs(top2.val * 17 + top.val * 3 + 7) % t2p.length)
-    parts.push('更兼' + t2p[t2i])
-  } else if (top2.val >= 5000 && top2.name !== top.name) {
-    parts.push('「' + top2.name + '」亦有可观')
-  }
-
-  // 最弱
-  if (bot.val <= 1200) {
-    var bp = weakPhrases[bot.name]
-    var bi = Math.floor(Math.abs(bot.val * 19 + 53) % bp.length)
-    var prefix = parts.length > 0 ? '然' : ''
-    parts.push(prefix + '「' + bot.name + '」' + bp[bi])
-  } else if (bot.val <= 2500) {
-    if (parts.length > 0) {
-      parts.push('惟「' + bot.name + '」有所不足')
-    } else {
-      parts.push('「' + bot.name + '」稍逊一筹')
-    }
-  }
-
   var total = 0
   for (var fi = 0; fi < 9; fi++) { total += attrs[fi] || 0 }
   var avg = total / 9
 
-  if (parts.length === 0) {
-    if (avg > 5000) return '中人之姿，平淡一生。'
-    if (avg > 2000) return '庸碌之辈，不足挂齿。'
-    return '微末之命，如草如芥。'
+  // ── 决定诗体 ──
+  var archetype = 'ping'
+  if (top.val >= 7000) {
+    if (top.name === '战功') archetype = 'war'
+    else if (top.name === '文采') archetype = 'wen'
+    else if (top.name === '学识') archetype = 'xue'
+    else if (top.name === '财富') archetype = 'cai'
+    else if (top.name === '医术') archetype = 'yi'
+    else if (top.name === '声望' || top.name === '政绩') archetype = 'gui'
+    else if (top.name === '颜值') archetype = 'yan'
+    else if (top.name === '义行') archetype = 'shan'
+  } else if (avg <= 1500) {
+    archetype = 'gu'
   }
 
-  return parts.join('。') + '。'
+  // ── 诗库 ──
+  var POEMS = {
+    // 将星
+    war: [
+      ['铁衣凌霜月','金戈指苍溟','百战不封侯','白骨照丹青'],
+      ['大漠孤烟直','长河落日寒','功名尘与土','马蹄声声慢'],
+      ['金甲耀秋城','旌旗卷暮云','将军百战后','独叹玉关空'],
+    ],
+    // 文星
+    wen: [
+      ['妙笔生春华','文章动九霄','一纸风云起','万古姓名标'],
+      ['墨洒青山外','诗成碧海间','才名冠天下','知己有几人'],
+      ['笔落惊风雨','词成泣鬼神','文章憎命达','千载有余音'],
+    ],
+    // 学星
+    xue: [
+      ['寒窗十年苦','一盏青灯明','胸中藏万卷','不羡世间名'],
+      ['青简堆千卷','白首穷一经','书中天地阔','门外日西沉'],
+      ['博览古今事','通晓天地机','但求明至理','何须万户侯'],
+    ],
+    // 财星
+    cai: [
+      ['金樽盛明月','玉盘满珠玑','富贵如云散','终归一捧泥'],
+      ['铜山连海起','珠履踏金阶','莫羡朱门富','黄粱梦已歇'],
+      ['千斛明珠聚','万贯铜钱堆','聚散如潮水','去留两不知'],
+    ],
+    // 医星
+    yi: [
+      ['采药深山去','悬壶济世来','回春有妙手','阎王也徘徊'],
+      ['金针度厄运','草木有灵心','但求人无恙','不慕千金裘'],
+      ['青囊藏妙诀','白药化玄机','扁鹊重生日','苍生免苦凄'],
+    ],
+    // 贵星
+    gui: [
+      ['紫绶三公印','朱衣九卿冠','庙堂高百尺','一步一霜寒'],
+      ['明堂悬明镜','丹陛奏清音','治国如烹鲜','天下望甘霖'],
+      ['金殿风云变','玉阶霜雪深','一朝权在手','万古名在心'],
+    ],
+    // 颜星
+    yan: [
+      ['桃面羞春月','柳眉笼晓烟','倾城复倾国','红颜薄命签'],
+      ['玉质生尘外','仙姿落凡间','花容终有尽','空惹世人怜'],
+      ['芙蓉出水清','牡丹映日红','风华绝代后','零落已成空'],
+    ],
+    // 善星
+    shan: [
+      ['古道照肝胆','侠气满乾坤','千金散尽日','天地一孤村'],
+      ['仗剑走江湖','济困不言苦','但行仁义事','莫问前程路'],
+      ['路见不平事','拔剑为苍生','此身虽草莽','义气贯长虹'],
+    ],
+    // 孤煞
+    gu: [
+      ['风中一落叶','水上几浮萍','命薄如秋纸','来去两无凭'],
+      ['寒灯照孤影','冷雨打窗棂','此生无多路','何处是归程'],
+      ['枯木倚寒岩','霜风摧苦颜','人生如大梦','醒来已无言'],
+    ],
+    // 平命
+    ping: [
+      ['春来花自放','秋去叶飘零','人生天地间','忽如远行客'],
+      ['柴门闻犬吠','风雪夜归人','碌碌平生事','一笑了红尘'],
+      ['晨起理荒秽','月下话桑麻','此身虽是客','也向人间急'],
+    ],
+  }
+
+  var pool = POEMS[archetype] || POEMS.ping
+  var idx = Math.floor(Math.abs(top.val * attrs[1] * 7 + 31) % pool.length)
+  return pool[idx]
 }
 
 module.exports = { init, render, onTouch, autoNext: null }

@@ -689,6 +689,7 @@ function handleAIResponse(result, action, userInput) {
   // system message 仍然进 narrativeHistory（给 LLM 看）
   narrative = (branch.content || '').slice(0, MAX_NARRATIVE_CHARS)
   systemLineCount = 0  // 前端不渲染 system 行
+  userScrolledAway = false  // v0.6.85: 新叙事到达，重置用户手动滚动状态
   displayedChars = 0
   displayStartTime = Date.now()
   options = (branch.options || []).slice(0, 3).map(label => ({ label, key: label }))
@@ -1175,6 +1176,8 @@ function drawBoardTarget(ctx) {
 // ─────── 叙事文字（打字机效果 + 滚动） ───────
 var scrollOffset = 0
 var scrollTouchStartY = 0
+var scrollMax = 0              // v0.6.85: 叙事区最大可滚动距离（drawNarrative 赋值）
+var userScrolledAway = false   // v0.6.85: 用户手动上滑后不自动滚回底部
 
 // ─── 古卷风状态 ───
 var statusHidden = false         // v0.2.5-J（先生 2026-06-13 11:03 拍板）：状态栏常显（玩家能直接看到气血/金银/身份/年月）
@@ -1364,23 +1367,25 @@ function drawNarrative(ctx) {
   // 4. 限制滚动 —— v0.2.5-J（规则 2）+ v0.2.5-U（先生 15:57 拍板）：文字超 th 时自动滚屏
   const contentH = contentEndY ? (contentEndY - mainStartY) : (text.split('\n').length * lineHeight)
   const maxScroll = Math.max(0, contentH - (th - 16))
+  scrollMax = maxScroll  // v0.6.85: 暴露给触摸处理器
 
   // v0.2.5-U：打字过程中自动滚屏，让光标保持在 th 底部可见
-  // 之前 v0.2.5-J 只靠玩家手动滑动，超出部分看不到；现在打字时光标位置自动滚动
-  if (displayedChars < totalChars && contentH > th - 16) {
-    const lines = text.split('\n')
-    const cursorLineIndex = lines.length - 1
+  // v0.6.85：用户手动上滑后不再强制拉回（userScrolledAway）
+  var cursorLineIndex = 0
+  if (!userScrolledAway && displayedChars < totalChars && contentH > th - 16) {
+    var lines = text.split('\n')
+    cursorLineIndex = lines.length - 1
     // 光标绝对 Y 位置（不含 scrollOffset）
-    const cursorAbsY = ty + 8 + cursorLineIndex * lineHeight
-    const visibleBottomY = ty + th - 16
+    var cursorAbsY = ty + 8 + cursorLineIndex * lineHeight
+    var visibleBottomY = ty + th - 16
     if (cursorAbsY > visibleBottomY) {
       scrollOffset = -(cursorAbsY - visibleBottomY)
     }
   }
   if (scrollOffset > 0) scrollOffset = 0
   if (scrollOffset < -maxScroll) scrollOffset = -maxScroll
-  // v0.6.50z: 打字完成时自动滚到底部
-  if (displayedChars >= totalChars && maxScroll > 0 && scrollOffset > -maxScroll) {
+  // v0.6.50z: 打字完成时自动滚到底部（v0.6.85: 用户手动上滑后不强制）
+  if (!userScrolledAway && displayedChars >= totalChars && maxScroll > 0 && scrollOffset > -maxScroll) {
     scrollOffset = scrollOffset - 1  // 缓步下滚
   }
 
@@ -2970,6 +2975,12 @@ function handleTouch(x, y, type) {
     if (isScrolling) {
       const dy = y - scrollTouchStartY
       scrollOffset = scrollStartOffset + dy
+      // v0.6.85: 检测用户是否手动离开了底部
+      if (scrollOffset > -(scrollMax - 10)) {
+        userScrolledAway = true
+      } else {
+        userScrolledAway = false
+      }
     }
     return null
   }

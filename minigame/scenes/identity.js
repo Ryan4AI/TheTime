@@ -40,7 +40,7 @@ function calcLayout() {
   // v0.6.74: 命格区域整体设计（标题+大雷达+命签诗做一体）
   var radarR = Math.min(48, Math.max(32, Math.floor(h * 0.080)))
   var radarCX = cx
-  var radarCY = divY + radarR + 38      // 38px: 标题(13px) + 上侧数值距标题3px
+  var radarCY = divY + radarR + 44      // 44px: 标题(13px) + 下间距12px + 标签偏移(6px) + 标签半高(5px) + 8px额外
   var labelDist = radarR + 8             // 距雷达顶点8px，避免标签压九边形边
   var titleY = divY + 10                 // 标题基线（13px楷体，baseline middle）
 
@@ -459,7 +459,7 @@ function render(ctx) {
     ctx.font = '13px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText('— 命 格 —', cx, l.titleY)
+    ctx.fillText('— 你的命格属性 —', cx, l.titleY)
     ctx.restore()
 
     // 雷达图

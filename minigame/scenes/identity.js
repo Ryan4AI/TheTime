@@ -27,36 +27,39 @@ function calcLayout() {
 
   // 1. 姓名（大字楷体）
   var nameS = Math.min(36, Math.floor(w * 0.095))
-  var nameY = cardY + Math.floor(cardH * 0.14)
+  var nameY = cardY + Math.floor(cardH * 0.12)
 
   // 2. 基础信息行：年龄 · 性别 · 职业 · 居所（统一在一行）
   var infoS = Math.min(12, Math.floor(w * 0.032))
-  var infoY = nameY + Math.floor(nameS * 0.65) + 10
+  var infoY = nameY + Math.floor(nameS * 0.55) + 8
 
   // 3. 分割线
-  var divY = infoY + Math.floor(infoS * 1.6)
+  var divY = infoY + Math.floor(infoS * 1.4)
 
-  // 4. 命格（雷达图）+ 标签
-  var labelS = Math.min(11, Math.floor(w * 0.03))
-  var labelY = divY + Math.floor(cardH * 0.05)
-  var radarR = Math.min(40, Math.floor(cardH * 0.16))
+  // 4. v0.6.70: 雷达图（无标题，直接跟分割线，加大）
+  var radarR = Math.min(45, Math.floor(cardH * 0.18))
   var radarCX = cx
-  var radarCY = labelY + radarR + 20
-  var labelDist = radarR + 10  // 标签距离中心
+  var radarCY = divY + radarR + 6
+  var labelDist = radarR + 8  // 标签距离中心
 
-  // 5. 底部纪年（只出现一次）+ 按钮
+  // 5. v0.6.70: 命签诗（两句联，雷达下方）
+  var poemS = Math.min(14, Math.floor(w * 0.036))
+  var poemY = radarCY + radarR + labelDist + 6
+
+  // 6. 底部纪年
+  // 5. v0.6.70: 两句联的poemS/poemY已在上方定义
   var tailS = Math.min(10, Math.floor(w * 0.028))
-  var tailY = cardY + cardH - Math.floor(cardH * 0.18)  // v0.6.68: 恢复原值，诗在各义空间内渲染
+  var tailY = cardY + cardH - Math.floor(cardH * 0.19)
 
-  // 6. 落笔按钮
+  // 7. 落笔按钮
   var btnH = Math.floor(cardH * 0.10)
-  var btnY = cardY + cardH - Math.floor(cardH * 0.20)
+  var btnY = cardY + cardH - Math.floor(cardH * 0.21)
   var btnW = Math.floor(cardW * 0.55)
   var btnX = Math.floor(cx - btnW / 2)
 
-  // 7. 点击提示
+  // 8. 点击提示
   var tapS = Math.min(11, Math.floor(w * 0.030))
-  var tapY = cardY + cardH - Math.floor(cardH * 0.05)
+  var tapY = cardY + cardH - Math.floor(cardH * 0.04)
 
   layout = {
     w: w, h: h, cx: cx,
@@ -65,9 +68,9 @@ function calcLayout() {
     nameS: nameS, nameY: nameY,
     infoS: infoS, infoY: infoY,
     divY: divY,
-    labelS: labelS, labelY: labelY,
     radarR: radarR, radarCX: radarCX, radarCY: radarCY,
     labelDist: labelDist,
+    poemS: poemS, poemY: poemY,
     tailS: tailS, tailY: tailY,
     btnH: btnH, btnY: btnY, btnW: btnW, btnX: btnX,
     tapS: tapS, tapY: tapY,
@@ -526,7 +529,11 @@ function render(ctx) {
 
 // v0.6.66: 命格评价（算命式，根据9属性生成）
 function genFatePoem(attrs) {
-  // v0.6.68: 五言命签诗（根据9属性选择诗体，每体2-3首变体）
+  // v0.6.70: 五言命签联（两句联，每句10字=两联拼合，14px展示）
+  return genCouplet(attrs)
+}
+
+function genCouplet(attrs) {
   var sorted = []
   var attrNames = ['声望','财富','学识','颜值','医术','战功','文采','政绩','义行']
   for (var fi = 0; fi < 9; fi++) {
@@ -541,7 +548,7 @@ function genFatePoem(attrs) {
   for (var fi = 0; fi < 9; fi++) { total += attrs[fi] || 0 }
   var avg = total / 9
 
-  // ── 决定诗体 ──
+  // 诗体判定（同前）
   var archetype = 'ping'
   if (top.val >= 7000) {
     if (top.name === '战功') archetype = 'war'
@@ -556,72 +563,62 @@ function genFatePoem(attrs) {
     archetype = 'gu'
   }
 
-  // ── 诗库 ──
-  var POEMS = {
-    // 将星
+  // 两句联诗库（每联10字=两五言句拼合）
+  var COUPLETS = {
     war: [
-      ['铁衣凌霜月','金戈指苍溟','百战不封侯','白骨照丹青'],
-      ['大漠孤烟直','长河落日寒','功名尘与土','马蹄声声慢'],
-      ['金甲耀秋城','旌旗卷暮云','将军百战后','独叹玉关空'],
+      ['铁甲裂寒霜 金戈指八荒', '百战功名在 一杯黄土香'],
+      ['大漠孤烟直 长河落日圆', '将军百战后 独坐数寒更'],
+      ['马踏天山雪 弓惊瀚海云', '封侯非我愿 但愿海波平'],
     ],
-    // 文星
     wen: [
-      ['妙笔生春华','文章动九霄','一纸风云起','万古姓名标'],
-      ['墨洒青山外','诗成碧海间','才名冠天下','知己有几人'],
-      ['笔落惊风雨','词成泣鬼神','文章憎命达','千载有余音'],
+      ['笔落惊风雨 词成动鬼神', '文章千古事 得失寸心知'],
+      ['墨洒春江月 诗成白玉楼', '才名冠天下 知己有几人'],
+      ['一纸风云起 万古姓名标', '文星高照处 寂寞是归潮'],
     ],
-    // 学星
     xue: [
-      ['寒窗十年苦','一盏青灯明','胸中藏万卷','不羡世间名'],
-      ['青简堆千卷','白首穷一经','书中天地阔','门外日西沉'],
-      ['博览古今事','通晓天地机','但求明至理','何须万户侯'],
+      ['寒窗十年苦 青灯一盏明', '胸中藏万卷 不羡世间名'],
+      ['青简堆千卷 白首穷一经', '书中天地阔 门外日西沉'],
+      ['博览古今事 通晓天地机', '但求明至理 何必万户侯'],
     ],
-    // 财星
     cai: [
-      ['金樽盛明月','玉盘满珠玑','富贵如云散','终归一捧泥'],
-      ['铜山连海起','珠履踏金阶','莫羡朱门富','黄粱梦已歇'],
-      ['千斛明珠聚','万贯铜钱堆','聚散如潮水','去留两不知'],
+      ['金樽盛明月 玉盏满珠玑', '富贵如云散 终归一捧泥'],
+      ['铜山连海起 珠履踏金阶', '莫羡朱门富 黄粱梦已歇'],
+      ['千斛明珠聚 万贯铜钱堆', '聚散如潮水 去留两不知'],
     ],
-    // 医星
     yi: [
-      ['采药深山去','悬壶济世来','回春有妙手','阎王也徘徊'],
-      ['金针度厄运','草木有灵心','但求人无恙','不慕千金裘'],
-      ['青囊藏妙诀','白药化玄机','扁鹊重生日','苍生免苦凄'],
+      ['采药深山里 悬壶济世来', '回春有妙手 阎王也徘徊'],
+      ['金针驱病厄 草木有灵心', '但求人无恙 不慕千金裘'],
+      ['青囊藏妙诀 白药化玄机', '扁鹊重生日 苍生免苦凄'],
     ],
-    // 贵星
     gui: [
-      ['紫绶三公印','朱衣九卿冠','庙堂高百尺','一步一霜寒'],
-      ['明堂悬明镜','丹陛奏清音','治国如烹鲜','天下望甘霖'],
-      ['金殿风云变','玉阶霜雪深','一朝权在手','万古名在心'],
+      ['紫绶三公印 朱衣九卿冠', '庙堂高百尺 一步一霜寒'],
+      ['明镜悬高堂 清风拂玉阶', '治国如烹鲜 天下望甘霖'],
+      ['金殿风云变 玉墀霜雪深', '一朝权在手 万古名在襟'],
     ],
-    // 颜星
     yan: [
-      ['桃面羞春月','柳眉笼晓烟','倾城复倾国','红颜薄命签'],
-      ['玉质生尘外','仙姿落凡间','花容终有尽','空惹世人怜'],
-      ['芙蓉出水清','牡丹映日红','风华绝代后','零落已成空'],
+      ['玉质生尘外 仙姿落凡间', '花容终有尽 空惹世人怜'],
+      ['桃面羞春月 柳眉笼晓烟', '倾城复倾国 红颜薄命签'],
+      ['芙蓉出水净 牡丹映日红', '风华绝代后 零落已成空'],
     ],
-    // 善星
     shan: [
-      ['古道照肝胆','侠气满乾坤','千金散尽日','天地一孤村'],
-      ['仗剑走江湖','济困不言苦','但行仁义事','莫问前程路'],
-      ['路见不平事','拔剑为苍生','此身虽草莽','义气贯长虹'],
+      ['古道照肝胆 侠气满乾坤', '千金散尽日 天地一孤村'],
+      ['仗剑行江湖 济困不言苦', '但行仁义事 莫问前程路'],
+      ['路见不平事 拔剑为苍生', '此身虽草莽 义气贯长虹'],
     ],
-    // 孤煞
     gu: [
-      ['风中一落叶','水上几浮萍','命薄如秋纸','来去两无凭'],
-      ['寒灯照孤影','冷雨打窗棂','此生无多路','何处是归程'],
-      ['枯木倚寒岩','霜风摧苦颜','人生如大梦','醒来已无言'],
+      ['风中一落叶 水上几浮萍', '命薄如秋纸 来去两无凭'],
+      ['寒灯照孤影 冷雨打寒窗', '此生无多路 何处是归程'],
+      ['枯木依寒岩 霜风摧苦颜', '人生如大梦 醒后已无言'],
     ],
-    // 平命
     ping: [
-      ['春来花自放','秋去叶飘零','人生天地间','忽如远行客'],
-      ['柴门闻犬吠','风雪夜归人','碌碌平生事','一笑了红尘'],
-      ['晨起理荒秽','月下话桑麻','此身虽是客','也向人间急'],
+      ['春来花自放 秋去叶飘零', '人生天地间 忽如远行客'],
+      ['柴门闻犬吠 风雪夜归人', '碌碌平生事 一笑了红尘'],
+      ['晨起理荒秽 月下话桑麻', '此身虽是客 也向人间行'],
     ],
   }
 
-  var pool = POEMS[archetype] || POEMS.ping
-  var idx = Math.floor(Math.abs(top.val * attrs[1] * 7 + 31) % pool.length)
+  var pool = COUPLETS[archetype] || COUPLETS.ping
+  var idx = Math.floor(Math.abs(top.val * (attrs[1]||1) * 7 + 31) % pool.length)
   return pool[idx]
 }
 

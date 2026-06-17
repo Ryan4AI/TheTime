@@ -15,6 +15,7 @@ var state = null
 var layout = null
 var currentItems = []
 var narrative = ''           // 当前显示的叙事文本
+var showFateDetail = false    // v0.6.56: 点击命格区切换数值详情
 var systemLineCount = 0     // v0.1.80 (D008): 当前 narrative 顶部的 system 行数（淡灰色显示）
 var displayedChars = 0        // 打字机效果：已显示字符数
 var displayStartTime = 0     // 打字开始时间
@@ -233,6 +234,7 @@ function initLayout() {
     optionGap: optGap,
     freeInputH: freeInputH,
     itemBarY: windowHeight - itemBarH - 10,  // v0.6.50r: 底部留白10px
+    fateArea: { x: padding, y: windowHeight - itemBarH - 10, w: (24 + 6) * 2 + 26, h: itemBarH },  // v0.6.56: 点击命格区切换数值
   }
 }
 
@@ -1654,29 +1656,48 @@ function drawItemBar(ctx) {
   // 左侧装饰已移除 v0.6.50y
   ctx.restore()
 
-  // 3. 边雷达图（每条边=一个属性，标签在中点）
+  // 3. 边雷达图 / 数值详情（点击切换）
   const rcx = fateCX
   const rcy = barY + barH / 2
   const rKeys = ['声望','财富','学识','颜值','医术','战功','文采','政绩','义行']
   const rVals = rKeys.map(k => state[k] || 0)
-  drawRadarEdges(ctx, rcx, rcy, radarR, rVals)
 
-  ctx.save()
-  for (let i = 0; i < 9; i++) {
-    const a = -Math.PI / 2 + (i + 0.5) * (Math.PI * 2) / 9
-    const labelDist = radarR + radarLabelOff
-    const lx = rcx + labelDist * Math.cos(a)
-    const ly = rcy + labelDist * Math.sin(a)
-    ctx.fillStyle = 'rgba(170,210,180,0.65)'
-    ctx.font = '8px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(rKeys[i], lx, ly - 4)
-    ctx.fillStyle = 'rgba(200,168,124,0.4)'
-    ctx.font = '7px sans-serif'
-    ctx.fillText(rVals[i], lx, ly + 5)
+  if (showFateDetail) {
+    // v0.6.56: 数值详情模式 — 9属性竖向列表
+    ctx.save()
+    ctx.fillStyle = 'rgba(25,20,15,0.88)'
+    ctx.fillRect(layout.padding + 1, barY + 1, fateW - 2, barH - 2)
+    const nameColX = layout.padding + 6
+    const valColX = layout.padding + fateW - 6
+    for (let i = 0; i < 9; i++) {
+      const rowY = barY + 3 + i * 8
+      ctx.fillStyle = 'rgba(170,210,180,0.65)'
+      ctx.font = '7px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'top'
+      ctx.fillText(rKeys[i], nameColX, rowY)
+      ctx.fillStyle = 'rgba(200,168,124,0.55)'
+      ctx.textAlign = 'right'
+      ctx.fillText(rVals[i].toString(), valColX, rowY)
+    }
+    ctx.restore()
+  } else {
+    drawRadarEdges(ctx, rcx, rcy, radarR, rVals)
+
+    ctx.save()
+    for (let i = 0; i < 9; i++) {
+      const a = -Math.PI / 2 + (i + 0.5) * (Math.PI * 2) / 9
+      const labelDist = radarR + radarLabelOff
+      const lx = rcx + labelDist * Math.cos(a)
+      const ly = rcy + labelDist * Math.sin(a)
+      ctx.fillStyle = 'rgba(170,210,180,0.65)'
+      ctx.font = '8px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(rKeys[i], lx, ly - 4)
+    }
+    ctx.restore()
   }
-  ctx.restore()
 
   // 4. 竖向分隔线（红+上下红点）
   ctx.save()
@@ -2738,6 +2759,12 @@ function handleTouch(x, y, type) {
       return null
     }
     return null // 榜单浮窗打开时拦截所有触摸
+  }
+
+  // ── v0.6.56: 命格区点击切换数值详情 ──
+  if (type === 'end' && layout.fateArea && hitTest(x, y, layout.fateArea.x, layout.fateArea.y, layout.fateArea.w, layout.fateArea.h)) {
+    showFateDetail = !showFateDetail
+    return null
   }
 
   // ── v2 新增：榜单目标条点击 → 打开榜单 ──

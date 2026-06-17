@@ -2781,17 +2781,6 @@ function handleTouch(x, y, type) {
     return null
   }
 
-  // ── v2 新增：榜单目标条点击 → 打开榜单 ──
-  if (type === 'end' && layout._boardTargetArea && hitTest(x, y, layout._boardTargetArea.x, layout._boardTargetArea.y, layout._boardTargetArea.w, layout._boardTargetArea.h)) {
-    showLeaderboard = true
-    // v0.6.50z: 点击榜单目标时默认打开对应榜单
-    if (closestBoardInfo && closestBoardInfo.name) {
-      var targetIdx = BOARD_LIST.indexOf(closestBoardInfo.name)
-      if (targetIdx >= 0) currentBoardIndex = targetIdx
-    }
-    fetchLeaderboardData()
-    return null
-  }
 
   // ── AI 调试浮窗触摸拦截（v0.1.61）──
   // 浮窗区域：右上角图标（折叠态）/ 全屏覆盖（展开态）
@@ -2924,6 +2913,19 @@ function handleTouch(x, y, type) {
       return null
     }
   }
+
+  // ── v2 新增：榜单目标条点击 → 打开榜单 ──
+  if (type === 'end' && layout._boardTargetArea && hitTest(x, y, layout._boardTargetArea.x, layout._boardTargetArea.y, layout._boardTargetArea.w, layout._boardTargetArea.h)) {
+    showLeaderboard = true
+    // v0.6.50z: 点击榜单目标时默认打开对应榜单
+    if (closestBoardInfo && closestBoardInfo.name) {
+      var targetIdx = BOARD_LIST.indexOf(closestBoardInfo.name)
+      if (targetIdx >= 0) currentBoardIndex = targetIdx
+    }
+    fetchLeaderboardData()
+    return null
+  }
+
 
   if (type === 'start') {
     touchStartTime = Date.now()

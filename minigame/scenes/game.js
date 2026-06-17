@@ -945,7 +945,21 @@ function drawBgImage(ctx) {
   const sw = layout.windowW - layout.padding * 2
   const sh = layout.sceneH
 
-  // v0.6.55: 画像区顶部分割线已移除（第三行已删，无需额外分隔）
+  // v0.6.57: 榜单目标与画卷分隔线（双线）
+  ctx.save()
+  ctx.strokeStyle = 'rgba(200,168,124,0.3)'
+  ctx.lineWidth = 0.8
+  ctx.beginPath()
+  ctx.moveTo(sx, sy - 5)
+  ctx.lineTo(sx + sw, sy - 5)
+  ctx.stroke()
+  ctx.strokeStyle = 'rgba(200,168,124,0.08)'
+  ctx.lineWidth = 0.4
+  ctx.beginPath()
+  ctx.moveTo(sx, sy - 8)
+  ctx.lineTo(sx + sw, sy - 8)
+  ctx.stroke()
+  ctx.restore()
   // v0.6.50h: 画像区始终预留 130px，加载时显示水墨加载提示
   if (!bgImgEl || !bgImgEl.complete || bgImgEl.width === 0) {
     ctx.save()
@@ -1534,7 +1548,7 @@ function drawRadarEdges(ctx, cx, cy, r, values) {
   const n = 9
   const step = (Math.PI * 2) / n
   const startAngle = -Math.PI / 2
-  const maxV = Math.max(...values, 1)
+  const maxV = 10000  // v0.6.57: 固定满分10000（之前动态max导致1000就满格）
   const innerR = r - 3
 
   ctx.save()
@@ -1769,7 +1783,7 @@ function drawItemBar(ctx) {
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const bx = gridStartX + c * (slotW + slotGap)
-      const by = (r === 0 ? barY + 7 : barY + 7 + slotH + slotGap)
+      const by = (r === 0 ? barY + 14 : barY + 14 + slotH + slotGap)  // v0.6.57: 垂直居中
       ctx.save()
       ctx.fillStyle = 'rgba(25,18,12,0.5)'
       roundRect(ctx, bx, by, slotW, slotH, 2)
@@ -1789,7 +1803,7 @@ function drawItemBar(ctx) {
       const c = i % cols
       if (r >= rows) return
       const bx = gridStartX + c * (slotW + slotGap)
-      const by = (r === 0 ? barY + 7 : barY + 7 + slotH + slotGap)
+      const by = (r === 0 ? barY + 14 : barY + 14 + slotH + slotGap)  // v0.6.57: 垂直居中
       // 物品底板（拉开抽屉效果）
       ctx.save()
       ctx.fillStyle = 'rgba(50,35,20,0.75)'

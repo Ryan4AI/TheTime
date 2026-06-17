@@ -673,7 +673,7 @@ function handleAIResponse(result, action, userInput) {
       narrativeHistory.push({ role: 'system', content: sm.content })
     }
   }
-  narrativeHistory.push({ role: 'ai', content: branch.content })
+  narrativeHistory.push({ role: 'ai', content: result.debug.raw_response || branch.content })  // v0.6.85: 存AI原始JSON输出（含全部分支），AI下一轮能看到自己的正确格式
   if (action === 'continue' && userInput && userInput !== '重试' && userInput !== '__retry__') {
     narrativeHistory.push({ role: 'user', content: userInput })
   }

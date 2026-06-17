@@ -25,25 +25,25 @@ function calcLayout() {
   var cardX = Math.floor(cx - cardW / 2)
   var cardY = Math.floor(h * 0.16)
 
-  // 1. 姓名（大字楷体）
-  var nameS = Math.min(36, Math.floor(w * 0.095))
-  var nameY = cardY + Math.floor(cardH * 0.12)
+  // 1. 顶部纪年（朝代标题）
+  var eraS = Math.min(11, Math.floor(w * 0.030))
+  var eraY = cardY + Math.floor(cardH * 0.04)
 
-  // 2. 基础信息行：年龄 · 性别 · 职业 · 居所（统一在一行）
+  // 2. 姓名（大字楷体）
+  var nameS = Math.min(36, Math.floor(w * 0.095))
+  var nameY = eraY + Math.floor(eraS * 1.8)
+
+  // 3. 基础信息行：年龄 · 性别 · 职业 · 居所（统一在一行）
   var infoS = Math.min(12, Math.floor(w * 0.032))
   var infoY = nameY + Math.floor(nameS * 0.55) + 8
 
-  // 3. 顶部纪年（朝代标题，从底部移过来）
-  var eraS = Math.min(11, Math.floor(w * 0.030))
-  var eraY = infoY + Math.floor(infoS * 1.2)
-
   // 4. 分割线
-  var divY = eraY + Math.floor(eraS * 1.6)
+  var divY = infoY + Math.floor(infoS * 1.4)
 
-  // 5. v0.6.71: 雷达图 + 命签诗（自适应空间）
-  var radarR = Math.min(45, Math.max(32, Math.floor(cardH * 0.15)))
+  // v0.6.73: 雷达图按屏高缩放
+  var radarR = Math.min(45, Math.max(28, Math.floor(h * 0.075)))
   var radarCX = cx
-  var radarCY = divY + radarR + 20
+  var radarCY = divY + radarR + 28
   var labelDist = radarR + 6
 
   // 雷达→底部可用空间，动态决定诗字号
@@ -372,8 +372,25 @@ function render(ctx) {
 
     // ── v0.6.71 重构：纪年(顶) → 姓名 → 信息 → 分割线 → 命格属性雷达 → 两句联 → 按钮 ──
 
-  // 段 1：姓名（大字楷体金色光晕）
+  // 段 0：顶部纪年
   var nOp = anims.name.update(now)
+  if (nOp > 0 && IDENTITY.dynasty) {
+    var eraDisp = IDENTITY.eraDisplay || IDENTITY.eraLabel || ''
+    if (eraDisp && eraDisp.indexOf(IDENTITY.dynasty) === 0) {
+      eraDisp = eraDisp.slice(IDENTITY.dynasty.length).replace(/^[·\s]*/, '')
+    }
+    var eraTitle = eraDisp ? IDENTITY.dynasty + ' · ' + eraDisp : IDENTITY.dynasty
+    ctx.save()
+    ctx.globalAlpha = iOp * 0.5
+    ctx.fillStyle = 'rgba(200,168,124,0.4)'
+    ctx.font = l.eraS + 'px "STKaiti", "KaiTi", "楷体", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(eraTitle, cx, l.eraY)
+    ctx.restore()
+  }
+
+  // 段 1：姓名（大字楷体金色光晕）
   if (nOp > 0) {
     ctx.save()
     ctx.shadowColor = 'rgba(232,200,130,' + (nOp * 0.6) + ')'
@@ -421,23 +438,6 @@ function render(ctx) {
 
     // v0.6.71: 雷达图（标题+加大+显示数值+两句联14px）
   if (iOp > 0 && l.radarR > 0) {
-    // 顶部纪年（从底部移过来）
-    if (IDENTITY.dynasty) {
-      var eraDisp = IDENTITY.eraDisplay || IDENTITY.eraLabel || ''
-      if (eraDisp && eraDisp.indexOf(IDENTITY.dynasty) === 0) {
-        eraDisp = eraDisp.slice(IDENTITY.dynasty.length).replace(/^[·\s]*/, '')
-      }
-      var eraTitle = eraDisp ? IDENTITY.dynasty + ' · ' + eraDisp : IDENTITY.dynasty
-      ctx.save()
-      ctx.globalAlpha = iOp * 0.5
-      ctx.fillStyle = 'rgba(200,168,124,0.4)'
-      ctx.font = l.eraS + 'px "STKaiti", "KaiTi", "楷体", sans-serif'
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(eraTitle, cx, l.eraY)
-      ctx.restore()
-    }
-
     // 标题：你的命格属性
     ctx.save()
     ctx.globalAlpha = iOp * 0.65
@@ -492,7 +492,7 @@ function render(ctx) {
     ctx.restore()
   }  // 雷达图+诗结束
 
-  // 段 5：落笔开局按钮（用独立的按钮动画，不依赖已删除的纪年）
+  // 段 4：落笔开局按钮
   var yOp = anims.year.update(now)
   if (yOp > 0) {
     ctx.save()
@@ -519,7 +519,7 @@ function render(ctx) {
     ctx.restore()
   }
 
-  // 段 7：底部点击提示
+  // 段 5：底部点击提示
   if (yOp > 0) {
     drawText(ctx, '· 点击任意处开始 ·', cx, l.tapY, {
       fontSize: l.tapS,

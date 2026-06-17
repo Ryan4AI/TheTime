@@ -185,7 +185,7 @@ function initLayout() {
   const statusBarH = 8  // v0.6.53: 恢复装饰线（之前50x不该显示城市/健康）
   // v0.2.5-Q（先生 2026-06-13 15:33 拍板）：自由输入从选项区移到画区右上角图标
   // 选项区只剩 3 个选项，optBlockH 不再算 freeInputH
-  const itemBarH = 72  // v0.6.50s: 72px（给雷达图+标签等高留空间）
+  const itemBarH = 80  // v0.6.54: 80px（给雷达图24+标签30留8px边距）
   const optH = 40
   const optGap = 4
   const freeInputH = 30  // 图标尺寸（圆形）
@@ -1629,9 +1629,9 @@ function drawItemBar(ctx) {
   const barH = layout.itemBarH
 
   // 左侧命格区
-  const radarR = 18
-  const radarLabelOff = 5
-  const fateW = (radarR + radarLabelOff) * 2 + 26  // 72px
+  const radarR = 24
+  const radarLabelOff = 6
+  const fateW = (radarR + radarLabelOff) * 2 + 26  // 86px
   const dividerX = layout.padding + fateW
   const fateCX = dividerX - fateW / 2
 

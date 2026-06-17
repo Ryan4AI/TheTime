@@ -28,6 +28,7 @@ var loadingStart = 0
 var loadingText = '史官正在落笔…'  // v0.1.74 (D008): 轮询期间显示等待时长
 var errorMsg = ''
 var narrativeHistory = []    // {role, content}
+var lastRawAiResp = null    // v0.6.85: 最后AI原始JSON，history送AI时代替普通content
 var alive = true             // 死亡标记
 var fadeOut = null           // 淡出动画
 var deathReason = null        // v0.6.61: 社会性死亡根因属性
@@ -302,11 +303,23 @@ function callAI(userInput) {
     historical_shelter: state.historical_shelter,
   }
 
+  // v0.6.85: 历史最后一条 AI 消息用原始 JSON（含全部分支），强化 AI 格式学习
+  // 之前的 AI 消息仍用选中分支普通内容（按先生要求）
+  var historyForAi = narrativeHistory.slice(-12)
+  if (lastRawAiResp) {
+    for (var i$ = historyForAi.length - 1; i$ >= 0; i$--) {
+      if (historyForAi[i$].role === 'ai') {
+        historyForAi[i$] = { role: 'ai', content: lastRawAiResp }
+        break
+      }
+    }
+  }
+
   const data = {
     state: stateData,
     input: realInput,
     is_retry: isRetry,
-    history: narrativeHistory.slice(-12),
+    history: historyForAi,
   }
 
   // ── 调试：记录完整 input ──
@@ -673,7 +686,8 @@ function handleAIResponse(result, action, userInput) {
       narrativeHistory.push({ role: 'system', content: sm.content })
     }
   }
-  narrativeHistory.push({ role: 'ai', content: result.debug.raw_response || branch.content })  // v0.6.85: 存AI原始JSON输出（含全部分支），AI下一轮能看到自己的正确格式
+  narrativeHistory.push({ role: 'ai', content: branch.content })  // 普通轮次只存选中分支
+  lastRawAiResp = (result.debug && result.debug.raw_response) || lastRawAiResp  // v0.6.85: 存原始JSON，history送AI时替代最后一条
   if (action === 'continue' && userInput && userInput !== '重试' && userInput !== '__retry__') {
     narrativeHistory.push({ role: 'user', content: userInput })
   }

@@ -40,8 +40,8 @@ function calcLayout() {
   // v0.6.74: 命格区域整体设计（标题+大雷达+命签诗做一体）
   var radarR = Math.min(48, Math.max(32, Math.floor(h * 0.080)))
   var radarCX = cx
-  var radarCY = divY + radarR + 34      // 34px: 标题(13px) + 标签偏移(6px) + 标签半高(5px) + 3px间隙
-  var labelDist = radarR + 3             // 标签贴近雷达边缘
+  var radarCY = divY + radarR + 38      // 38px: 标题(13px) + 上侧数值距标题3px
+  var labelDist = radarR + 8             // 距雷达顶点8px，避免标签压九边形边
   var titleY = divY + 10                 // 标题基线（13px楷体，baseline middle）
 
   // 雷达→诗紧凑排列，4px间隙
@@ -467,25 +467,29 @@ function render(ctx) {
     var rVals = rKeys.map(function(k) { return IDENTITY[k] || 0 })
     ui.drawRadarEdges(ctx, l.radarCX, l.radarCY, l.radarR, rVals)
 
-    // 属性标签 + 数值（边中点）
+    // 属性标签 + 数值（径向偏移：标签距雷达8px，数值再向外10px）
     ctx.save()
     for (var ri = 0; ri < 9; ri++) {
       var a = -Math.PI / 2 + (ri + 0.5) * (Math.PI * 2) / 9
-      var lx = l.radarCX + l.labelDist * Math.cos(a)
-      var ly = l.radarCY + l.labelDist * Math.sin(a)
+      var cosA = Math.cos(a), sinA = Math.sin(a)
+      var ld = l.labelDist
+      var lx = l.radarCX + ld * cosA
+      var ly = l.radarCY + ld * sinA
+      var vx = l.radarCX + (ld + 10) * cosA
+      var vy = l.radarCY + (ld + 10) * sinA
       var rn = rKeys[ri]
       var rv = rVals[ri]
-      // 属性名
+      // 属性名（沿径向向外偏移6px）
       ctx.fillStyle = 'rgba(170,210,180,0.65)'
       ctx.font = '10px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.fillText(rn, lx, ly - 6)
-      // 数值
+      ctx.fillText(rn, lx + cosA * 6, ly + sinA * 6)
+      // 数值（在标签外侧再偏移10px）
       var valAlpha = 0.25 + Math.min(1, rv / 8000) * 0.4
       ctx.fillStyle = 'rgba(210,180,130,' + valAlpha + ')'
       ctx.font = '11px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-      ctx.fillText(rv, lx, ly + 7)
+      ctx.fillText(rv, vx + cosA * 6, vy + sinA * 6)
     }
     ctx.restore()
 

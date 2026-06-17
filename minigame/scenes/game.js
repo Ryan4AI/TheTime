@@ -182,7 +182,7 @@ function initLayout() {
   // 顶栏(52) → 状态栏(26) → 文字面板(自适应 narrative 行数) → 选项(3×40+gap 4+输入 32 = 160) → 物品栏(64)
   const topBarH = 52
   // v0.2.5-J（先生 2026-06-13 11:03 拍板）：状态栏常显，statusBarH 永远生效
-  const statusBarH = 18  // v0.6.50x: 从8→18，显示城市+健康/财富/寿限
+  const statusBarH = 8  // v0.6.53: 恢复装饰线（之前50x不该显示城市/健康）
   // v0.2.5-Q（先生 2026-06-13 15:33 拍板）：自由输入从选项区移到画区右上角图标
   // 选项区只剩 3 个选项，optBlockH 不再算 freeInputH
   const itemBarH = 72  // v0.6.50s: 72px（给雷达图+标签等高留空间）
@@ -1080,51 +1080,24 @@ function drawSealTopBar(ctx) {
 
 // ─────── 状态分隔条（v0.6.50x: 加宽至20px，显示城市+阶层）───────
 function drawStatusBar(ctx) {
+  // v0.6.53: 仅留装饰细线，不再显示城市/健康/财富（占空间）
   const padding = layout.padding
   const top = layout.safeTop + layout.topBarH
   const h = layout.statusBarH || 0
-  if (h < 6) return
+  if (h < 4) return
 
-  // 暖木色底 + 细边框
+  // 暗木色底 + 边框
   ctx.save()
-  ctx.fillStyle = 'rgba(25,20,16,0.5)'
+  ctx.fillStyle = 'rgba(20,16,12,0.6)'
   ctx.fillRect(padding, top, layout.windowW - padding * 2, h)
-  ctx.strokeStyle = 'rgba(200,168,124,0.2)'
+  ctx.strokeStyle = 'rgba(200,168,124,0.25)'
   ctx.lineWidth = 0.5
   ctx.beginPath()
   ctx.moveTo(padding, top + 0.5)
-  ctx.lineTo(layout.windowW - padding, top + 0.5)
+  ctx.lineTo(padding + layout.windowW - padding * 2, top + 0.5)
   ctx.moveTo(padding, top + h - 0.5)
-  ctx.lineTo(layout.windowW - padding, top + h - 0.5)
+  ctx.lineTo(padding + layout.windowW - padding * 2, top + h - 0.5)
   ctx.stroke()
-  ctx.restore()
-
-  // 左侧城市名（小字）
-  const cityStr = state.city_name || state.city || ''
-  if (cityStr) {
-    ctx.save()
-    ctx.fillStyle = 'rgba(170,210,180,0.6)'
-    ctx.font = '9px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-    ctx.textAlign = 'left'
-    ctx.textBaseline = 'middle'
-    ctx.fillText('📍 ' + cityStr, padding + 6, top + h / 2)
-    ctx.restore()
-  }
-
-  // 右侧状态：健康/财富/寿限
-  ctx.save()
-  ctx.fillStyle = 'rgba(200,168,124,0.5)'
-  ctx.font = '9px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-  ctx.textAlign = 'right'
-  ctx.textBaseline = 'middle'
-  const health = state.health != null ? '❤ ' + state.health : ''
-  const coin = state.coin != null ? '💰 ' + state.coin : ''
-  const age = state.age ? state.age + '岁' : ''
-  const parts = []
-  if (age) parts.push(age)
-  if (health) parts.push(health)
-  if (coin) parts.push(coin)
-  if (parts.length > 0) ctx.fillText(parts.join(' | '), layout.windowW - padding - 6, top + h / 2)
   ctx.restore()
 }
 

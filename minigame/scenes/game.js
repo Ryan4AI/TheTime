@@ -234,7 +234,7 @@ function initLayout() {
     optionGap: optGap,
     freeInputH: freeInputH,
     itemBarY: windowHeight - itemBarH - 10,  // v0.6.50r: 底部留白10px
-    fateArea: { x: padding, y: windowHeight - itemBarH - 10, w: (24 + 6) * 2 + 26, h: itemBarH },  // v0.6.56: 点击命格区切换数值
+    fateArea: { x: 14, y: windowHeight - itemBarH - 10, w: (24 + 6) * 2 + 26, h: itemBarH },  // v0.6.57: padding=14
   }
 }
 

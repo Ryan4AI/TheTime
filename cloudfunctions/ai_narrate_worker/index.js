@@ -1047,7 +1047,7 @@ async function callScoringAI(content, prevState) {
 function callLLM(messages, modelOverride) {
   return new Promise((resolve, reject) => {
     const useModel = modelOverride || DS_MODEL
-    const data = JSON.stringify({ model: useModel, messages, max_tokens: MAX_TOKENS, temperature: TEMPERATURE, think: true })  // v0.6.59: 打开思考模式改善输出格式
+    const data = JSON.stringify({ model: useModel, messages, max_tokens: MAX_TOKENS, temperature: TEMPERATURE, think: false })  // v0.6.85: 关闭思考模式（开启导致输出格式不匹配）
     const url = new URL(DS_BASE_URL + '/chat/completions')
     const req = https.request({
       hostname: url.hostname, path: url.pathname, method: 'POST',

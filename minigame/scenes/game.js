@@ -1140,6 +1140,14 @@ function drawBoardTarget(ctx) {
 
   ctx.textBaseline = 'middle'
 
+  // v0.6.85: 榜单目标条底部装饰分隔线（↔场景画面之间）
+  ctx.strokeStyle = 'rgba(200,168,124,0.12)'
+  ctx.lineWidth = 0.8
+  ctx.beginPath()
+  ctx.moveTo(padding + 16, top + h + 2)
+  ctx.lineTo(padding + w - 16, top + h + 2)
+  ctx.stroke()
+
   if (closestBoardInfo.on) {
     // 已上榜：显示🏆榜名 + "已上榜·点击查看"
     ctx.fillStyle = 'rgba(232,200,130,0.85)'

@@ -644,15 +644,15 @@ function handleAIResponse(result, action, userInput) {
     state.health = 0
   }
 
-  // v0.6.61: 属性归零→社会性死亡（颜值除外）
+  // v0.6.61: 全部社会属性归零→社会性死亡（颜值除外）
   var DEATH_ATTRS = ['声望', '财富', '学识', '医术', '战功', '文采', '政绩', '义行'];
+  var allZero = true;
   for (var i = 0; i < DEATH_ATTRS.length; i++) {
-    var attrVal = state[DEATH_ATTRS[i]] || 0;
-    if (attrVal <= 0 && state.health > 0) {
-      state.health = 0;
-      deathReason = DEATH_ATTRS[i];
-      break;
-    }
+    if ((state[DEATH_ATTRS[i]] || 0) > 0) { allZero = false; break; }
+  }
+  if (allZero && state.health > 0) {
+    state.health = 0;
+    deathReason = '全部社会属性';
   }
 
   // 3. 死亡判定

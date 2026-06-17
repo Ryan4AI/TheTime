@@ -467,7 +467,7 @@ function render(ctx) {
     var rVals = rKeys.map(function(k) { return IDENTITY[k] || 0 })
     ui.drawRadarEdges(ctx, l.radarCX, l.radarCY, l.radarR, rVals)
 
-    // 属性标签 + 数值（径向偏移：标签距雷达8px，数值再向外10px）
+    // 属性标签 + 数值（属性名在上，数字在下，统一垂直排列）
     ctx.save()
     for (var ri = 0; ri < 9; ri++) {
       var a = -Math.PI / 2 + (ri + 0.5) * (Math.PI * 2) / 9
@@ -475,8 +475,6 @@ function render(ctx) {
       var ld = l.labelDist
       var lx = l.radarCX + ld * cosA
       var ly = l.radarCY + ld * sinA
-      var vx = l.radarCX + (ld + 10) * cosA
-      var vy = l.radarCY + (ld + 10) * sinA
       var rn = rKeys[ri]
       var rv = rVals[ri]
       // 属性名（沿径向向外偏移6px）
@@ -485,11 +483,11 @@ function render(ctx) {
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText(rn, lx + cosA * 6, ly + sinA * 6)
-      // 数值（在标签外侧再偏移10px）
+      // 数值（属性名下边，垂直偏移11px）
       var valAlpha = 0.25 + Math.min(1, rv / 8000) * 0.4
       ctx.fillStyle = 'rgba(210,180,130,' + valAlpha + ')'
       ctx.font = '11px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-      ctx.fillText(rv, vx + cosA * 6, vy + sinA * 6)
+      ctx.fillText(rv, lx + cosA * 6, ly + sinA * 6 + 11)
     }
     ctx.restore()
 

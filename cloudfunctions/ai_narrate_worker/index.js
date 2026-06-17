@@ -48,7 +48,7 @@ const DS_API_KEY = process.env.DS_API_KEY
 const DS_BASE_URL = 'https://api.deepseek.com/v1'
 const DS_MODEL = 'deepseek-v4-flash'
 const DS_FALLBACK_MODEL = 'deepseek-v4-flash'
-const MAX_TOKENS = 2500
+const MAX_TOKENS = 4000  // v0.6.59: think=true 时需更多token给推理链
 const SCORE_MAX_TOKENS = 300
 const TEMPERATURE = 0.85
 const LLM_TIMEOUT_MS = 110000
@@ -1016,7 +1016,7 @@ async function callScoringAI(content, prevState) {
 function callLLM(messages, modelOverride) {
   return new Promise((resolve, reject) => {
     const useModel = modelOverride || DS_MODEL
-    const data = JSON.stringify({ model: useModel, messages, max_tokens: MAX_TOKENS, temperature: TEMPERATURE, think: false })
+    const data = JSON.stringify({ model: useModel, messages, max_tokens: MAX_TOKENS, temperature: TEMPERATURE, think: true })  // v0.6.59: 打开思考模式改善输出格式
     const url = new URL(DS_BASE_URL + '/chat/completions')
     const req = https.request({
       hostname: url.hostname, path: url.pathname, method: 'POST',

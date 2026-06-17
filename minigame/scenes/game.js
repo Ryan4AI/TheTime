@@ -945,7 +945,7 @@ function drawBgImage(ctx) {
 
   // v0.6.50y: 画像区顶部双线分隔（从顶栏底部移下来，更明显）
   ctx.save()
-    ctx.strokeStyle = 'rgba(200,168,124,0.35)'
+  ctx.strokeStyle = 'rgba(200,168,124,0.35)'
   ctx.lineWidth = 1
   ctx.beginPath()
   ctx.moveTo(sx, sy - 6)
@@ -956,12 +956,8 @@ function drawBgImage(ctx) {
   ctx.beginPath()
   ctx.moveTo(sx, sy - 9)
   ctx.lineTo(sx + sw, sy - 9)
-x.beginPath()
-  ctx.moveTo(sx, sy - 4)
-  ctx.lineTo(sx + sw, sy - 4)
   ctx.stroke()
   ctx.restore()
-
   // v0.6.50h: 画像区始终预留 130px，加载时显示水墨加载提示
   if (!bgImgEl || !bgImgEl.complete || bgImgEl.width === 0) {
     ctx.save()

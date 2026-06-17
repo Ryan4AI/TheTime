@@ -394,7 +394,7 @@ function render(ctx) {
     ctx.save()
     ctx.globalAlpha = iOp * 0.5
     ctx.fillStyle = 'rgba(200,168,124,0.4)'
-    ctx.font = l.eraS + 'px "STKaiti", "KaiTi", "楷体", sans-serif'
+    ctx.font = l.eraS + 'px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(eraTitle, cx, l.eraY)
@@ -427,6 +427,7 @@ function render(ctx) {
     if (IDENTITY.residence) parts.push('居' + IDENTITY.residence)
     var infoText = parts.filter(Boolean).join(' · ')
     drawText(ctx, infoText, cx, l.infoY, {
+      fontFamily: '"STKaiti", "KaiTi", "楷体", ' + ui.fontFamily,
       fontSize: l.infoS,
       color: COLORS.paperDarker,
       align: 'center', baseline: 'middle',
@@ -453,7 +454,7 @@ function render(ctx) {
     ctx.save()
     ctx.globalAlpha = iOp * 0.45
     ctx.fillStyle = 'rgba(200,168,124,0.6)'
-    ctx.font = '9px "STKaiti", "KaiTi", "楷体", sans-serif'
+    ctx.font = '9px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText('— 你的命格属性 —', cx, l.titleY)
@@ -474,14 +475,14 @@ function render(ctx) {
       var rv = rVals[ri]
       // 属性名
       ctx.fillStyle = 'rgba(170,210,180,0.65)'
-      ctx.font = '8px "STKaiti", "KaiTi", "楷体", sans-serif'
+      ctx.font = '8px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText(rn, lx, ly - 5)
       // 数值
       var valAlpha = 0.25 + Math.min(1, rv / 8000) * 0.4
       ctx.fillStyle = 'rgba(210,180,130,' + valAlpha + ')'
-      ctx.font = '9px "STKaiti", "KaiTi", "楷体", sans-serif'
+      ctx.font = '9px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
       ctx.fillText(rv, lx, ly + 6)
     }
     ctx.restore()
@@ -520,6 +521,7 @@ function render(ctx) {
     ctx.shadowColor = 'rgba(232,200,130,0.6)'
     ctx.shadowBlur = 8
     drawText(ctx, '落 笔 开 局', cx, l.btnY + l.btnH / 2, {
+      fontFamily: '"STKaiti", "KaiTi", "楷体", ' + ui.fontFamily,
       fontSize: Math.min(18, Math.floor(l.btnH * 0.55)),
       fontFamily: '"STKaiti", "KaiTi", "楷体", ' + ui.fontFamily,
       color: COLORS.goldLight,

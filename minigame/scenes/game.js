@@ -182,7 +182,7 @@ function initLayout() {
   // 顶栏(52) → 状态栏(26) → 文字面板(自适应 narrative 行数) → 选项(3×40+gap 4+输入 32 = 160) → 物品栏(64)
   const topBarH = 52
   // v0.2.5-J（先生 2026-06-13 11:03 拍板）：状态栏常显，statusBarH 永远生效
-  const statusBarH = 8  // v0.6.53: 恢复装饰线（之前50x不该显示城市/健康）
+  const statusBarH = 0  // v0.6.55: 第三行已删，整行去掉
   // v0.2.5-Q（先生 2026-06-13 15:33 拍板）：自由输入从选项区移到画区右上角图标
   // 选项区只剩 3 个选项，optBlockH 不再算 freeInputH
   const itemBarH = 80  // v0.6.54: 80px（给雷达图24+标签30留8px边距）
@@ -943,21 +943,7 @@ function drawBgImage(ctx) {
   const sw = layout.windowW - layout.padding * 2
   const sh = layout.sceneH
 
-  // v0.6.50y: 画像区顶部双线分隔（从顶栏底部移下来，更明显）
-  ctx.save()
-  ctx.strokeStyle = 'rgba(200,168,124,0.35)'
-  ctx.lineWidth = 1
-  ctx.beginPath()
-  ctx.moveTo(sx, sy - 6)
-  ctx.lineTo(sx + sw, sy - 6)
-  ctx.stroke()
-  ctx.strokeStyle = 'rgba(200,168,124,0.12)'
-  ctx.lineWidth = 0.5
-  ctx.beginPath()
-  ctx.moveTo(sx, sy - 9)
-  ctx.lineTo(sx + sw, sy - 9)
-  ctx.stroke()
-  ctx.restore()
+  // v0.6.55: 画像区顶部分割线已移除（第三行已删，无需额外分隔）
   // v0.6.50h: 画像区始终预留 130px，加载时显示水墨加载提示
   if (!bgImgEl || !bgImgEl.complete || bgImgEl.width === 0) {
     ctx.save()
@@ -1070,7 +1056,7 @@ function drawSealTopBar(ctx) {
   ctx.fillText(state.name + ' · ' + state.age + '岁' + (addInfo ? ' · ' + addInfo : ''), textX, sealCenterY + 11)
   ctx.restore()
 
-  // 4. v0.6.50y: 分割线移到画卷区顶部了，这里不再画
+  // 4. v0.6.55: 分割线已删（第三行去掉后不需要额外分隔）
 
   // 5. v2 新增：右侧"榜"按钮（已移除 → 榜单目标条可点击）
 

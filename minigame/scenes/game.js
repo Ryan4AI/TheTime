@@ -843,9 +843,11 @@ function adjustFluidLayout() {
   layout.sceneH = sceneH
   layout.sceneVisible = true
 
-  // 文字区高度 = 剩余 - 画区 - 选项块 - 间距
-  let finalTextH = availableH - sceneH - optReserveH - optionGap - 12
-  finalTextH = Math.max(100, finalTextH)  // 不限上限
+  // v0.6.50y: 用textY到itemBarY的实际空间
+  const computedTextY = safeTop + topBarH + (layout.statusBarH || 0) + 4 + sceneH + 8 + 24
+  const textToItemBar = (layout.windowH - itemBarH - 10) - computedTextY
+  let finalTextH = textToItemBar - optReserveH - 16  // 16 = 2文字-选项gap + 6freeGap + 8缓冲
+  finalTextH = Math.max(100, finalTextH)
 
   layout.sceneH = sceneH
   layout.sceneVisible = true
@@ -858,14 +860,8 @@ function adjustFluidLayout() {
   layout.textY = safeTop + topBarH + (layout.statusBarH || 0) + 4 + sceneH + 8 + boardTargetOffset
   layout.textH = finalTextH
   // v0.6.50g: 选项紧贴叙事文字底部（2px 微距代替原来 6px）
-    // v0.6.50x: 限制选项区不越过物品栏
-  const maxOptBottom = layout.itemBarY - 4  // 4px gap
-  const minOptY = layout.textY + 100 + 2
-  layout.optionY = Math.min(
-    layout.textY + finalTextH + 2,
-    maxOptBottom - optReserveH
-  )
-  layout.optionY = Math.max(layout.optionY, minOptY)
+  // v0.6.50y: optionY = textY + finalTextH + 2（textH已正确扣减）
+  layout.optionY = layout.textY + finalTextH + 2
   layout.optionFadeIn = typingDone ? 1 : 0
   layout.optionH = 36                       // v0.1.67: 38 → 36 缩 2px
   layout.optionGap = optionGap
@@ -947,13 +943,19 @@ function drawBgImage(ctx) {
   const sw = layout.windowW - layout.padding * 2
   const sh = layout.sceneH
 
-  // v0.6.50x: 画像区顶部视觉分隔线（与上方信息区隔开）
+  // v0.6.50y: 画像区顶部双线分隔（从顶栏底部移下来，更明显）
   ctx.save()
-  ctx.strokeStyle = 'rgba(200,168,124,0.15)'
-  ctx.lineWidth = 0.5
+  ctx.strokeStyle = 'rgba(200,168,124,0.35)'
+  ctx.lineWidth = 1
   ctx.beginPath()
   ctx.moveTo(sx, sy - 1)
   ctx.lineTo(sx + sw, sy - 1)
+  ctx.stroke()
+  ctx.strokeStyle = 'rgba(200,168,124,0.12)'
+  ctx.lineWidth = 0.5
+  ctx.beginPath()
+  ctx.moveTo(sx, sy - 4)
+  ctx.lineTo(sx + sw, sy - 4)
   ctx.stroke()
   ctx.restore()
 
@@ -1055,30 +1057,21 @@ function drawSealTopBar(ctx) {
   const eraStr = state.eraDisplay || (state.dynasty + ' ' + state.year + '年')
   const textX = sealCenterX + 32  // 文字起始 X（印章右侧）
 
-  // 上行：朝代 + 年月 + 月份（大字，暖米黄）— v0.6.50x: 缩为12px腾出行
+  // 上行：朝代 + 年月（大字，暖米黄）— v0.6.50y: 回退双行紧凑版，不多加行
   ctx.fillStyle = 'rgba(232,221,208,0.95)'
-  ctx.font = '12px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+  ctx.font = 'bold 13px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
-  ctx.fillText(eraStr + ' · ' + monthStrTopBar, textX, sealCenterY - 13)
+  ctx.fillText(eraStr + ' · ' + monthStrTopBar, textX, sealCenterY - 11)
 
-  // 中行：姓名 · 年龄 · 身份（小字，暗金）
-  ctx.fillStyle = 'rgba(200,168,124,0.85)'
+  // 下行：姓名 · 年龄 · 居所 · 身份 · 阶层（一行全塞）
+  ctx.fillStyle = 'rgba(200,168,124,0.8)'
   ctx.font = '11px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-  const occ = state.occupation || ''
-  ctx.fillText(state.name + ' · ' + state.age + '岁' + (occ ? ' · ' + occ : ''), textX, sealCenterY + 2)
-
-  // 下行：居所 · 阶层（更小字，暗金淡色）
-  ctx.fillStyle = 'rgba(200,168,124,0.55)'
-  ctx.font = '10px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-  const cityStr = state.city_name || state.city || ''
-  const clsStr = state.social_class || ''
-  const info2 = [cityStr, clsStr].filter(Boolean).join(' · ')
-  if (info2) ctx.fillText(info2, textX, sealCenterY + 16)
+  const addInfo = [state.city_name || state.city || '', state.occupation || '', state.social_class || ''].filter(Boolean).join(' · ')
+  ctx.fillText(state.name + ' · ' + state.age + '岁' + (addInfo ? ' · ' + addInfo : ''), textX, sealCenterY + 11)
   ctx.restore()
 
-  // 4. 暗金细线分隔（顶栏底部）
-  ui.drawClassicalDivider(ctx, padding, safeTop + topH - 1, layout.windowW - padding * 2, 0.6)
+  // 4. v0.6.50y: 分割线移到画卷区顶部了，这里不再画
 
   // 5. v2 新增：右侧"榜"按钮（已移除 → 榜单目标条可点击）
 
@@ -1696,7 +1689,7 @@ function drawItemBar(ctx) {
   ctx.font = '10px sans-serif'
   ctx.textAlign = 'left'
   ctx.textBaseline = 'top'
-  ctx.fillText('〖', layout.padding + 2, barY + barH - 13)
+  // 左侧装饰已移除 v0.6.50y
   ctx.restore()
 
   // 3. 边雷达图（每条边=一个属性，标签在中点）

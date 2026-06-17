@@ -1644,7 +1644,7 @@ function drawItemBar(ctx) {
 
   // 左侧命格区
   const radarR = 24
-  const radarLabelOff = 6
+  const radarLabelOff = 8               // v0.6.83: 匹配 identity.js，labelDist=R+8
   const fateW = (radarR + radarLabelOff) * 2 + 26  // 86px
   const dividerX = layout.padding + fateW
   const fateCX = dividerX - fateW / 2
@@ -1720,7 +1720,8 @@ function drawItemBar(ctx) {
       ctx.font = '8px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.fillText(rKeys[i], lx, ly - 4)
+      var sinA = Math.sin(a), cosA = Math.cos(a)
+      ctx.fillText(rKeys[i], lx + cosA * 5, ly + sinA * 5)
     }
     ctx.restore()
   }

@@ -46,7 +46,7 @@ function calcLayout() {
 
   // 5. 底部纪年（只出现一次）+ 按钮
   var tailS = Math.min(10, Math.floor(w * 0.028))
-  var tailY = cardY + cardH - Math.floor(cardH * 0.20)  // v0.6.68: 给命签诗腾空间
+  var tailY = cardY + cardH - Math.floor(cardH * 0.18)  // v0.6.68: 恢复原值，诗在各义空间内渲染
 
   // 6. 落笔按钮
   var btnH = Math.floor(cardH * 0.10)
@@ -448,16 +448,20 @@ function render(ctx) {
   // v0.6.68: 命签诗（雷达图下方）
   if (iOp > 0 && l.radarR > 0) {
     var poemLines = genFatePoem(rVals)
-    var poemY0 = l.radarCY + l.radarR + l.labelDist + 14
+    var poemY0 = l.radarCY + l.radarR + l.labelDist + 2
+    ctx.save()
     for (var pi = 0; pi < 4; pi++) {
-      drawText(ctx, poemLines[pi], cx, poemY0 + pi * 12, {
-        fontSize: 9,
-        color: 'rgba(200,168,124,0.35)',
-        align: 'center', baseline: 'top',
-        opacity: iOp * 0.6 - pi * 0.05,
-        fontFamily: '"STKaiti", "KaiTi", "楷体", ' + ui.fontFamily,
-      })
+      var pOp = iOp * (0.65 - pi * 0.06)
+      ctx.globalAlpha = pOp * pOp  // 渐隐更柔和
+      ctx.shadowColor = 'rgba(200,168,124,' + (pOp * 0.15) + ')'
+      ctx.shadowBlur = 2
+      ctx.fillStyle = 'rgba(210,180,130,0.45)'
+      ctx.font = '10px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'top'
+      ctx.fillText(poemLines[pi], cx, poemY0 + pi * 14)
     }
+    ctx.restore()
   }
 
   // 段 5：底部纪年（只出现一次）

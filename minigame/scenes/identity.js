@@ -29,13 +29,13 @@ function calcLayout() {
   var eraS = Math.min(13, Math.floor(w * 0.035))
   var eraY = cardY + Math.floor(cardH * 0.04)
 
-  // 2. 基础信息行（含姓名·年齿·身份·居所）
-  var infoS = Math.min(12, Math.floor(w * 0.032))
+  // 2. 基础信息行（含姓名·年齿·身份·居所）— 14px展宽
+  var infoS = Math.min(14, Math.floor(w * 0.036))
   var infoY = eraY + Math.floor(eraS * 1.8) + 8
 
   // 3. 分割线（小屏紧凑/大屏文书双行）
   var compactInfo = h < 540
-  var divY = compactInfo ? (infoY + Math.floor(infoS * 1.4)) : (infoY + Math.floor(infoS * 1.6) * 2 + 4)
+  var divY = compactInfo ? (infoY + Math.floor(infoS * 1.4)) : (infoY + Math.floor(infoS * 1.7) * 2 + 6)
 
   // v0.6.74: 命格区域整体设计（标题+大雷达+命签诗做一体）
   var radarR = Math.min(48, Math.max(32, Math.floor(h * 0.080)))

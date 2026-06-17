@@ -945,15 +945,18 @@ function drawBgImage(ctx) {
 
   // v0.6.50y: 画像区顶部双线分隔（从顶栏底部移下来，更明显）
   ctx.save()
-  ctx.strokeStyle = 'rgba(200,168,124,0.35)'
+    ctx.strokeStyle = 'rgba(200,168,124,0.35)'
   ctx.lineWidth = 1
   ctx.beginPath()
-  ctx.moveTo(sx, sy - 1)
-  ctx.lineTo(sx + sw, sy - 1)
+  ctx.moveTo(sx, sy - 6)
+  ctx.lineTo(sx + sw, sy - 6)
   ctx.stroke()
   ctx.strokeStyle = 'rgba(200,168,124,0.12)'
   ctx.lineWidth = 0.5
   ctx.beginPath()
+  ctx.moveTo(sx, sy - 9)
+  ctx.lineTo(sx + sw, sy - 9)
+x.beginPath()
   ctx.moveTo(sx, sy - 4)
   ctx.lineTo(sx + sw, sy - 4)
   ctx.stroke()
@@ -1393,6 +1396,10 @@ function drawNarrative(ctx) {
   }
   if (scrollOffset > 0) scrollOffset = 0
   if (scrollOffset < -maxScroll) scrollOffset = -maxScroll
+  // v0.6.50z: 打字完成时自动滚到底部
+  if (displayedChars >= totalChars && maxScroll > 0 && scrollOffset > -maxScroll) {
+    scrollOffset = scrollOffset - 1  // 缓步下滚
+  }
 
   // v0.2.5-S（先生 2026-06-13 15:56 拍板）：去掉打字光标
   // 之前 v0.1.61 加的暖金色小竖线 + 闪烁动画，先生觉得多余
@@ -1420,11 +1427,11 @@ function drawScrollIndicator(ctx) {
   const thumbY = barY + (barH - thumbH) * (Math.abs(scrollOffset) / maxOff)
 
   ctx.save()
-  ctx.fillStyle = 'rgba(200,168,124,0.12)'
-  roundRect(ctx, barX - 1, barY, 2, barH, 1)
+  ctx.fillStyle = 'rgba(200,168,124,0.08)'
+  roundRect(ctx, barX - 2, barY, 3, barH, 2)
   ctx.fill()
-  ctx.fillStyle = 'rgba(200,168,124,0.3)'
-  roundRect(ctx, barX - 1, thumbY, 2, thumbH, 1)
+  ctx.fillStyle = 'rgba(200,168,124,0.4)'
+  roundRect(ctx, barX - 2, thumbY, 3, thumbH, 2)
   ctx.fill()
   ctx.restore()
 }
@@ -1743,7 +1750,7 @@ function drawItemBar(ctx) {
   const rows = 2
   const gridW = cols * (slotW + slotGap) - slotGap
   const gridH = rows * (slotH + slotGap) - slotGap
-  const gridStartX = itemEndX - gridW - 4
+  const gridStartX = dividerX + 6 + Math.max(0, (chestW - gridW) / 2)
 
   // 木匣外框（粗木纹色 + 圆角）
   ctx.save()
@@ -2781,6 +2788,11 @@ function handleTouch(x, y, type) {
   // ── v2 新增：榜单目标条点击 → 打开榜单 ──
   if (type === 'end' && layout._boardTargetArea && hitTest(x, y, layout._boardTargetArea.x, layout._boardTargetArea.y, layout._boardTargetArea.w, layout._boardTargetArea.h)) {
     showLeaderboard = true
+    // v0.6.50z: 点击榜单目标时默认打开对应榜单
+    if (closestBoardInfo && closestBoardInfo.name) {
+      var targetIdx = BOARD_LIST.indexOf(closestBoardInfo.name)
+      if (targetIdx >= 0) currentBoardIndex = targetIdx
+    }
     fetchLeaderboardData()
     return null
   }

@@ -42,7 +42,7 @@ function calcLayout() {
   var radarCX = cx
   var radarCY = divY + radarR + 34      // 34px: 标题(13px) + 标签偏移(6px) + 标签半高(5px) + 3px间隙
   var labelDist = radarR + 3             // 标签贴近雷达边缘
-  var titleY = divY + 10                 // 标题基线（9px楷体，baseline middle）
+  var titleY = divY + 10                 // 标题基线（13px楷体，baseline middle）
 
   // 雷达→诗紧凑排列，4px间隙
   var btnH = Math.floor(cardH * 0.10)
@@ -73,7 +73,6 @@ function calcLayout() {
     w: w, h: h, cx: cx,
     cardW: cardW, cardH: cardH,
     cardX: cardX, cardY: cardY,
-    nameS: nameS, nameY: nameY,
     infoS: infoS, infoY: infoY,
     eraS: eraS, eraY: eraY,
     divY: divY,
@@ -407,7 +406,6 @@ function render(ctx) {
     ctx.textBaseline = 'middle'
 
     var compact = l.h < 540
-    var fCol = 'rgba(170,155,130,' + (iOp * 0.65) + ')'
     var vCol = 'rgba(215,200,175,' + (iOp * 0.85) + ')'
 
     if (compact) {
@@ -452,9 +450,9 @@ function render(ctx) {
     ctx.restore()
   }
 
-    // v0.6.74: 雷达图（标题9px+大雷达+两句联紧凑）
+    // v0.6.74: 雷达图（标题13px+大雷达+两句联紧凑）
   if (iOp > 0 && l.radarR > 0) {
-    // 标题：你的命格属性（9px淡金，夹在分割线与雷达顶点之间）
+    // 标题：命格（13px淡金，夹在分割线与雷达顶点之间）
     ctx.save()
     ctx.globalAlpha = iOp * 0.45
     ctx.fillStyle = 'rgba(200,168,124,0.6)'
@@ -527,7 +525,6 @@ function render(ctx) {
     drawText(ctx, '落 笔 开 局', cx, l.btnY + l.btnH / 2, {
       fontFamily: '"STKaiti", "KaiTi", "楷体", ' + ui.fontFamily,
       fontSize: Math.min(18, Math.floor(l.btnH * 0.55)),
-      fontFamily: '"STKaiti", "KaiTi", "楷体", ' + ui.fontFamily,
       color: COLORS.goldLight,
       align: 'center', baseline: 'middle',
       opacity: yOp,

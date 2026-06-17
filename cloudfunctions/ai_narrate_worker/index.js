@@ -154,6 +154,17 @@ async function backgroundTask(request_id, payload) {
         updated[attr] = Math.max(0, Math.min(10000, (baseUpdated[attr] || 0) + attrPatch[attr]))
       }
     }
+    // v0.6.61: 属性归零→社会性死亡（颜值除外：颜值归零只是丑，不会死）
+    const DEATH_ATTRS = ['声望', '财富', '学识', '医术', '战功', '文采', '政绩', '义行'];
+    for (const attr of DEATH_ATTRS) {
+      if ((updated[attr] || 0) <= 0) {
+        updated.alive = false;
+        updated.health = 0;
+        updated.deathReason = attr;
+        console.log('[ai_narrate_worker] 属性归零触发死亡:', attr);
+        break;  // 一个属性归零就够了，不重复触发
+      }
+    }
     const systemMessages = emitSystemMessages(preUpdate, updated)
 
     const monthChanged = updated.month !== state.month || updated.year !== state.year
@@ -923,7 +934,10 @@ function buildSystemPrompt(state, monthEvent) {
     `- 死亡判定由系统负责，你不需要写"你死了"`,
     `- patch 不影响 content 的"显示"——剧情里不直接说"你失去了 200 文"，而是用叙事暗示`,
     `- 玩家只能从下一轮的状态变化感知 patch（"你摸了摸口袋，钱袋轻了"）`,
-    `- 死亡（health 归零）由系统判定，不由 patch 控制`,
+    `- 死亡（health 归零）由系统判定，不由 patch 控制
+- 属性归零也会导致死亡（社会性死亡）：声望归零=身败名裂，财富归零=穷困潦倒，学识归零=痴呆愚钝，医术归零=医德尽失，战功归零=军功尽废，文采归零=江郎才尽，政绩归零=仕途尽毁，义行归零=众叛亲离
+- **颜值归零不会死**（只是变丑）——只有社会属性归零才会社会性死亡
+- **危险不只是物理伤害**：你可以通过叙事让玩家损失声望（被诬陷）、损失财富（被盗）、损失学识（失忆/打击）、损失战功（被削爵）等等。降低属性比直接杀死更难但也更自然——玩家可能逐渐发现自己"活不下去了"`,
   ].join('\n')
 }
 

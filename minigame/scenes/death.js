@@ -186,6 +186,14 @@ function render(ctx) {
       align: 'left', baseline: 'middle',
       opacity: sOp * 0.9,
     })
+    if (deathState.deathReason) {
+      drawText(ctx, '死因: 「' + deathState.deathReason + '」归零', l.cardX + 30 + Math.floor(colW * 3 / 2), summaryY + 26, {
+        fontSize: 12,
+        color: '#c04040',
+        align: 'center', baseline: 'middle',
+        opacity: sOp * 0.8,
+      })
+    }
   }
 
   // 墓志铭

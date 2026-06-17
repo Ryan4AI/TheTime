@@ -30,6 +30,7 @@ var errorMsg = ''
 var narrativeHistory = []    // {role, content}
 var alive = true             // 死亡标记
 var fadeOut = null           // 淡出动画
+var deathReason = null        // v0.6.61: 社会性死亡根因属性
 var monthChanged = false     // 月份变化（用于显示特殊提示）
 var newEvent = null          // 新事件
 var itemDetail = null        // 物品详情浮窗（点击物品后弹出）
@@ -641,6 +642,17 @@ function handleAIResponse(result, action, userInput) {
   // v0.6.50j 寿限覆盖：寿限已到 → health 归零触发死亡
   if (state.lifespan && state.age >= state.lifespan && state.health > 0) {
     state.health = 0
+  }
+
+  // v0.6.61: 属性归零→社会性死亡（颜值除外）
+  var DEATH_ATTRS = ['声望', '财富', '学识', '医术', '战功', '文采', '政绩', '义行'];
+  for (var i = 0; i < DEATH_ATTRS.length; i++) {
+    var attrVal = state[DEATH_ATTRS[i]] || 0;
+    if (attrVal <= 0 && state.health > 0) {
+      state.health = 0;
+      deathReason = DEATH_ATTRS[i];
+      break;
+    }
   }
 
   // 3. 死亡判定

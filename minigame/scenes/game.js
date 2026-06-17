@@ -1656,9 +1656,9 @@ function drawItemBar(ctx) {
   const barH = layout.itemBarH
 
   // 左侧命格区
-  const radarR = 24
-  const radarLabelOff = 8
-  const fateW = (radarR + radarLabelOff) * 2 + 26  // 90px
+  const radarR = 18
+  const radarLabelOff = 5
+  const fateW = (radarR + radarLabelOff) * 2 + 26  // 72px
   const dividerX = layout.padding + fateW
   const fateCX = dividerX - fateW / 2
 

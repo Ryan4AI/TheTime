@@ -356,7 +356,90 @@ function drawTextInRect(ctx, text, x, y, maxW, lineHeight, fontSize) {
   return cy
 }
 
+
+// v0.6.65: 九边形雷达图（从game.js提取，供identity.js复用）
+function drawRadarEdges(ctx, cx, cy, r, values) {
+  var n = 9;
+  var step = (Math.PI * 2) / n;
+  var startAngle = -Math.PI / 2;
+  var maxV = 10000;
+  var innerR = r - 3;
+
+  ctx.save();
+
+  // 淡色背景九边形
+  ctx.beginPath();
+  for (var i = 0; i <= n; i++) {
+    var a = startAngle + (i % n) * step;
+    var x = cx + r * Math.cos(a);
+    var y = cy + r * Math.sin(a);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(15,12,8,0.6)';
+  ctx.fill();
+
+  // 同心参考环（5等分）
+  for (var lvl = 1; lvl <= 5; lvl++) {
+    var lr = innerR * lvl / 5;
+    ctx.beginPath();
+    for (var i = 0; i <= n; i++) {
+      var a = startAngle + (i % n) * step;
+      var x = cx + lr * Math.cos(a);
+      var y = cy + lr * Math.sin(a);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.strokeStyle = lvl === 5 ? 'rgba(200,168,124,0.3)' : 'rgba(200,168,124,0.08)';
+    ctx.lineWidth = lvl === 5 ? 0.8 : 0.3;
+    ctx.stroke();
+  }
+
+  // 三角形填充（每条边对应属性值）
+  for (var i = 0; i < n; i++) {
+    var v = values[i] || 0;
+    var rv = (v / maxV) * innerR;
+    if (rv < 0.5) continue;
+
+    var a0 = startAngle + i * step;
+    var a1 = startAngle + ((i + 1) % n) * step;
+
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + rv * Math.cos(a0), cy + rv * Math.sin(a0));
+    ctx.lineTo(cx + rv * Math.cos(a1), cy + rv * Math.sin(a1));
+    ctx.closePath();
+
+    var intensity = 0.2 + (v / maxV) * 0.45;
+    ctx.fillStyle = 'rgba(220,182,100,' + intensity + ')';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(220,182,100,' + Math.min(intensity + 0.2, 0.6) + ')';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+  }
+
+  // 外缘九边形边框
+  ctx.beginPath();
+  for (var i = 0; i <= n; i++) {
+    var a = startAngle + (i % n) * step;
+    ctx.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+  }
+  ctx.closePath();
+  ctx.strokeStyle = 'rgba(200,168,124,0.4)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // 中心点
+  ctx.beginPath();
+  ctx.arc(cx, cy, 1.5, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(200,168,124,0.3)';
+  ctx.fill();
+
+  ctx.restore();
+}
+
 module.exports = {
+  drawRadarEdges,
   COLORS,
   FONT_FAMILY, setCustomFont, getFontStack,
   getSystemInfo,

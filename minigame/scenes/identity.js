@@ -19,53 +19,42 @@ function calcLayout() {
   var h = sys.height
   var cx = Math.floor(w / 2)
 
-  // 卡片尺寸（v0.6.5 加大）
+  // 卡片尺寸
   var cardW = Math.floor(w * 0.88)
   var cardH = Math.floor(h * 0.62)
   var cardX = Math.floor(cx - cardW / 2)
   var cardY = Math.floor(h * 0.16)
 
-  // 1. 顶部：朝代 + 纪年
-  var eraS = Math.min(13, Math.floor(w * 0.035))
-  var eraY = cardY + Math.floor(cardH * 0.08)
+  // 1. 姓名（大字楷体）
+  var nameS = Math.min(36, Math.floor(w * 0.095))
+  var nameY = cardY + Math.floor(cardH * 0.14)
 
-  // 2. 姓名（大字 + 楷体）
-  var nameS = Math.min(40, Math.floor(w * 0.105))
-  var nameY = eraY + Math.floor(cardH * 0.13)
+  // 2. 基础信息行：年龄 · 性别 · 职业 · 居所（统一在一行）
+  var infoS = Math.min(12, Math.floor(w * 0.032))
+  var infoY = nameY + Math.floor(nameS * 0.4) + 6
 
-  // 3. 副标题：阶层+职业+年龄+性别
-  var subS = Math.min(13, Math.floor(w * 0.035))
-  var subY = nameY + Math.floor(nameS * 0.55) + 4
+  // 3. 分割线
+  var divY = infoY + Math.floor(infoS * 1.6)
 
-  // 4. 第一道分割线
-  var div1Y = subY + Math.floor(subS * 1.4)
+  // 4. 命格（雷达图）+ 标签
+  var labelS = Math.min(11, Math.floor(w * 0.03))
+  var labelY = divY + Math.floor(cardH * 0.05)
+  var radarR = Math.min(40, Math.floor(cardH * 0.16))
+  var radarCX = cx
+  var radarCY = labelY + radarR + 20
+  var labelDist = radarR + 10  // 标签距离中心
 
-  // 5. 命格标题
-  var labelS = Math.min(12, Math.floor(w * 0.032))
-  var labelY = div1Y + Math.floor(cardH * 0.06)
+  // 5. 底部纪年（只出现一次）+ 按钮
+  var tailS = Math.min(10, Math.floor(w * 0.028))
+  var tailY = cardY + cardH - Math.floor(cardH * 0.18)
 
-  // 6. 3×3 九属性网格：名+值
-  var attrNameS = Math.min(12, Math.floor(w * 0.032))
-  var attrValS = Math.min(20, Math.floor(w * 0.052))     // 数值大
-  var attrNameY = labelY + Math.floor(cardH * 0.05)
-  var attrValY = attrNameY + Math.floor(attrNameS * 1.6)
-  var attrRowH = Math.floor(48 * w / 390)
-  var attrColW = Math.floor((cardW - 60) / 3)
-
-  // 7. 第二道分割线
-  var div2Y = attrValY + attrRowH * 2 + Math.floor(cardH * 0.06)
-
-  // 8. 庇护层数
-  var shieldS = Math.min(12, Math.floor(w * 0.032))
-  var shieldY = div2Y + Math.floor(cardH * 0.05)
-
-  // 9. 落笔按钮
+  // 6. 落笔按钮
   var btnH = Math.floor(cardH * 0.10)
   var btnY = cardY + cardH - Math.floor(cardH * 0.20)
   var btnW = Math.floor(cardW * 0.55)
   var btnX = Math.floor(cx - btnW / 2)
 
-  // 10. 点击提示
+  // 7. 点击提示
   var tapS = Math.min(11, Math.floor(w * 0.030))
   var tapY = cardY + cardH - Math.floor(cardH * 0.05)
 
@@ -73,17 +62,13 @@ function calcLayout() {
     w: w, h: h, cx: cx,
     cardW: cardW, cardH: cardH,
     cardX: cardX, cardY: cardY,
-    eraS: eraS, eraY: eraY,
     nameS: nameS, nameY: nameY,
-    subS: subS, subY: subY,
-    div1Y: div1Y,
+    infoS: infoS, infoY: infoY,
+    divY: divY,
     labelS: labelS, labelY: labelY,
-    attrNameS: attrNameS, attrValS: attrValS,
-    attrNameY: attrNameY, attrValY: attrValY,
-    attrRowH: attrRowH,
-    attrColW: attrColW,
-    div2Y: div2Y,
-    shieldS: shieldS, shieldY: shieldY,
+    radarR: radarR, radarCX: radarCX, radarCY: radarCY,
+    labelDist: labelDist,
+    tailS: tailS, tailY: tailY,
     btnH: btnH, btnY: btnY, btnW: btnW, btnX: btnX,
     tapS: tapS, tapY: tapY,
   }
@@ -380,38 +365,9 @@ function render(ctx) {
   // 四角装饰
   drawCornerDeco(ctx, l.cardX + 3, l.cardY + 3, l.cardW - 6, l.cardH - 6, 1)
 
-  // ── v0.6.5 新设计：5 段（朝代/姓名/副标题/属性/庇护+按钮）──
+    // ── v0.6.65 新设计：姓名 → 基础信息 → 雷达图命格 → 纪年 → 按钮 ──
 
-  // 段 1：顶部朝代 + 纪年
-  var tOp = anims.title.update(now)
-  if (tOp > 0 && IDENTITY.dynasty) {
-    var era = IDENTITY.eraDisplay || IDENTITY.eraLabel || ''
-    // 去重
-    if (era && era.indexOf(IDENTITY.dynasty) === 0) {
-      era = era.replace(new RegExp('^' + IDENTITY.dynasty.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[·\\s]*'), '')
-    }
-    var eraText = era ? IDENTITY.dynasty + ' · ' + era : IDENTITY.dynasty
-    // 顶部细线
-    ctx.save()
-    ctx.globalAlpha = tOp * 0.15
-    ctx.strokeStyle = COLORS.gold
-    ctx.lineWidth = 0.5
-    ctx.beginPath()
-    ctx.moveTo(l.cardX + 30, l.eraY - 8)
-    ctx.lineTo(cx - 40, l.eraY - 8)
-    ctx.moveTo(cx + 40, l.eraY - 8)
-    ctx.lineTo(l.cardX + l.cardW - 30, l.eraY - 8)
-    ctx.stroke()
-    ctx.restore()
-    drawText(ctx, eraText, cx, l.eraY, {
-      fontSize: l.eraS,
-      color: COLORS.gold,
-      align: 'center', baseline: 'middle',
-      opacity: tOp * 0.85,
-    })
-  }
-
-  // 段 2：姓名（楷体 + 金色光晕）
+  // 段 1：姓名（大字楷体金色光晕）
   var nOp = anims.name.update(now)
   if (nOp > 0) {
     ctx.save()
@@ -428,142 +384,99 @@ function render(ctx) {
     ctx.restore()
   }
 
-  // 段 3：副标题（14岁 · 女 · 渔夫）
-  var sOp = anims.info.update(now)
-  if (sOp > 0) {
-    var subParts = []
-    if (IDENTITY.age != null) subParts.push(IDENTITY.age + '岁')
-    if (IDENTITY.gender) subParts.push(IDENTITY.gender)
-    if (IDENTITY.occupation) subParts.push(IDENTITY.occupation)
-    if (IDENTITY.socialClass && !IDENTITY.occupation?.includes?.(IDENTITY.socialClass)) {
-      subParts.push(IDENTITY.socialClass)
-    }
-    var subText = subParts.filter(Boolean).join(' · ')
-    // 居所单独行（如果存在）
-    drawText(ctx, subText, cx, l.subY, {
-      fontSize: l.subS,
+  // 段 2：基础信息（统一设计：年龄 · 性别 · 职业 · 居所，一行）
+  var iOp = anims.info.update(now)
+  if (iOp > 0) {
+    var parts = []
+    if (IDENTITY.age != null) parts.push(IDENTITY.age + '岁')
+    if (IDENTITY.gender) parts.push(IDENTITY.gender)
+    if (IDENTITY.occupation) parts.push(IDENTITY.occupation)
+    if (IDENTITY.residence) parts.push('居' + IDENTITY.residence)
+    var infoText = parts.filter(Boolean).join(' · ')
+    drawText(ctx, infoText, cx, l.infoY, {
+      fontSize: l.infoS,
       color: COLORS.paperDarker,
       align: 'center', baseline: 'middle',
-      opacity: sOp * 0.8,
+      opacity: iOp * 0.8,
     })
-    if (IDENTITY.residence) {
-      drawText(ctx, '居 · ' + IDENTITY.residence, cx, l.subY + Math.floor(l.subS * 1.4), {
-        fontSize: l.subS - 1,
-        color: COLORS.paperDarker,
-        align: 'center', baseline: 'middle',
-        opacity: sOp * 0.65,
-      })
-    }
   }
 
-  // 段 4：第一道分割线
-  if (sOp > 0.5) {
+  // 段 3：分割线
+  if (iOp > 0.5) {
     ctx.save()
-    ctx.globalAlpha = (sOp - 0.5) * 0.15
+    ctx.globalAlpha = (iOp - 0.5) * 0.15
     ctx.strokeStyle = COLORS.gold
     ctx.lineWidth = 0.5
     ctx.beginPath()
-    ctx.moveTo(l.cardX + 30, l.div1Y)
-    ctx.lineTo(l.cardX + l.cardW - 30, l.div1Y)
+    ctx.moveTo(l.cardX + 30, l.divY)
+    ctx.lineTo(l.cardX + l.cardW - 30, l.divY)
     ctx.stroke()
     ctx.restore()
   }
 
-  // 段 5：命格标题（4 个属性）
-  if (sOp > 0) {
-    drawText(ctx, '─ 你的命格 ─', cx, l.labelY, {
+  // 段 4：命格标题 + 雷达图
+  if (iOp > 0) {
+    drawText(ctx, '─ 命 格 ─', cx, l.labelY, {
       fontSize: l.labelS,
       color: COLORS.gold,
       align: 'center', baseline: 'middle',
-      opacity: sOp * 0.7,
+      opacity: iOp * 0.7,
     })
   }
 
-  // 段 6：3×3 全属性网格
-  if (sOp > 0) {
-    var attrs = [
-      { name: '声望', val: IDENTITY['声望'] || 0 },
-      { name: '财富', val: IDENTITY['财富'] || 0 },
-      { name: '学识', val: IDENTITY['学识'] || 0 },
-      { name: '颜值', val: IDENTITY['颜值'] || 0 },
-      { name: '医术', val: IDENTITY['医术'] || 0 },
-      { name: '战功', val: IDENTITY['战功'] || 0 },
-      { name: '文采', val: IDENTITY['文采'] || 0 },
-      { name: '政绩', val: IDENTITY['政绩'] || 0 },
-      { name: '义行', val: IDENTITY['义行'] || 0 },
-    ]
-    for (var ai = 0; ai < attrs.length; ai++) {
-      var col = ai % 3
-      var row = Math.floor(ai / 3)
-      var ax = l.cardX + 30 + col * l.attrColW + l.attrColW / 2
-      var ay = l.attrNameY + row * l.attrRowH
-      var av = l.attrValY + row * l.attrRowH
+  // 雷达图
+  if (iOp > 0 && l.radarR > 0) {
+    var rKeys = ['声望','财富','学识','颜值','医术','战功','文采','政绩','义行']
+    var rVals = rKeys.map(function(k) { return IDENTITY[k] || 0 })
+    ui.drawRadarEdges(ctx, l.radarCX, l.radarCY, l.radarR, rVals)
 
-      // 属性名（小字）
-      drawText(ctx, attrs[ai].name, ax, ay, {
-        fontSize: l.attrNameS,
-        color: COLORS.paperDarker,
-        align: 'center', baseline: 'middle',
-        opacity: sOp * 0.7,
-      })
-      // 属性值（金色大字）
-      ctx.save()
-      ctx.shadowColor = 'rgba(232,200,130,' + (sOp * 0.3) + ')'
-      ctx.shadowBlur = 4
-      drawText(ctx, attrs[ai].val, ax, av, {
-        fontSize: l.attrValS,
-        color: COLORS.goldLight,
-        align: 'center', baseline: 'middle',
-        opacity: sOp,
-        bold: true,
-      })
-      ctx.restore()
-    }
-  }
-
-  // 段 7：第二道分割线
-  if (sOp > 0.5) {
+    // 属性标签（边中点）
     ctx.save()
-    ctx.globalAlpha = (sOp - 0.5) * 0.15
-    ctx.strokeStyle = COLORS.gold
-    ctx.lineWidth = 0.5
-    ctx.beginPath()
-    ctx.moveTo(l.cardX + 30, l.div2Y)
-    ctx.lineTo(l.cardX + l.cardW - 30, l.div2Y)
-    ctx.stroke()
+    for (var i = 0; i < 9; i++) {
+      var a = -Math.PI / 2 + (i + 0.5) * (Math.PI * 2) / 9
+      var lx = l.radarCX + l.labelDist * Math.cos(a)
+      var ly = l.radarCY + l.labelDist * Math.sin(a)
+      ctx.fillStyle = 'rgba(170,210,180,0.65)'
+      ctx.font = '8px "STKaiti", "KaiTi", "楷体", sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(rKeys[i], lx, ly)
+    }
     ctx.restore()
   }
 
-  // 段 8：v0.6.7 移除庇护层数（先生拍板"多余概念，去掉"）
-  // 用一个简单的朝代纪年行填充原位置
-  if (sOp > 0) {
-    var tailDynasty = IDENTITY.dynasty || ''
-    var tailEra = IDENTITY.eraDisplay || IDENTITY.eraLabel || ''
-    var tailText = tailDynasty && tailEra ? tailDynasty + ' · ' + tailEra : (tailDynasty || tailEra)
-    drawText(ctx, tailText, cx, l.shieldY, {
-      fontSize: l.shieldS,
+  // 段 5：底部纪年（只出现一次）
+  var yOp = anims.year.update(now)
+  if (yOp > 0) {
+    var eraText = ''
+    if (IDENTITY.dynasty) {
+      // v0.6.65: 去重：如果 eraDisplay 已包含朝代，不重复
+      var era = IDENTITY.eraDisplay || IDENTITY.eraLabel || ''
+      if (era && era.indexOf(IDENTITY.dynasty) === 0) {
+        era = era.slice(IDENTITY.dynasty.length).replace(/^[·\s]*/, '')
+      }
+      eraText = era ? IDENTITY.dynasty + ' · ' + era : IDENTITY.dynasty
+    }
+    drawText(ctx, eraText || '', cx, l.tailY, {
+      fontSize: l.tailS,
       color: COLORS.paperDarker,
       align: 'center', baseline: 'middle',
-      opacity: sOp * 0.7,
+      opacity: yOp * 0.6,
     })
   }
 
-  // 段 9：落笔开局按钮
-  var yOp = anims.year.update(now)
+  // 段 6：落笔开局按钮
   if (yOp > 0) {
     ctx.save()
-    // 按钮底（暖金半透）
     ctx.globalAlpha = yOp * 0.95
     ctx.fillStyle = 'rgba(60, 45, 30, 0.85)'
     roundRect(ctx, l.btnX, l.btnY, l.btnW, l.btnH, l.btnH / 2)
     ctx.fill()
-    // 按钮描边（暗金）
     ctx.globalAlpha = yOp * 0.8
     ctx.strokeStyle = COLORS.gold
     ctx.lineWidth = 1.2
     roundRect(ctx, l.btnX, l.btnY, l.btnW, l.btnH, l.btnH / 2)
     ctx.stroke()
-    // 按钮文字（楷体 + 金色光晕）
     ctx.globalAlpha = yOp
     ctx.shadowColor = 'rgba(232,200,130,0.6)'
     ctx.shadowBlur = 8
@@ -578,7 +491,7 @@ function render(ctx) {
     ctx.restore()
   }
 
-  // 段 10：底部点击提示
+  // 段 7：底部点击提示
   if (yOp > 0) {
     drawText(ctx, '· 点击任意处开始 ·', cx, l.tapY, {
       fontSize: l.tapS,

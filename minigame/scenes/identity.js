@@ -41,9 +41,9 @@ function calcLayout() {
   var divY = eraY + Math.floor(eraS * 1.6)
 
   // 5. v0.6.71: 雷达图 + 命签诗（自适应空间）
-  var radarR = Math.min(45, Math.max(30, Math.floor(cardH * 0.17)))
+  var radarR = Math.min(45, Math.max(32, Math.floor(cardH * 0.15)))
   var radarCX = cx
-  var radarCY = divY + radarR + 6
+  var radarCY = divY + radarR + 20
   var labelDist = radarR + 6
 
   // 雷达→底部可用空间，动态决定诗字号
@@ -490,8 +490,10 @@ function render(ctx) {
       ctx.fillText(poemLines[1], cx, l.poemY + 19)
     }
     ctx.restore()
-  }  // [纪年已移到顶部]
-// 段 6：落笔开局按钮
+  }  // 雷达图+诗结束
+
+  // 段 5：落笔开局按钮（用独立的按钮动画，不依赖已删除的纪年）
+  var yOp = anims.year.update(now)
   if (yOp > 0) {
     ctx.save()
     ctx.globalAlpha = yOp * 0.95

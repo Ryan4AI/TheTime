@@ -182,7 +182,7 @@ function initLayout() {
   // 顶栏(52) → 状态栏(26) → 文字面板(自适应 narrative 行数) → 选项(3×40+gap 4+输入 32 = 160) → 物品栏(64)
   const topBarH = 52
   // v0.2.5-J（先生 2026-06-13 11:03 拍板）：状态栏常显，statusBarH 永远生效
-  const statusBarH = 8  // v0.6.50o: 去掉9属性数字（雷达图替代），缩为装饰线
+  const statusBarH = 18  // v0.6.50x: 从8→18，显示城市+健康/财富/寿限
   // v0.2.5-Q（先生 2026-06-13 15:33 拍板）：自由输入从选项区移到画区右上角图标
   // 选项区只剩 3 个选项，optBlockH 不再算 freeInputH
   const itemBarH = 72  // v0.6.50s: 72px（给雷达图+标签等高留空间）
@@ -858,7 +858,14 @@ function adjustFluidLayout() {
   layout.textY = safeTop + topBarH + (layout.statusBarH || 0) + 4 + sceneH + 8 + boardTargetOffset
   layout.textH = finalTextH
   // v0.6.50g: 选项紧贴叙事文字底部（2px 微距代替原来 6px）
-  layout.optionY = layout.textY + finalTextH + 2
+    // v0.6.50x: 限制选项区不越过物品栏
+  const maxOptBottom = layout.itemBarY - 4  // 4px gap
+  const minOptY = layout.textY + 100 + 2
+  layout.optionY = Math.min(
+    layout.textY + finalTextH + 2,
+    maxOptBottom - optReserveH
+  )
+  layout.optionY = Math.max(layout.optionY, minOptY)
   layout.optionFadeIn = typingDone ? 1 : 0
   layout.optionH = 36                       // v0.1.67: 38 → 36 缩 2px
   layout.optionGap = optionGap
@@ -939,6 +946,16 @@ function drawBgImage(ctx) {
   const sy = layout.sceneY
   const sw = layout.windowW - layout.padding * 2
   const sh = layout.sceneH
+
+  // v0.6.50x: 画像区顶部视觉分隔线（与上方信息区隔开）
+  ctx.save()
+  ctx.strokeStyle = 'rgba(200,168,124,0.15)'
+  ctx.lineWidth = 0.5
+  ctx.beginPath()
+  ctx.moveTo(sx, sy - 1)
+  ctx.lineTo(sx + sw, sy - 1)
+  ctx.stroke()
+  ctx.restore()
 
   // v0.6.50h: 画像区始终预留 130px，加载时显示水墨加载提示
   if (!bgImgEl || !bgImgEl.complete || bgImgEl.width === 0) {
@@ -1038,17 +1055,26 @@ function drawSealTopBar(ctx) {
   const eraStr = state.eraDisplay || (state.dynasty + ' ' + state.year + '年')
   const textX = sealCenterX + 32  // 文字起始 X（印章右侧）
 
-  // 上行：朝代 + 年月（大字，暖米黄）
+  // 上行：朝代 + 年月 + 月份（大字，暖米黄）— v0.6.50x: 缩为12px腾出行
   ctx.fillStyle = 'rgba(232,221,208,0.95)'
-  ctx.font = 'bold 14px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+  ctx.font = '12px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
-  ctx.fillText(eraStr + monthStrTopBar, textX, sealCenterY - 10)
+  ctx.fillText(eraStr + ' · ' + monthStrTopBar, textX, sealCenterY - 13)
 
-  // 下行：姓名 + 年龄（小字，暗金）
-  ctx.fillStyle = 'rgba(200,168,124,0.8)'
-  ctx.font = '12px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-  ctx.fillText(state.name + ' · ' + state.age + '岁', textX, sealCenterY + 10)
+  // 中行：姓名 · 年龄 · 身份（小字，暗金）
+  ctx.fillStyle = 'rgba(200,168,124,0.85)'
+  ctx.font = '11px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+  const occ = state.occupation || ''
+  ctx.fillText(state.name + ' · ' + state.age + '岁' + (occ ? ' · ' + occ : ''), textX, sealCenterY + 2)
+
+  // 下行：居所 · 阶层（更小字，暗金淡色）
+  ctx.fillStyle = 'rgba(200,168,124,0.55)'
+  ctx.font = '10px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+  const cityStr = state.city_name || state.city || ''
+  const clsStr = state.social_class || ''
+  const info2 = [cityStr, clsStr].filter(Boolean).join(' · ')
+  if (info2) ctx.fillText(info2, textX, sealCenterY + 16)
   ctx.restore()
 
   // 4. 暗金细线分隔（顶栏底部）
@@ -1060,26 +1086,53 @@ function drawSealTopBar(ctx) {
   layout._sealArea = { x: 0, y: 0, w: layout.windowW, h: safeTop + topH }
 }
 
-// ─────── 月份变化提示 ───────
+// ─────── 状态分隔条（v0.6.50x: 加宽至20px，显示城市+阶层）───────
 function drawStatusBar(ctx) {
-  // v0.6.50o: 去掉9属性数字（雷达图已替代），仅留装饰细线
   const padding = layout.padding
   const top = layout.safeTop + layout.topBarH
   const h = layout.statusBarH || 0
-  if (h < 4) return
+  if (h < 6) return
 
-  // 暗木色底 + 边框
+  // 暖木色底 + 细边框
   ctx.save()
-  ctx.fillStyle = 'rgba(20,16,12,0.6)'
+  ctx.fillStyle = 'rgba(25,20,16,0.5)'
   ctx.fillRect(padding, top, layout.windowW - padding * 2, h)
-  ctx.strokeStyle = 'rgba(200,168,124,0.25)'
+  ctx.strokeStyle = 'rgba(200,168,124,0.2)'
   ctx.lineWidth = 0.5
   ctx.beginPath()
   ctx.moveTo(padding, top + 0.5)
-  ctx.lineTo(padding + layout.windowW - padding * 2, top + 0.5)
+  ctx.lineTo(layout.windowW - padding, top + 0.5)
   ctx.moveTo(padding, top + h - 0.5)
-  ctx.lineTo(padding + layout.windowW - padding * 2, top + h - 0.5)
+  ctx.lineTo(layout.windowW - padding, top + h - 0.5)
   ctx.stroke()
+  ctx.restore()
+
+  // 左侧城市名（小字）
+  const cityStr = state.city_name || state.city || ''
+  if (cityStr) {
+    ctx.save()
+    ctx.fillStyle = 'rgba(170,210,180,0.6)'
+    ctx.font = '9px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('📍 ' + cityStr, padding + 6, top + h / 2)
+    ctx.restore()
+  }
+
+  // 右侧状态：健康/财富/寿限
+  ctx.save()
+  ctx.fillStyle = 'rgba(200,168,124,0.5)'
+  ctx.font = '9px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+  ctx.textAlign = 'right'
+  ctx.textBaseline = 'middle'
+  const health = state.health != null ? '❤ ' + state.health : ''
+  const coin = state.coin != null ? '💰 ' + state.coin : ''
+  const age = state.age ? state.age + '岁' : ''
+  const parts = []
+  if (age) parts.push(age)
+  if (health) parts.push(health)
+  if (coin) parts.push(coin)
+  if (parts.length > 0) ctx.fillText(parts.join(' | '), layout.windowW - padding - 6, top + h / 2)
   ctx.restore()
 }
 
@@ -1687,103 +1740,107 @@ function drawItemBar(ctx) {
   ctx.fill()
   ctx.restore()
 
-  // 5. 物品区（无文字说明，用托盘/槽位暗示）
-  const slotW = 52
-  const slotH = 30
-  const slotGap = 6
+  // 5. 物品区（木匣格子·双行抽屉）
+  const slotW = 44
+  const slotH = 24
+  const slotGap = 4
   const itemEndX = layout.windowW - layout.padding
-  const maxSlots = Math.floor((itemEndX - dividerX - 10) / (slotW + slotGap))
-  const numSlots = Math.min(maxSlots, 5)
-  const totalW = numSlots * (slotW + slotGap) - slotGap
-  const slotStartX = Math.max(dividerX + 8, itemEndX - totalW)
-  const slotY = barY + (barH - slotH) / 2
+  const chestW = itemEndX - dividerX - 10
+  const cols = Math.min(Math.floor(chestW / (slotW + slotGap)), 5)
+  const rows = 2
+  const gridW = cols * (slotW + slotGap) - slotGap
+  const gridH = rows * (slotH + slotGap) - slotGap
+  const gridStartX = itemEndX - gridW - 4
 
-  // 物品区边框（木盒/托盘风格）
+  // 木匣外框（粗木纹色 + 圆角）
   ctx.save()
-  ctx.strokeStyle = 'rgba(200,168,124,0.18)'
-  ctx.lineWidth = 0.5
-  roundRect(ctx, dividerX + 4, barY + 3, itemEndX - dividerX - 8, barH - 6, 4)
+  ctx.strokeStyle = 'rgba(160,120,70,0.2)'
+  ctx.lineWidth = 1
+  roundRect(ctx, dividerX + 4, barY + 3, chestW, barH - 6, 4)
   ctx.stroke()
-  ctx.strokeStyle = 'rgba(200,168,124,0.1)'
-  ctx.lineWidth = 0.3
-  roundRect(ctx, dividerX + 6, barY + 5, itemEndX - dividerX - 12, barH - 10, 3)
+  ctx.strokeStyle = 'rgba(160,120,70,0.1)'
+  ctx.lineWidth = 0.5
+  roundRect(ctx, dividerX + 6, barY + 5, chestW - 4, barH - 10, 3)
   ctx.stroke()
   ctx.restore()
 
-  // 空槽位（始终显示：无物品时暗格，有物品时被覆盖）
-  for (let i = 0; i < numSlots; i++) {
-    const bx = slotStartX + i * (slotW + slotGap)
-    ctx.save()
-    ctx.fillStyle = items.length > 0 ? 'rgba(0,0,0,0)' : 'rgba(200,168,124,0.04)'
-    ctx.fill()
-    ctx.strokeStyle = 'rgba(200,168,124,0.12)'
-    ctx.lineWidth = 0.5
-    roundRect(ctx, bx, slotY, slotW, slotH, 3)
-    ctx.stroke()
-    ctx.strokeStyle = 'rgba(200,168,124,0.06)'
-    ctx.lineWidth = 0.3
-    roundRect(ctx, bx + 2, slotY + 2, slotW - 4, slotH - 4, 2)
-    ctx.stroke()
-    ctx.restore()
-  }
+  // 铜角装饰
+  ctx.save()
+  ctx.fillStyle = 'rgba(180,140,80,0.25)'
+  const corners = [
+    [dividerX + 7, barY + 6],
+    [dividerX + chestW - 8, barY + 6],
+    [dividerX + 7, barY + barH - 8],
+    [dividerX + chestW - 8, barY + barH - 8]
+  ]
+  corners.forEach(([cx, cy]) => {
+    ctx.beginPath(); ctx.arc(cx, cy, 2.5, 0, Math.PI * 2); ctx.fill()
+  })
+  ctx.restore()
 
-  // 有物品时，覆盖在槽位上
-  if (items.length > 0) {
-    const boxW = slotW
-    const boxH = slotH
-    const gap = slotGap
-    const totalItemW = items.length * (boxW + gap) - gap
-    const startX = Math.max(dividerX + 50, itemEndX - totalItemW)
-    const boxY = slotY
+  // 横向木纹线（拼缝）
+  ctx.save()
+  ctx.strokeStyle = 'rgba(160,120,70,0.05)'
+  ctx.lineWidth = 0.5
+  const midY = barY + barH / 2
+  ctx.beginPath()
+  ctx.moveTo(dividerX + 8, midY)
+  ctx.lineTo(itemEndX - 4, midY)
+  ctx.stroke()
+  ctx.restore()
 
-    items.forEach((item, i) => {
-      const bx = startX + i * (boxW + gap)
-      if (bx + boxW > itemEndX) return
+  // 所有格子背景
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const bx = gridStartX + c * (slotW + slotGap)
+      const by = (r === 0 ? barY + 7 : barY + 7 + slotH + slotGap)
       ctx.save()
-      ctx.fillStyle = 'rgba(35, 28, 22, 0.85)'
-      roundRect(ctx, bx, boxY, boxW, boxH, 3)
+      ctx.fillStyle = 'rgba(25,18,12,0.5)'
+      roundRect(ctx, bx, by, slotW, slotH, 2)
       ctx.fill()
-      ctx.strokeStyle = 'rgba(192, 48, 48, 0.7)'
-      ctx.lineWidth = 0.8
-      roundRect(ctx, bx, boxY, boxW, boxH, 3)
-      ctx.stroke()
-      ctx.strokeStyle = 'rgba(192, 48, 48, 0.3)'
+      ctx.strokeStyle = 'rgba(160,120,70,0.08)'
       ctx.lineWidth = 0.5
-      roundRect(ctx, bx + 2, boxY + 2, boxW - 4, boxH - 4, 2)
+      roundRect(ctx, bx, by, slotW, slotH, 2)
       ctx.stroke()
       ctx.restore()
-      ctx.fillStyle = 'rgba(232, 200, 130, 0.95)'
-      ctx.font = '13px ' + ui.fontFamily
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(item.icon || '📦', bx + 14, boxY + boxH / 2)
-      ctx.fillStyle = 'rgba(245, 239, 224, 0.9)'
-      const name = item.name || ''
-      const nameMaxW = boxW - 24
-      let nameFontSize = 10
-      ctx.font = nameFontSize + 'px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-      let nameW = ctx.measureText(name).width
-      while (nameW > nameMaxW && nameFontSize > 8) {
-        nameFontSize--
-        ctx.font = nameFontSize + 'px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-        nameW = ctx.measureText(name).width
-      }
-      let displayName = name
-      if (nameW > nameMaxW) {
-        for (let len = name.length - 1; len > 0; len--) {
-          displayName = name.slice(0, len) + '…'
-          if (ctx.measureText(displayName).width <= nameMaxW) break
-        }
-      }
-      ctx.textAlign = 'left'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(displayName, bx + 22, boxY + boxH / 2)
-      ctx.textAlign = 'left'
-      ctx.textBaseline = 'alphabetic'
-      item._bounds = { x: bx, y: boxY, w: boxW, h: boxH }
-    })
+    }
   }
 
+  // 物品填入格子
+  if (items.length > 0) {
+    items.forEach((item, i) => {
+      const r = Math.floor(i / cols)
+      const c = i % cols
+      if (r >= rows) return
+      const bx = gridStartX + c * (slotW + slotGap)
+      const by = (r === 0 ? barY + 7 : barY + 7 + slotH + slotGap)
+      // 物品底板（拉开抽屉效果）
+      ctx.save()
+      ctx.fillStyle = 'rgba(50,35,20,0.75)'
+      roundRect(ctx, bx + 1, by + 1, slotW - 2, slotH - 2, 2)
+      ctx.fill()
+      ctx.strokeStyle = 'rgba(192,48,48,0.4)'
+      ctx.lineWidth = 0.6
+      roundRect(ctx, bx + 1, by + 1, slotW - 2, slotH - 2, 2)
+      ctx.stroke()
+      // 抽屉抽手（小圆点）
+      ctx.fillStyle = 'rgba(180,140,80,0.35)'
+      ctx.beginPath()
+      ctx.arc(bx + slotW - 7, by + 4, 1.5, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.restore()
+      // 物品名（图标+缩略名）
+      ctx.fillStyle = 'rgba(232,200,130,0.85)'
+      ctx.font = '8px "STKaiti", "KaiTi", "\u6977\u4F53", ' + ui.fontFamily
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      const shortName = (item.name || '').slice(0, 4)
+      ctx.fillText((item.icon || '\ud83d\udce6') + shortName, bx + slotW / 2, by + slotH / 2)
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'alphabetic'
+      item._bounds = { x: bx, y: by, w: slotW, h: slotH }
+    })
+  }
 }// ─────── 玉牒浮窗（长按状态） ───────
 function drawJadeTablet(ctx) {
   const w = layout.windowW

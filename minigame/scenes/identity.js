@@ -40,20 +40,30 @@ function calcLayout() {
   // 4. 分割线
   var divY = infoY + Math.floor(infoS * 1.4)
 
-  // v0.6.73: 雷达图按屏高缩放
-  var radarR = Math.min(45, Math.max(28, Math.floor(h * 0.075)))
+  // v0.6.74: 命格区域整体设计（标题+大雷达+命签诗做一体）
+  var radarR = Math.min(48, Math.max(32, Math.floor(h * 0.080)))
   var radarCX = cx
-  var radarCY = divY + radarR + 28
-  var labelDist = radarR + 6
+  var radarCY = divY + radarR + 24      // 24px: 标题(9px高) + 紧凑间隙
+  var labelDist = radarR + 3             // 标签贴近雷达边缘
+  var titleY = divY + 10                 // 标题基线（9px楷体，baseline middle）
 
-  // 雷达→底部可用空间，动态决定诗字号
+  // 雷达→诗紧凑排列，4px间隙
   var btnH = Math.floor(cardH * 0.10)
   var btnY = cardY + cardH - Math.floor(cardH * 0.20)
   var btnW = Math.floor(cardW * 0.55)
   var btnX = Math.floor(cx - btnW / 2)
-  var availH = btnY - (radarCY + radarR + labelDist) - 6
-  var poemS = Math.min(14, Math.max(11, Math.floor(availH / 3)))
-  var poemY = radarCY + radarR + labelDist + Math.floor((availH - poemS * 2) / 2)
+  var poemY = radarCY + radarR + labelDist + 4  // 诗紧贴雷达标签下方
+  var poemS = Math.min(14, Math.max(11, Math.floor((btnY - poemY) / 3)))
+
+  // 命格区域（标题+雷达+诗）整体垂直居中于分割线和按钮之间
+  var unitEnd = poemY + 19 + poemS
+  var unitSlack = (btnY - divY) - (unitEnd - divY)
+  if (unitSlack > 4) {
+    var shift = Math.floor(unitSlack / 2)
+    titleY += shift
+    radarCY += shift
+    poemY += shift
+  }
 
   var tailS = Math.min(10, Math.floor(w * 0.028))
   var tailY = cardY + cardH - Math.floor(cardH * 0.19)
@@ -73,6 +83,7 @@ function calcLayout() {
     radarR: radarR, radarCX: radarCX, radarCY: radarCY,
     labelDist: labelDist,
     poemS: poemS, poemY: poemY,
+    titleY: titleY,
     tailS: tailS, tailY: tailY,
     btnH: btnH, btnY: btnY, btnW: btnW, btnX: btnX,
     tapS: tapS, tapY: tapY,
@@ -436,16 +447,16 @@ function render(ctx) {
     ctx.restore()
   }
 
-    // v0.6.71: 雷达图（标题+加大+显示数值+两句联14px）
+    // v0.6.74: 雷达图（标题9px+大雷达+两句联紧凑）
   if (iOp > 0 && l.radarR > 0) {
-    // 标题：你的命格属性
+    // 标题：你的命格属性（9px淡金，夹在分割线与雷达顶点之间）
     ctx.save()
-    ctx.globalAlpha = iOp * 0.65
-    ctx.fillStyle = 'rgba(200,168,124,0.5)'
-    ctx.font = l.eraS + 'px "STKaiti", "KaiTi", "楷体", sans-serif'
+    ctx.globalAlpha = iOp * 0.45
+    ctx.fillStyle = 'rgba(200,168,124,0.6)'
+    ctx.font = '9px "STKaiti", "KaiTi", "楷体", sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText('— 你的命格属性 —', cx, l.divY + Math.floor((l.radarCY - l.radarR - l.divY) / 2))
+    ctx.fillText('— 你的命格属性 —', cx, l.titleY)
     ctx.restore()
 
     // 雷达图

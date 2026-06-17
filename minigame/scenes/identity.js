@@ -21,7 +21,7 @@ function calcLayout() {
 
   // 卡片尺寸
   var cardW = Math.floor(w * 0.88)
-  var cardH = Math.floor(h * 0.62)
+  var cardH = Math.min(Math.floor(Math.max(h * 0.62, h * 0.72 - 10)), Math.floor(h * 0.80))
   var cardX = Math.floor(cx - cardW / 2)
   var cardY = Math.floor(h * 0.16)
 
@@ -33,31 +33,32 @@ function calcLayout() {
   var infoS = Math.min(12, Math.floor(w * 0.032))
   var infoY = nameY + Math.floor(nameS * 0.55) + 8
 
-  // 3. 分割线
-  var divY = infoY + Math.floor(infoS * 1.4)
+  // 3. 顶部纪年（朝代标题，从底部移过来）
+  var eraS = Math.min(11, Math.floor(w * 0.030))
+  var eraY = infoY + Math.floor(infoS * 1.2)
 
-  // 4. v0.6.70: 雷达图（无标题，直接跟分割线，加大）
-  var radarR = Math.min(45, Math.floor(cardH * 0.18))
+  // 4. 分割线
+  var divY = eraY + Math.floor(eraS * 1.6)
+
+  // 5. v0.6.71: 雷达图 + 命签诗（自适应空间）
+  var radarR = Math.min(45, Math.max(30, Math.floor(cardH * 0.17)))
   var radarCX = cx
   var radarCY = divY + radarR + 6
-  var labelDist = radarR + 8  // 标签距离中心
+  var labelDist = radarR + 6
 
-  // 5. v0.6.70: 命签诗（两句联，雷达下方）
-  var poemS = Math.min(14, Math.floor(w * 0.036))
-  var poemY = radarCY + radarR + labelDist + 6
+  // 雷达→底部可用空间，动态决定诗字号
+  var btnH = Math.floor(cardH * 0.10)
+  var btnY = cardY + cardH - Math.floor(cardH * 0.20)
+  var btnW = Math.floor(cardW * 0.55)
+  var btnX = Math.floor(cx - btnW / 2)
+  var availH = btnY - (radarCY + radarR + labelDist) - 6
+  var poemS = Math.min(14, Math.max(11, Math.floor(availH / 3)))
+  var poemY = radarCY + radarR + labelDist + Math.floor((availH - poemS * 2) / 2)
 
-  // 6. 底部纪年
-  // 5. v0.6.70: 两句联的poemS/poemY已在上方定义
   var tailS = Math.min(10, Math.floor(w * 0.028))
   var tailY = cardY + cardH - Math.floor(cardH * 0.19)
 
-  // 7. 落笔按钮
-  var btnH = Math.floor(cardH * 0.10)
-  var btnY = cardY + cardH - Math.floor(cardH * 0.21)
-  var btnW = Math.floor(cardW * 0.55)
-  var btnX = Math.floor(cx - btnW / 2)
-
-  // 8. 点击提示
+  // 7. 点击提示
   var tapS = Math.min(11, Math.floor(w * 0.030))
   var tapY = cardY + cardH - Math.floor(cardH * 0.04)
 
@@ -67,6 +68,7 @@ function calcLayout() {
     cardX: cardX, cardY: cardY,
     nameS: nameS, nameY: nameY,
     infoS: infoS, infoY: infoY,
+    eraS: eraS, eraY: eraY,
     divY: divY,
     radarR: radarR, radarCX: radarCX, radarCY: radarCY,
     labelDist: labelDist,
@@ -368,7 +370,7 @@ function render(ctx) {
   // 四角装饰
   drawCornerDeco(ctx, l.cardX + 3, l.cardY + 3, l.cardW - 6, l.cardH - 6, 1)
 
-    // ── v0.6.65 新设计：姓名 → 基础信息 → 雷达图命格 → 纪年 → 按钮 ──
+    // ── v0.6.71 重构：纪年(顶) → 姓名 → 信息 → 分割线 → 命格属性雷达 → 两句联 → 按钮 ──
 
   // 段 1：姓名（大字楷体金色光晕）
   var nOp = anims.name.update(now)
@@ -417,77 +419,79 @@ function render(ctx) {
     ctx.restore()
   }
 
-  // 段 4：命格标题 + 雷达图
-  if (iOp > 0) {
-    drawText(ctx, '─ 命 格 ─', cx, l.labelY, {
-      fontSize: l.labelS,
-      color: COLORS.gold,
-      align: 'center', baseline: 'middle',
-      opacity: iOp * 0.7,
-    })
-  }
-
-  // 雷达图
+    // v0.6.71: 雷达图（标题+加大+显示数值+两句联14px）
   if (iOp > 0 && l.radarR > 0) {
+    // 顶部纪年（从底部移过来）
+    if (IDENTITY.dynasty) {
+      var eraDisp = IDENTITY.eraDisplay || IDENTITY.eraLabel || ''
+      if (eraDisp && eraDisp.indexOf(IDENTITY.dynasty) === 0) {
+        eraDisp = eraDisp.slice(IDENTITY.dynasty.length).replace(/^[·\s]*/, '')
+      }
+      var eraTitle = eraDisp ? IDENTITY.dynasty + ' · ' + eraDisp : IDENTITY.dynasty
+      ctx.save()
+      ctx.globalAlpha = iOp * 0.5
+      ctx.fillStyle = 'rgba(200,168,124,0.4)'
+      ctx.font = l.eraS + 'px "STKaiti", "KaiTi", "楷体", sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(eraTitle, cx, l.eraY)
+      ctx.restore()
+    }
+
+    // 标题：你的命格属性
+    ctx.save()
+    ctx.globalAlpha = iOp * 0.65
+    ctx.fillStyle = 'rgba(200,168,124,0.5)'
+    ctx.font = l.eraS + 'px "STKaiti", "KaiTi", "楷体", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('— 你的命格属性 —', cx, l.divY + Math.floor((l.radarCY - l.radarR - l.divY) / 2))
+    ctx.restore()
+
+    // 雷达图
     var rKeys = ['声望','财富','学识','颜值','医术','战功','文采','政绩','义行']
     var rVals = rKeys.map(function(k) { return IDENTITY[k] || 0 })
     ui.drawRadarEdges(ctx, l.radarCX, l.radarCY, l.radarR, rVals)
 
-    // 属性标签（边中点）
+    // 属性标签 + 数值（边中点）
     ctx.save()
-    for (var i = 0; i < 9; i++) {
-      var a = -Math.PI / 2 + (i + 0.5) * (Math.PI * 2) / 9
+    for (var ri = 0; ri < 9; ri++) {
+      var a = -Math.PI / 2 + (ri + 0.5) * (Math.PI * 2) / 9
       var lx = l.radarCX + l.labelDist * Math.cos(a)
       var ly = l.radarCY + l.labelDist * Math.sin(a)
+      var rn = rKeys[ri]
+      var rv = rVals[ri]
+      // 属性名
       ctx.fillStyle = 'rgba(170,210,180,0.65)'
       ctx.font = '8px "STKaiti", "KaiTi", "楷体", sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.fillText(rKeys[i], lx, ly)
+      ctx.fillText(rn, lx, ly - 5)
+      // 数值
+      var valAlpha = 0.25 + Math.min(1, rv / 8000) * 0.4
+      ctx.fillStyle = 'rgba(210,180,130,' + valAlpha + ')'
+      ctx.font = '9px "STKaiti", "KaiTi", "楷体", sans-serif'
+      ctx.fillText(rv, lx, ly + 6)
     }
     ctx.restore()
-  }
 
-  // v0.6.68: 命签诗（雷达图下方）
-  if (iOp > 0 && l.radarR > 0) {
+    // 命签诗（两句联，14px楷体）
     var poemLines = genFatePoem(rVals)
-    var poemY0 = l.radarCY + l.radarR + l.labelDist + 2
     ctx.save()
-    for (var pi = 0; pi < 4; pi++) {
-      var pOp = iOp * (0.65 - pi * 0.06)
-      ctx.globalAlpha = pOp * pOp  // 渐隐更柔和
-      ctx.shadowColor = 'rgba(200,168,124,' + (pOp * 0.15) + ')'
-      ctx.shadowBlur = 2
-      ctx.fillStyle = 'rgba(210,180,130,0.45)'
-      ctx.font = '10px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'top'
-      ctx.fillText(poemLines[pi], cx, poemY0 + pi * 14)
+    ctx.globalAlpha = iOp * 0.5
+    ctx.shadowColor = 'rgba(200,168,124,0.08)'
+    ctx.shadowBlur = 4
+    ctx.fillStyle = 'rgba(210,180,130,0.55)'
+    ctx.font = l.poemS + 'px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'top'
+    ctx.fillText(poemLines[0], cx, l.poemY)
+    if (poemLines.length > 1) {
+      ctx.fillText(poemLines[1], cx, l.poemY + 19)
     }
     ctx.restore()
-  }
-
-  // 段 5：底部纪年（只出现一次）
-  var yOp = anims.year.update(now)
-  if (yOp > 0) {
-    var eraText = ''
-    if (IDENTITY.dynasty) {
-      // v0.6.65: 去重：如果 eraDisplay 已包含朝代，不重复
-      var era = IDENTITY.eraDisplay || IDENTITY.eraLabel || ''
-      if (era && era.indexOf(IDENTITY.dynasty) === 0) {
-        era = era.slice(IDENTITY.dynasty.length).replace(/^[·\s]*/, '')
-      }
-      eraText = era ? IDENTITY.dynasty + ' · ' + era : IDENTITY.dynasty
-    }
-    drawText(ctx, eraText || '', cx, l.tailY, {
-      fontSize: l.tailS,
-      color: COLORS.paperDarker,
-      align: 'center', baseline: 'middle',
-      opacity: yOp * 0.6,
-    })
-  }
-
-  // 段 6：落笔开局按钮
+  }  // [纪年已移到顶部]
+// 段 6：落笔开局按钮
   if (yOp > 0) {
     ctx.save()
     ctx.globalAlpha = yOp * 0.95

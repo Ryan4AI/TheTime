@@ -29,22 +29,18 @@ function calcLayout() {
   var eraS = Math.min(13, Math.floor(w * 0.035))
   var eraY = cardY + Math.floor(cardH * 0.04)
 
-  // 2. 姓名（大字楷体）
-  var nameS = Math.min(36, Math.floor(w * 0.095))
-  var nameY = eraY + Math.floor(eraS * 1.8)
-
-  // 3. 基础信息行：年龄 · 性别 · 职业 · 居所（统一在一行）
+  // 2. 基础信息行（含姓名·年齿·身份·居所）
   var infoS = Math.min(12, Math.floor(w * 0.032))
-  var infoY = nameY + Math.floor(nameS * 0.55) + 8
+  var infoY = eraY + Math.floor(eraS * 1.8) + 8
 
-  // 4. 分割线（小屏紧凑/大屏文书双行）
+  // 3. 分割线（小屏紧凑/大屏文书双行）
   var compactInfo = h < 540
   var divY = compactInfo ? (infoY + Math.floor(infoS * 1.4)) : (infoY + Math.floor(infoS * 1.6) * 2 + 4)
 
   // v0.6.74: 命格区域整体设计（标题+大雷达+命签诗做一体）
   var radarR = Math.min(48, Math.max(32, Math.floor(h * 0.080)))
   var radarCX = cx
-  var radarCY = divY + radarR + 32      // 32px: 标题(13px) + 6.5px间隙到雷达标签
+  var radarCY = divY + radarR + 34      // 34px: 标题(13px) + 标签偏移(6px) + 标签半高(5px) + 3px间隙
   var labelDist = radarR + 3             // 标签贴近雷达边缘
   var titleY = divY + 10                 // 标题基线（9px楷体，baseline middle）
 
@@ -402,23 +398,9 @@ function render(ctx) {
     ctx.restore()
   }
 
-  // 段 1：姓名（大字楷体金色光晕）
-  if (nOp > 0) {
-    ctx.save()
-    ctx.shadowColor = 'rgba(232,200,130,' + (nOp * 0.6) + ')'
-    ctx.shadowBlur = 12
-    drawText(ctx, IDENTITY.name, cx, l.nameY, {
-      fontSize: l.nameS,
-      fontFamily: '"STKaiti", "KaiTi", "楷体", ' + ui.fontFamily,
-      color: COLORS.goldLight,
-      align: 'center', baseline: 'middle',
-      opacity: nOp,
-      bold: true,
-    })
-    ctx.restore()
-  }
+  // 段 1：姓名已合并进下方信息区，不再独立渲染
 
-  // 段 2：古代身份文书样式（两列两行：姓名·年齿 / 身份·居所；小屏紧凑单行）
+  // 段 2：古代身份文书样式（双行居中：姓名·年齿 / 身份·居所；小屏紧凑单行）
   var iOp = anims.info.update(now)
   if (iOp > 0) {
     ctx.font = l.infoS + 'px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
@@ -429,8 +411,10 @@ function render(ctx) {
     var vCol = 'rgba(215,200,175,' + (iOp * 0.85) + ')'
 
     if (compact) {
-      // 紧凑单行：年齿·身份·居所（去重名）
+      // 紧凑单行：姓名·年齿·身份·居所
       var parts = []
+      var nameLabel = IDENTITY.gender === '女' ? '小字' : '姓名'
+      parts.push(nameLabel + '：' + IDENTITY.name)
       parts.push('年齿：' + IDENTITY.age + '岁')
       parts.push(IDENTITY.occupation || '庶民')
       parts.push(IDENTITY.residence || '不详')
@@ -443,14 +427,15 @@ function render(ctx) {
       var halfW = Math.floor(l.cardW * 0.14)
       var r1Y = l.infoY - 2
       var r2Y = l.infoY + Math.floor(l.infoS * 1.6) - 2
+      var nameLabel = IDENTITY.gender === '女' ? '小字' : '姓名'
       var gender = IDENTITY.gender || '男'
 
       ctx.textAlign = 'center'
       ctx.fillStyle = vCol
-      ctx.fillText('年齿：' + IDENTITY.age + '岁', l.cx - halfW, r1Y)
-      ctx.fillText('性别：' + gender, l.cx + halfW, r1Y)
-      ctx.fillText(IDENTITY.occupation || '庶民', l.cx - halfW, r2Y)
-      ctx.fillText(IDENTITY.residence || '不详', l.cx + halfW, r2Y)
+      ctx.fillText(nameLabel + '：' + IDENTITY.name, l.cx - halfW, r1Y)
+      ctx.fillText('年齿：' + IDENTITY.age + '岁', l.cx + halfW, r1Y)
+      ctx.fillText('身份：' + (IDENTITY.occupation || '庶民'), l.cx - halfW, r2Y)
+      ctx.fillText('居所：' + (IDENTITY.residence || '不详'), l.cx + halfW, r2Y)
     }
   }
 

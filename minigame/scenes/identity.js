@@ -44,7 +44,7 @@ function calcLayout() {
   // v0.6.74: 命格区域整体设计（标题+大雷达+命签诗做一体）
   var radarR = Math.min(48, Math.max(32, Math.floor(h * 0.080)))
   var radarCX = cx
-  var radarCY = divY + radarR + 26      // 26px: 标题(13px) + 间隙
+  var radarCY = divY + radarR + 32      // 32px: 标题(13px) + 6.5px间隙到雷达标签
   var labelDist = radarR + 3             // 标签贴近雷达边缘
   var titleY = divY + 10                 // 标题基线（9px楷体，baseline middle）
 
@@ -398,7 +398,7 @@ function render(ctx) {
     ctx.font = '13px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(eraTitle, cx, l.eraY)
+    ctx.fillText('— ' + eraTitle + ' —', cx, l.eraY)
     ctx.restore()
   }
 
@@ -429,10 +429,8 @@ function render(ctx) {
     var vCol = 'rgba(215,200,175,' + (iOp * 0.85) + ')'
 
     if (compact) {
-      // 紧凑单行：姓名·年齿·身份·居所 inline
+      // 紧凑单行：年齿·身份·居所（去重名）
       var parts = []
-      var nameLabel = IDENTITY.gender === '女' ? '小字' : '姓名'
-      parts.push(nameLabel + '：' + IDENTITY.name)
       parts.push('年齿：' + IDENTITY.age + '岁')
       parts.push(IDENTITY.occupation || '庶民')
       parts.push(IDENTITY.residence || '不详')
@@ -441,26 +439,18 @@ function render(ctx) {
       ctx.fillStyle = vCol
       ctx.fillText(text, l.cx, l.infoY)
     } else {
-      // 大屏双行文书样式
-      var col1X = l.cardX + Math.floor(l.cardW * 0.10)
-      var col2X = l.cardX + Math.floor(l.cardW * 0.52)
+      // 大屏双行文书（居中对称）
+      var halfW = Math.floor(l.cardW * 0.14)
       var r1Y = l.infoY - 2
       var r2Y = l.infoY + Math.floor(l.infoS * 1.6) - 2
+      var gender = IDENTITY.gender || '男'
 
-      function drawField(label, value, x, y) {
-        ctx.textAlign = 'left'
-        ctx.fillStyle = fCol
-        ctx.fillText(label + '：', x, y)
-        var lw = ctx.measureText(label + '：').width
-        ctx.fillStyle = vCol
-        ctx.fillText(value, x + lw, y)
-      }
-
-      var nameLabel = IDENTITY.gender === '女' ? '小字' : '姓名'
-      drawField(nameLabel, IDENTITY.name, col1X, r1Y)
-      drawField('年齿', IDENTITY.age + '岁', col2X, r1Y)
-      drawField('身份', IDENTITY.occupation || '庶民', col1X, r2Y)
-      drawField('居所', IDENTITY.residence || '不详', col2X, r2Y)
+      ctx.textAlign = 'center'
+      ctx.fillStyle = vCol
+      ctx.fillText('年齿：' + IDENTITY.age + '岁', l.cx - halfW, r1Y)
+      ctx.fillText('性别：' + gender, l.cx + halfW, r1Y)
+      ctx.fillText(IDENTITY.occupation || '庶民', l.cx - halfW, r2Y)
+      ctx.fillText(IDENTITY.residence || '不详', l.cx + halfW, r2Y)
     }
   }
 

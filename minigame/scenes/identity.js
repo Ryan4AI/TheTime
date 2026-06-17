@@ -445,6 +445,34 @@ function render(ctx) {
     ctx.restore()
   }
 
+  // v0.6.66: 命格评价（雷达图下方）
+  if (iOp > 0 && l.radarR > 0) {
+    var evalText = generateFateEval(rVals)
+    // 限制长度，防止溢出
+    if (evalText.length > 40) evalText = evalText.slice(0, 40) + '…'
+    drawText(ctx, evalText, cx, l.radarCY + l.radarR + l.labelDist + 12, {
+      fontSize: 9,
+      color: 'rgba(200,168,124,0.45)',
+      align: 'center', baseline: 'top',
+      opacity: iOp * 0.65,
+      maxWidth: l.cardW - 80,
+    })
+  }
+
+  // v0.6.66: 命格评价（雷达图下方）
+  if (iOp > 0 && l.radarR > 0) {
+    var evalText = generateFateEval(rVals)
+    // 限制长度，防止溢出
+    if (evalText.length > 40) evalText = evalText.slice(0, 40) + '…'
+    drawText(ctx, evalText, cx, l.radarCY + l.radarR + l.labelDist + 12, {
+      fontSize: 9,
+      color: 'rgba(200,168,124,0.45)',
+      align: 'center', baseline: 'top',
+      opacity: iOp * 0.65,
+      maxWidth: l.cardW - 80,
+    })
+  }
+
   // 段 5：底部纪年（只出现一次）
   var yOp = anims.year.update(now)
   if (yOp > 0) {
@@ -504,4 +532,95 @@ function render(ctx) {
   // 记录按钮位置（用于触摸检测）
   layout._btnArea = { x: l.btnX, y: l.btnY, w: l.btnW, h: l.btnH }
 }
+
+// v0.6.66: 命格评价（算命式，根据9属性生成）
+function generateFateEval(attrs) {
+  // 属性权重排序
+  var sorted = []
+  var attrNames = ['声望','财富','学识','颜值','医术','战功','文采','政绩','义行']
+  for (var fi = 0; fi < 9; fi++) {
+    sorted.push({ name: attrNames[fi], val: attrs[fi] || 0 })
+  }
+  sorted.sort(function(a,b) { return b.val - a.val })
+
+  var top = sorted[0]
+  var top2 = sorted[1]
+  var bot = sorted[8]
+  var bot2 = sorted[7]
+
+  // 强属性描述
+  var strongPhrases = {
+    '声望': ['威仪赫赫，名动四方', '声名远播，天下皆知', '一言九鼎，众望所归'],
+    '财富': ['富甲一方，金玉满堂', '财源滚滚，富可敌国', '黄金铺地，白银为阶'],
+    '学识': ['才高八斗，学富五车', '过目不忘，通晓古今', '博闻强识，满腹经纶'],
+    '颜值': ['面若冠玉，风华绝代', '容姿端丽，倾国倾城', '清姿玉质，世所罕见'],
+    '医术': ['妙手回春，活死人肉白骨', '岐黄妙手，医道通神', '望闻问切，无不灵验'],
+    '战功': ['百战百胜，铁血丹心', '马踏山河，功盖三军', '沙场宿将，战无不克'],
+    '文采': ['文思泉涌，下笔如神', '锦绣文章，洛阳纸贵', '诗词歌赋，冠绝当世'],
+    '政绩': ['经天纬地，治世能臣', '明察秋毫，政通人和', '运筹帷幄，治国安邦'],
+    '义行': ['侠肝义胆，路见不平', '仗义疏财，济困扶危', '一诺千金，义薄云天'],
+  }
+  var weakPhrases = {
+    '声望': ['门庭冷落，无人问津', '声名狼藉，谤满天下', '无名之辈，不足挂齿'],
+    '财富': ['囊中羞涩，家徒四壁', '穷困潦倒，身无长物', '贫贱难移，衣不蔽体'],
+    '学识': ['目不识丁，愚昧蒙昧', '胸无点墨，浅薄无知', '寡陋孤闻，不学无术'],
+    '颜值': ['面目可憎，不堪入目', '形貌猥琐，见者侧目', '其貌不扬，泯然众人'],
+    '医术': ['庸医误人，不通医理', '药石罔效，医术粗疏', '歧黄门外，徒增笑耳'],
+    '战功': ['手无缚鸡，未谙兵事', '临阵脱逃，胆怯如鼠', '纸上谈兵，不谙战阵'],
+    '文采': ['文笔拙劣，辞不达意', '才疏学浅，文墨不通', '言词鄙陋，难登大雅'],
+    '政绩': ['碌碌无为，寸功未立', '尸位素餐，政绩全无', '管窥蠡测，难当大任'],
+    '义行': ['自私自利，独善其身', '见利忘义，刻薄寡恩', '独来独往，不涉世事'],
+  }
+
+  // 特殊判定
+  var parts = []
+
+  // 最强属性（> 7000 才算明显）
+  if (top.val >= 7000) {
+    var tPhrases = strongPhrases[top.name]
+    var tIdx = Math.floor(Math.abs(top.val) % tPhrases.length)
+    parts.push(tPhrases[tIdx])
+  } else if (top.val >= 5000) {
+    parts.push('「' + top.name + '」略有根基')
+  }
+
+  // 次强（> 6000）
+  if (top2.val >= 6000 && top2.name !== top.name) {
+    var t2Phrases = strongPhrases[top2.name]
+    var t2Idx = Math.floor(Math.abs(top2.val * 7 + 3) % t2Phrases.length)
+    parts.push(t2Phrases[t2Idx])
+  }
+
+  // 最弱（< 1500 才算明显缺陷）
+  if (bot.val <= 1500) {
+    var bPhrases = weakPhrases[bot.name]
+    var bIdx = Math.floor(Math.abs(bot.val * 3 + 7) % bPhrases.length)
+    if (parts.length > 0) {
+      parts.push('然「' + bot.name + '」' + bPhrases[bIdx])
+    } else {
+      parts.push('「' + bot.name + '」' + bPhrases[bIdx])
+    }
+  } else if (bot.val <= 3000) {
+    if (parts.length > 0) {
+      parts.push('惟「' + bot.name + '」稍显不足')
+    } else {
+      parts.push('「' + bot.name + '」为短板')
+    }
+  }
+
+  // 总评
+  var total = 0
+  for (var fi = 0; fi < 9; fi++) { total += attrs[fi] || 0 }
+  var avg = total / 9
+
+  // 如果所有评价都为空
+  if (parts.length === 0) {
+    if (avg > 5000) return '平庸之辈，碌碌一生。'
+    if (avg > 2000) return '资质平平，无甚可道。'
+    return '命如草芥，微末之姿。'
+  }
+
+  return parts.join('。') + '。'
+}
+
 module.exports = { init, render, onTouch, autoNext: null }

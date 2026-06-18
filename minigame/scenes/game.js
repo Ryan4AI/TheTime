@@ -728,11 +728,8 @@ function render(ctx) {
   // 2. 顶部朱砂印（古卷风顶栏）
   drawSealTopBar(ctx)
 
-  // 2.5 v0.1.82 状态条（v0.2.5-J：状态栏常显，layout.statusBarH 永远生效）
-  // 长按时玉牒浮窗（drawJadeTablet）会盖住状态条展示更详细信息
-  if (!statusHidden || isLongPressing) {
-    drawStatusBar(ctx)
-  }
+  // 2.5 v0.1.82 状态条
+  drawStatusBar(ctx)
 
   // v0.6.35: 榜单目标指示器
   drawBoardTarget(ctx)
@@ -773,12 +770,7 @@ function render(ctx) {
     drawError(ctx)
   }
 
-  // 11. 长按状态：玉牒浮窗（v0.2.5-J：只有长按时才显示，不再依赖 statusHidden）
-  if (isLongPressing) {
-    drawJadeTablet(ctx)
-  }
-
-  // 12. 物品详情浮窗（点击物品后弹出，点任何位置关闭）
+  // 11. 物品详情浮窗（点击物品后弹出，点任何位置关闭）
   if (itemDetail) {
     drawItemDetail(ctx)
   }
@@ -1190,9 +1182,6 @@ var scrollMax = 0              // v0.6.85: 叙事区最大可滚动距离（draw
 var userScrolledAway = false   // v0.6.85: 用户手动上滑后不自动滚回底部
 
 // ─── 古卷风状态 ───
-var statusHidden = false         // v0.2.5-J（先生 2026-06-13 11:03 拍板）：状态栏常显（玩家能直接看到气血/金银/身份/年月）
-var longPressStart = 0           // 长按计时
-var isLongPressing = false       // 是否在长按中
 var sealAnimProgress = 0         // 印章动画进度（0-1）
 const SEAL_SIZE = 30             // 朱砂印尺寸
 
@@ -1859,150 +1848,6 @@ function drawItemBar(ctx) {
       item._bounds = { x: bx, y: by, w: slotW, h: slotH }
     })
   }
-}// ─────── 玉牒浮窗（长按状态） ───────
-function drawJadeTablet(ctx) {
-  const w = layout.windowW
-  const h = layout.windowH
-
-  // 半透明遮罩
-  ctx.fillStyle = 'rgba(0,0,0,0.65)'
-  ctx.fillRect(0, 0, w, h)
-
-  // v2 扩展：玉牒面板加大（加9属性 + 庇护）
-  const pw = Math.min(300, w - 30)
-  const ph = Math.min(h * 0.75, 420)
-  const px = (w - pw) / 2
-  const py = (h - ph) / 2
-
-  ctx.save()
-  ctx.fillStyle = 'rgba(26,36,30,0.95)'
-  roundRect(ctx, px, py, pw, ph, 12)
-  ctx.fill()
-  ctx.strokeStyle = 'rgba(90,138,112,0.5)'
-  ctx.lineWidth = 1
-  roundRect(ctx, px, py, pw, ph, 12)
-  ctx.stroke()
-  ctx.restore()
-
-  // 玉牒标题
-  ctx.fillStyle = COLORS.jade
-  ctx.font = '16px ' + ui.fontFamily
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText('玉  牒', px + pw / 2, py + 28)
-
-  // 分隔线
-  let curY = py + 48
-  ctx.strokeStyle = 'rgba(90,138,112,0.2)'
-  ctx.lineWidth = 1
-  ctx.beginPath()
-  ctx.moveTo(px + 20, curY)
-  ctx.lineTo(px + pw - 20, curY)
-  ctx.stroke()
-
-  // 基本信息（紧凑布局）
-  const seasonNames = ['正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '冬月', '腊月']
-  const monthStr = seasonNames[(state.month || 1) - 1] || ''
-  ctx.textAlign = 'left'
-  ctx.font = '12px ' + ui.fontFamily
-  
-  curY += 22
-  // Row 1: 姓名 + 年岁
-  ctx.fillStyle = 'rgba(200,200,200,0.5)'
-  ctx.fillText('姓名', px + 20, curY)
-  ctx.fillStyle = 'rgba(245,239,224,0.85)'
-  ctx.fillText(state.name, px + 60, curY)
-  ctx.fillStyle = 'rgba(200,200,200,0.5)'
-  ctx.fillText('年岁', px + pw/2 + 10, curY)
-  ctx.fillStyle = 'rgba(245,239,224,0.85)'
-  ctx.fillText(state.age + '岁', px + pw/2 + 50, curY)
-  
-  curY += 24
-  // Row 2: 身份 + 金银
-  ctx.fillStyle = 'rgba(200,200,200,0.5)'
-  ctx.fillText('身份', px + 20, curY)
-  ctx.fillStyle = 'rgba(245,239,224,0.85)'
-  const occStr = state.occupation || '庶民'
-  ctx.fillText(occStr.length > 5 ? occStr.slice(0, 4) + '…' : occStr, px + 60, curY)
-  ctx.fillStyle = 'rgba(200,200,200,0.5)'
-  ctx.fillText('金银', px + pw/2 + 10, curY)
-  ctx.fillStyle = 'rgba(245,239,224,0.85)'
-  ctx.fillText(state.coin + '文', px + pw/2 + 50, curY)
-  
-  curY += 24
-  // Row 3: 年月 + 庇护
-  ctx.fillStyle = 'rgba(200,200,200,0.5)'
-  ctx.fillText('年月', px + 20, curY)
-  ctx.fillStyle = 'rgba(245,239,224,0.85)'
-  ctx.fillText((state.year || '?') + '年 ' + monthStr, px + 60, curY)
-  ctx.fillStyle = 'rgba(200,168,124,0.6)'
-  // v0.6.7 移除庇护显示
-  ctx.fillStyle = 'rgba(245,239,224,0.85)'
-  // v0.6.7 移除庇护显示
-
-  // 分隔线
-  curY += 20
-  ctx.strokeStyle = 'rgba(90,138,112,0.15)'
-  ctx.beginPath()
-  ctx.moveTo(px + 20, curY)
-  ctx.lineTo(px + pw - 20, curY)
-  ctx.stroke()
-
-  // 9属性（3列布局）
-  curY += 18
-  const ATTRS = [
-    { name: '声望', val: state['声望'] || 0 },
-    { name: '财富', val: state['财富'] || 0 },
-    { name: '学识', val: state['学识'] || 0 },
-    { name: '颜值', val: state['颜值'] || 0 },
-    { name: '医术', val: state['医术'] || 0 },
-    { name: '战功', val: state['战功'] || 0 },
-    { name: '文采', val: state['文采'] || 0 },
-    { name: '政绩', val: state['政绩'] || 0 },
-    { name: '义行', val: state['义行'] || 0 },
-  ]
-  
-  ctx.font = '11px ' + ui.fontFamily
-  const colW = (pw - 40) / 3
-  for (let i = 0; i < ATTRS.length; i++) {
-    const col = i % 3
-    const row = Math.floor(i / 3)
-    const ax = px + 20 + col * colW
-    const ay = curY + row * 24
-    ctx.fillStyle = 'rgba(200,168,124,0.5)'
-    ctx.fillText(ATTRS[i].name, ax, ay)
-    ctx.fillStyle = 'rgba(245,239,224,0.75)'
-    ctx.fillText(String(ATTRS[i].val), ax + 32, ay)
-  }
-
-  // 分隔线
-  curY += Math.ceil(ATTRS.length / 3) * 24 + 12
-  ctx.strokeStyle = 'rgba(90,138,112,0.15)'
-  ctx.beginPath()
-  ctx.moveTo(px + 20, curY)
-  ctx.lineTo(px + pw - 20, curY)
-  ctx.stroke()
-
-  // 物品列表
-  if (state.items && state.items.length > 0) {
-    curY += 18
-    ctx.fillStyle = 'rgba(200,200,200,0.5)'
-    ctx.font = '12px ' + ui.fontFamily
-    ctx.fillText('行李', px + 20, curY)
-    ctx.fillStyle = 'rgba(245,239,224,0.7)'
-    ctx.font = '11px ' + ui.fontFamily
-    const itemStr = state.items.map(i => (i.icon || '') + i.name).join('  ')
-    ctx.fillText(itemStr, px + 60, curY, pw - 80)
-  }
-
-  // 底部提示
-  ctx.fillStyle = 'rgba(200,200,200,0.3)'
-  ctx.font = '10px ' + ui.fontFamily
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'bottom'
-  ctx.fillText('轻点关闭', px + pw / 2, py + ph - 12)
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'alphabetic'
 }
 
 // v2 新增：属性变化飘字系统
@@ -2750,8 +2595,6 @@ function drawItemDetail(ctx) {
 var scrollStartOffset = 0
 var isScrolling = false
 var touchStartTime = 0
-var touchStartPos = { x: 0, y: 0 }
-var longPressTriggered = false
 
 function handleTouch(x, y, type) {
   // ── v2 新增：榜单浮窗触摸拦截 ──
@@ -2957,8 +2800,6 @@ function handleTouch(x, y, type) {
 
   if (type === 'start') {
     touchStartTime = Date.now()
-    touchStartPos = { x, y }
-    longPressTriggered = false
 
     // 检测是否在叙事滚动区域
     if (layout._scrollArea && x >= layout._scrollArea.x && x <= layout._scrollArea.x + layout._scrollArea.w &&
@@ -2971,17 +2812,6 @@ function handleTouch(x, y, type) {
   }
 
   if (type === 'move') {
-    // 长按检测：手指按住不动 → 显示玉牒
-    if (!longPressTriggered && !isLongPressing && Date.now() - touchStartTime > 400) {
-      const dx = x - touchStartPos.x
-      const dy = y - touchStartPos.y
-      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
-        longPressTriggered = true
-        isLongPressing = true
-        return null
-      }
-    }
-
     if (isScrolling) {
       const dy = y - scrollTouchStartY
       scrollOffset = scrollStartOffset + dy
@@ -2996,12 +2826,6 @@ function handleTouch(x, y, type) {
   }
 
   if (type === 'end') {
-    // 如果正在显示玉牒 → 点击关闭
-    if (isLongPressing) {
-      isLongPressing = false
-      return null
-    }
-
     isScrolling = false
 
     // 滑动超过阈值 → 不触发按钮点击（但错误状态下不要吞，让玩家能点重试）

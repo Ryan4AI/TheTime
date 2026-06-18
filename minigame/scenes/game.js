@@ -658,10 +658,15 @@ function handleAIResponse(result, action, userInput) {
   }
 
   // v0.6.61: 全部社会属性归零→社会性死亡（颜值除外）
+  // v0.6.86: 未成年人（<15岁）豁免——幼儿/少年没有社会属性，不应开局即死
   var DEATH_ATTRS = ['声望', '财富', '学识', '医术', '战功', '文采', '政绩', '义行'];
   var allZero = true;
-  for (var i = 0; i < DEATH_ATTRS.length; i++) {
-    if ((state[DEATH_ATTRS[i]] || 0) > 0) { allZero = false; break; }
+  if ((state.age || 0) < 15) {
+    allZero = false;
+  } else {
+    for (var i = 0; i < DEATH_ATTRS.length; i++) {
+      if ((state[DEATH_ATTRS[i]] || 0) > 0) { allZero = false; break; }
+    }
   }
   if (allZero && state.health > 0) {
     state.health = 0;

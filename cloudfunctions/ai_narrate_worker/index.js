@@ -169,6 +169,11 @@ async function backgroundTask(request_id, payload) {
       updated.alive = false;
       updated.health = 0;
       updated.deathReason = '全部社会属性';
+      // 生成墓志铭——AI 还没机会写，这里补一个默认的
+      var age = updated.age || 20;
+      if (age < 30) updated.epitaph = age <= 15 ? '未及弱冠，便已消散于人海。' : '青春未展，已无踪迹可寻。';
+      else if (age < 50) updated.epitaph = '碌碌半生，终归尘土，无人记得。';
+      else updated.epitaph = '一生如梦，来去无痕。';
       console.log('[ai_narrate_worker] 全部社会属性归零触发死亡');
     }
     const systemMessages = emitSystemMessages(preUpdate, updated)

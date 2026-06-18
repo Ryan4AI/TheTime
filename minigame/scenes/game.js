@@ -586,6 +586,7 @@ function handleAIResponse(result, action, userInput) {
     if (newState.month) state.month = newState.month
     if (newState.year) state.year = newState.year
     if (newState.round !== undefined) state.round = newState.round
+    if (newState.epitaph) state.epitaph = newState.epitaph  // v0.6.89: 云函数生成的墓志铭
     // v0.6.35: AI₂ 评分后的属性从 newState 读（patch 不再含属性）
     const V2_ATTRS = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
     for (const attr of V2_ATTRS) {

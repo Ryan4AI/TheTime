@@ -31,7 +31,6 @@ var narrativeHistory = []    // {role, content}
 var lastRawAiResp = null    // v0.6.85: 最后AI原始JSON，history送AI时代替普通content
 var alive = true             // 死亡标记
 var fadeOut = null           // 淡出动画
-var deathReason = null        // v0.6.61: 社会性死亡根因属性
 var monthChanged = false     // 月份变化（用于显示特殊提示）
 var newEvent = null          // 新事件
 var itemDetail = null        // 物品详情浮窗（点击物品后弹出）
@@ -657,23 +656,7 @@ function handleAIResponse(result, action, userInput) {
     state.health = 0
   }
 
-  // v0.6.61: 全部社会属性归零→社会性死亡（颜值除外）
-  // v0.6.86: 未成年人（<15岁）豁免——幼儿/少年没有社会属性，不应开局即死
-  var DEATH_ATTRS = ['声望', '财富', '学识', '医术', '战功', '文采', '政绩', '义行'];
-  var allZero = true;
-  if ((state.age || 0) < 15) {
-    allZero = false;
-  } else {
-    for (var i = 0; i < DEATH_ATTRS.length; i++) {
-      if ((state[DEATH_ATTRS[i]] || 0) > 0) { allZero = false; break; }
-    }
-  }
-  if (allZero && state.health > 0) {
-    state.health = 0;
-    deathReason = '全部社会属性';
-  }
-
-  // 3. 死亡判定
+  // 3. 死亡判定（社会性死亡由云函数判定后写入 newState）
   if (state.health <= 0 || newState && newState.alive === false) {
     state.alive = false
     alive = false

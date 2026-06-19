@@ -118,9 +118,14 @@ function init(items, identity, gender) {
   }
   for (var k in anims) anims[k].start(now)
 
-  // v0.7.11: 测试模式 → 按钮立刻 ready（不等 3.2s）
-  // （先生 05:38 拍板：先跳转后生成，按钮 ready 应该同步于数据 ready）
-  setTimeout(function() { ready = true }, testPoemPending ? 800 : 3200)
+  // v0.7.11: 按钮 ready 跟数据 ready 同步（先生 05:46 反馈）
+  // 测试模式：云函数返回 + setTestPoemData 后立即 ready（不等 800ms / 3200ms 动画）
+  // 正常死亡流：等 3200ms 是因为有墓碑/铭/姓名 fade-in 动画，按钮是最后一项
+  if (testPoemPending) {
+    ready = false  // 测试模式：云函数返回时改 true（triggerTestPoemCloud success 里）
+  } else {
+    setTimeout(function() { ready = true }, 3200)
+  }
 }
 
 function onTouch(x, y, type) {
@@ -202,9 +207,15 @@ function render(ctx) {
 
   // v0.7.11: 测试模式加载中 → 画骨架屏覆盖在墓碑中央
   // （先生拍板 05:38：先跳转后生成，墓碑不空白）
-  if (testPoemLoading || testPoemError) {
+  if (testPoemLoading) {
     drawTestPoemSkeleton(ctx)
-    return  // 骨架屏模式：不画后续文字/按钮（避免墓志铭位置错乱）
+    return  // loading 中：不画后续文字/按钮（避免墓志铭位置错乱）
+  }
+  // v0.7.11 fix2: 失败时仍画骨架屏（说明情况），但**继续渲染按钮**让先生能返回
+  // （先生 05:46 反馈：按钮不该等；失败也要可点）
+  if (testPoemError) {
+    drawTestPoemSkeleton(ctx)
+    // 不 return，继续画下面的姓名/朝代/享年/按钮
   }
 
   // 3. 顶部小字"第 X 世"（淡灰色）
@@ -471,8 +482,10 @@ function triggerTestPoemCloud() {
           deathState.epitaph = res.result.epitaph
           deathCause = res.result.deathCause
           epRecord = res.result.epRecord
-          // 标记测试模式已结束（按钮 ready 不再变 false）
+          // 标记测试模式已结束
           testPoemPending = false
+          // v0.7.11 fix2: 数据 ready → 按钮 ready（先生 05:46 反馈）
+          ready = true
         } else {
           testPoemError = (res && res.result && res.result.error) || '未知错误'
         }
@@ -480,6 +493,8 @@ function triggerTestPoemCloud() {
       fail: err => {
         testPoemLoading = false
         testPoemError = (err && err.errMsg) || '调用失败'
+        // v0.7.11 fix2: 失败也要让按钮 ready（先生可以点返回主页）
+        ready = true
       },
     })
   } else {

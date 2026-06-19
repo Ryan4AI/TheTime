@@ -5,7 +5,7 @@
 const ui = require('../engine/ui')
 const {
   COLORS, getSystemInfo, drawBackground,
-  drawText, drawButton, drawPrimaryButton, hitTest
+  drawText, drawButton, drawPrimaryButton, hitTest, roundRect
 } = ui
 const { CharAnim, SlideFadeAnim, FadeAnim } = require('../engine/anim')
 
@@ -13,7 +13,53 @@ const TITLE = '穿越日记'
 const SUBTITLE = '留名青史，或无名而亡'
 const BTN_START = '踏入长河'
 const BTN_LEADERBOARD = '群英录'
+const BTN_TEST_POEM = '试写墓志铭'  // v0.7.0
 const FOOTER = 'AI演绎 · 历史真实数据'
+
+// v0.7.11: 测试墓志铭按钮 → 直接切到 death scene，由 death.js 内部画骨架屏+调云函数
+// （不再做蒙层拦截，蒙层是过度设计——先生拍板 05:38）
+
+// 3 个测试样例（先生不同时跑能看出多样性）
+const TEST_CASES = [
+  {
+    name: '韩守安', gender: '男', age: 65, occupation: '伙夫', socialClass: '寒门',
+    dynasty: '西汉', city: '长安', year: 160, life_number: 1,
+    lifespan: 70, deathType: '寿终',
+    narrativeHistory: [
+      { role: 'ai', content: '韩守安生于长安东市一户贫家，幼年丧父，靠母亲纺织为生。' },
+      { role: 'user', content: '我去学手艺' },
+      { role: 'ai', content: '韩守安拜入东市某馆为伙夫，主以严苛闻名。韩某谨事二十余年，未尝有失。' },
+      { role: 'user', content: '娶妻' },
+      { role: 'ai', content: '韩守安娶同里张氏为妻，育二子一女。' },
+      { role: 'user', content: '继续' },
+      { role: 'ai', content: '长子夭于元鼎二年疫，韩守安哀痛数日，次日仍按时上工。' },
+      { role: 'user', content: '暮年' },
+      { role: 'ai', content: '暮年告归，卧病三月，殁于家。' },
+    ],
+  },
+  {
+    name: '沈青禾', gender: '女', age: 28, occupation: '女医', socialClass: '平民',
+    dynasty: '北宋', city: '开封', year: 1075, life_number: 1,
+    lifespan: 75, deathType: '剧情杀',
+    narrativeHistory: [
+      { role: 'ai', content: '沈青禾自幼随父习医，能辨百草。' },
+      { role: 'user', content: '我去城里行医' },
+      { role: 'ai', content: '沈青禾在开封城南悬壶济世，尤擅治小儿痘疹，活人无数。' },
+      { role: 'user', content: '遇到瘟疫' },
+      { role: 'ai', content: '瘟疫流行，沈青禾日夜诊治，不幸染病。' },
+    ],
+  },
+  {
+    name: '王守诚', gender: '男', age: 55, occupation: '商贾', socialClass: '官宦',
+    dynasty: '南宋', city: '临安', year: 1180, life_number: 1,
+    lifespan: 60, deathType: '社会性',
+    narrativeHistory: [
+      { role: 'ai', content: '王守诚为临安巨贾，贩丝帛通南北，家资巨万。' },
+      { role: 'user', content: '继续' },
+      { role: 'ai', content: '王守诚被诬通敌，抄家没产，妻离子散。' },
+    ],
+  },
+]
 
 let layout = {}
 let anims = null
@@ -52,8 +98,9 @@ function calcLayout() {
   var btnH = Math.min(64, Math.floor(w * 0.17))
   var btnS = Math.min(18, Math.floor(w * 0.048))
   var btnX = Math.floor(cx - btnW / 2)
-  var btnY1 = Math.floor(h * 0.64)
-  var btnY2 = Math.floor(btnY1 + btnH + 10)
+  var btnY1 = Math.floor(h * 0.60)
+  var btnY2 = Math.floor(btnY1 + btnH + 8)
+  var btnY3 = Math.floor(btnY2 + btnH + 8)  // v0.7.0: 测试墓志铭按钮
 
   // Footer
   var footerS = Math.min(10, Math.floor(w * 0.028))
@@ -68,7 +115,7 @@ function calcLayout() {
     subS: subS, subY: subY,
     divW: divW, divY: divY,
     btnW: btnW, btnH: btnH, btnS: btnS,
-    btnX: btnX, btnY1: btnY1, btnY2: btnY2,
+    btnX: btnX, btnY1: btnY1, btnY2: btnY2, btnY3: btnY3,
     footerS: footerS, footerY: footerY,
   }
 }
@@ -306,6 +353,16 @@ function render(ctx) {
       { fontSize: l.btnS, opacity: b2.opacity })
   }
 
+  // 9.5 v0.7.0: 测试墓志铭按钮（更小，灰色）
+  var b3 = anims.btnTestPoem ? anims.btnTestPoem.update(now) : { opacity: 1 }
+  if (b3.opacity > 0) {
+    drawButton(ctx, l.btnX, l.btnY3, l.btnW, l.btnH, BTN_TEST_POEM,
+      { fontSize: l.btnS - 2, opacity: b3.opacity * 0.7 })
+  }
+
+  // 9.7 v0.7.11: 测试按钮不再画蒙层（已删除蒙层逻辑）
+  // （先生拍板 05:38：直接跳转到 death scene，由 death.js 内部画骨架屏）
+
   // 10. Footer
   var f = anims.footer.update(now)
   if (f.opacity > 0) {
@@ -320,12 +377,56 @@ function render(ctx) {
 // ─── Touch ───
 function onTouch(x, y, type) {
   if (type === 'end') {
-    // 临时调试：整个屏幕都是按钮1的点击区域
-    // 如果这样能工作，说明是点击区域计算问题
-    console.log('[entry] Touch at:', x, y, 'screen:', layout.w, layout.h)
+    var l = layout
+
+    // v0.7.11: 测试墓志铭按钮（btnY3）— 1 次点击 → 直接切到 death scene
+    // （不再蒙层、不再弹窗，先生拍板 05:38：先跳转后生成）
+    if (l.btnY3 && hitTest(x, y, l.btnX, l.btnY3, l.btnW, l.btnH)) {
+      var idx = Math.floor(Math.random() * TEST_CASES.length)
+      var tc = TEST_CASES[idx]
+      // game.js switchScene 第二个参数 params 全字段平铺传给 death.init
+      return {
+        scene: 'death',
+        items: [],
+        identity: null,
+        gender: tc.gender,
+        testPoemPending: true,
+        testPoemCase: tc,  // 整包给 death.js 用
+      }
+    }
+
     return { scene: 'selection' }
   }
   return null
 }
 
-module.exports = { init: init, render: render, onTouch: onTouch }
+// v0.7.0: 简易文字拆行（保留，entry.js 不直接用）
+function splitText(text, maxWidth, fontSize) {
+  if (!text) return ['']
+  var charWidth = fontSize
+  var maxChars = Math.floor(maxWidth / charWidth) || 12
+  var lines = []
+  var currentLine = ''
+  var sentences = text.split(/([，。；！？、])/)
+  for (var i = 0; i < sentences.length; i++) {
+    var seg = sentences[i]
+    if (!seg) continue
+    if ((currentLine + seg).length <= maxChars) {
+      currentLine += seg
+    } else {
+      if (currentLine) lines.push(currentLine)
+      if (seg.length > maxChars) {
+        for (var j = 0; j < seg.length; j += maxChars) {
+          lines.push(seg.substring(j, j + maxChars))
+        }
+        currentLine = ''
+      } else {
+        currentLine = seg
+      }
+    }
+  }
+  if (currentLine) lines.push(currentLine)
+  return lines.length ? lines : ['']
+}
+
+module.exports = { init: init, render: render, onTouch: onTouch, autoNext: null }

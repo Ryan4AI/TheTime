@@ -41,6 +41,18 @@ function switchScene(name, params) {
         var items = (sceneParams && sceneParams.items) || []
         var identity = (sceneParams && sceneParams.identity) || null
         var gender = (sceneParams && sceneParams.gender) || null
+        // v0.6.97: 把 autoNext 顶层字段（deathCause / epRecord / epitaph / deathType / highestAchievement）合并到 identity
+        // death scene 的 init(items, identity, gender) 第二个参数是 identity
+        if (identity && name === 'death') {
+          if (params.deathCause !== undefined) identity.deathCause = params.deathCause
+          if (params.epRecord !== undefined) identity.epRecord = params.epRecord
+          if (params.epitaph !== undefined) identity.epitaph = params.epitaph
+          if (params.deathType !== undefined) identity.deathType = params.deathType
+          if (params.highestAchievement !== undefined) identity.highestAchievement = params.highestAchievement
+          // v0.7.11: 测试墓志铭模式 — entry.js 直接切到 death
+          if (params.testPoemPending !== undefined) identity.testPoemPending = params.testPoemPending
+          if (params.testPoemCase !== undefined) identity.testPoemCase = params.testPoemCase
+        }
         s.init(items, identity, gender)
       } else {
         s.init()
@@ -101,6 +113,7 @@ wx.onTouchEnd(function(e) {
         }
       }
     }
+
   }
 })
 

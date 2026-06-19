@@ -53,10 +53,11 @@ function calcLayout() {
     epRecordY: tabletY + tabletH * 0.40,
     epRecordLineH: 16,
     epRecordMaxLines: 3,
-    // 行 3: 元信息（朝代 · 享年 · 死因 合并 11pt 灰色一行）
-    metaY: tabletY + tabletH * 0.66,
-    // 行 4: 最高成就（10pt 玉色）
-    achieveY: tabletY + tabletH * 0.78,
+    // 行 3: 元信息上半（朝代 · 享年 11pt 灰色）
+    metaY: tabletY + tabletH * 0.64,
+    // 行 3.5: 元信息下半（死因 单独一行，11pt 弱金色）—— v0.7.11 fix3 拆短
+    // 行 4: 最高成就（10pt 玉色）—— 同步下移避开元信息下半
+    achieveY: tabletY + tabletH * 0.82,
     // 按钮位置（墓碑下方）—— v0.6.98: 两个按钮并排
     btnY: tabletY + tabletH + 24,
     btnW: Math.min(130, Math.floor(w * 0.36)),
@@ -263,6 +264,8 @@ function render(ctx) {
 
   // 6. 元信息行（v0.6.99 新增：朝代 + 享年 + 死因 三合一）
   // 按 game-ui-design: every element earns screen space
+  // v0.7.11 fix3: 死因单独一行（先生 05:49 反馈：元信息行文字溢出墓碑边框）
+  // 原方案 "dynasty·享年X岁·死因" 挤一行，字数超 maxWidth 就溢出（drawText 不截断）
   var mOp = anims.name.update(now)
   if (mOp > 0) {
     var dynasty = deathState.dynasty || ''
@@ -270,18 +273,31 @@ function render(ctx) {
     var age = deathState.age != null ? deathState.age : '?'
     var ageStr = '享年 ' + age + '岁'
     var causeStr = deathCause ? deathCause : ''
-    var parts = []
-    if (dynasty) parts.push(dynasty + (eraDisplay ? '·' + eraDisplay : ''))
-    if (ageStr) parts.push(ageStr)
-    if (causeStr) parts.push(causeStr)
-    var metaStr = parts.join(' · ')
-    drawText(ctx, metaStr, cx, l.metaY, {
+    // 上半行：朝代 · 享年
+    var upperParts = []
+    if (dynasty) upperParts.push(dynasty + (eraDisplay ? '·' + eraDisplay : ''))
+    if (ageStr) upperParts.push(ageStr)
+    var upperStr = upperParts.join(' · ')
+    drawText(ctx, upperStr, cx, l.metaY, {
       fontSize: 11,
       color: 'rgba(200,168,124,0.7)',  // 金色弱
       align: 'center', baseline: 'middle',
       opacity: mOp * 0.85,
-      maxWidth: l.tabletW - 40,
     })
+    // 下半行：死因（单独画，限定宽度，超长按字符截断）
+    if (causeStr) {
+      var maxChars = Math.floor((l.tabletW - 40) / 11) - 1  // 11pt 字号每字符约 11px
+      var causeDisplay = causeStr
+      if (causeStr.length > maxChars) {
+        causeDisplay = causeStr.substring(0, maxChars) + '…'
+      }
+      drawText(ctx, causeDisplay, cx, l.metaY + 16, {
+        fontSize: 11,
+        color: 'rgba(200,168,124,0.55)',  // 弱金色（弱于上半行）
+        align: 'center', baseline: 'middle',
+        opacity: mOp * 0.85,
+      })
+    }
   }
 
   // 7. 最高成就（v0.6.99 保留）

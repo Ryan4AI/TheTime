@@ -49,9 +49,7 @@ function switchScene(name, params) {
           if (params.epitaph !== undefined) identity.epitaph = params.epitaph
           if (params.deathType !== undefined) identity.deathType = params.deathType
           if (params.highestAchievement !== undefined) identity.highestAchievement = params.highestAchievement
-          // v0.7.11: 测试墓志铭模式 — entry.js 直接切到 death
-          if (params.testPoemPending !== undefined) identity.testPoemPending = params.testPoemPending
-          if (params.testPoemCase !== undefined) identity.testPoemCase = params.testPoemCase
+          // v0.7.11: testPoemPending/testPoemCase 由 entry.js 直接放到 identity 对象里（不在顶层）
         }
         s.init(items, identity, gender)
       } else {

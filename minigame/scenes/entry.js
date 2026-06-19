@@ -384,14 +384,13 @@ function onTouch(x, y, type) {
     if (l.btnY3 && hitTest(x, y, l.btnX, l.btnY3, l.btnW, l.btnH)) {
       var idx = Math.floor(Math.random() * TEST_CASES.length)
       var tc = TEST_CASES[idx]
-      // game.js switchScene 第二个参数 params 全字段平铺传给 death.init
+      // v0.7.11 fix: 把 testPoemPending/testPoemCase 塞到 identity 对象里
+      // （game.js switchScene 把 params.identity 直接传给 death.init，null 会丢字段）
       return {
         scene: 'death',
         items: [],
-        identity: null,
+        identity: { testPoemPending: true, testPoemCase: tc },
         gender: tc.gender,
-        testPoemPending: true,
-        testPoemCase: tc,  // 整包给 death.js 用
       }
     }
 

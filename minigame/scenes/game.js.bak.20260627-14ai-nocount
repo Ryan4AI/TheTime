@@ -515,9 +515,9 @@ function pollNarrateResult(requestId, action, userInput, attempt) {
             // v3.0.14: 选项时机跟 streamedText 对齐（保持"打字完才出"习惯）
             optionsAppearTime = displayStartTime + streamedText.length * TYPEWRITE_SPEED + 300
           }
-          // 流式 loading 文案：只显示真实秒数（partialWriter 500ms 切片后字数跳太快，秒数更直观）
+          // 流式 loading 文案（v3.0.14: 显示已抽出的字数，不是 LLM 原始 partial_content 长度）
           const elapsedSec = Math.round((Date.now() - (debugLog[debugLog.length - 1]?.ts || Date.now())) / 1000)
-          loadingText = `史官正在落笔… ${elapsedSec}秒`
+          loadingText = `史官正在落笔…（${elapsedSec}秒 · 已收 ${(streamedText || '').length} 字）`
           // 继续轮询
           pollNarrateResult(requestId, action, userInput, attempt + 1)
           return

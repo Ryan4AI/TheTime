@@ -743,8 +743,8 @@ function handleAIResponse(result, action, userInput) {
     }
   }
 
-  // 2. 基础 patch（items/月—D031 删 coin/health 字段，铜钱=财富属性）
-  const patch = branch.patch || {}
+  // 2. 基础 patch（items/月—D046: patch 来源从 branch.patch 改 result.attr_patch(D036 后 AI₁ 不输出 patch)）
+  const patch = (result && result.attr_patch) || {}
   // D010（先生 2026-06-24 19:41 拍板）：AI 叙事回合不写 epitaph，全部由 ai_write_death 独立生成
   // v0.6.50j 旧逻辑删除：if (patch.epitaph) state.epitaph = patch.epitaph
   // D010 落地（先生 2026-06-27 01:51 反馈"为啥死亡还会输出 epitaph"顺手清）

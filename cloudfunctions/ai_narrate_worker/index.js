@@ -302,6 +302,7 @@ async function backgroundTask(request_id, payload) {
       system_messages: systemMessages,  // v0.1.80 — 前端拿来渲染 [system · XXX]
       closest_board: closestBoardInfo,  // v0.6.35 — 前端展示榜单接近度
       is_retry: is_retry,
+      attr_patch: attrPatch,  // D046：attrPatch 顶层暴露(前端读 patch.items)
       debug: { system_prompt: systemPrompt, user_prompt: userPrompt, messages, raw_response: rawContent, perf_logs: perfLogs, attr_patch: attrPatch, picked_branch: picked, score_prompt: scorePrompt, score_raw_response: scoreRawResponse },
     }
 
@@ -1175,7 +1176,10 @@ async function callScoringAI(content, prevState) {
     `    - 6：半年跨度("秋去冬来")`,
     `    - 12：跨年("转眼一年")`,
     `    - 60：极端("十年后..."),不要常用`,
-    `  "items": 可选。物品耐久损耗：{"<物品名>": <损耗值>}。剧情中提到物品丢失/损坏就在这里写。新物品获取不由 AI₂ 处理(叙事 AI 决定)。`,
+    `  "items": 可选字段。两种写法：`,
+    `    A. 损耗/丢失: {"<物品名>": <损耗值>}, 数字 ≥ 0, 减物品 durability 到 0 时消失`,
+    `    B. 新增物品: {"<物品名>": {"name":"<物品名>","icon":"<emoji>","desc":"<1-2句描述>","durability":100}}, 玩家在剧情里"拾起/收下/购买/获赠"物品时写`,
+    `    剧情里写"捡起打火石"→这里写 items: {"打火石":{...}};剧情里写"茶包磨损"→这里写 items: {"茶包":-15}`,
     `}`,
     ``,
     `规则：`,
@@ -1186,7 +1190,7 @@ async function callScoringAI(content, prevState) {
     `- 没有相关行为的属性 = 0（不要无中生有）`,
     `- 年龄约束：${age < 8 ? '玩家不足8岁，学识/医术/战功/文采/政绩/义行/财富均只能为0（幼儿不可能获得这些成就类属性）。声望最多±5。' : age < 15 ? '玩家不足15岁（少年），学识/文采最多±10；医术/战功/政绩最多±5；义行最多±10；财富最多±5。' : '成年玩家无额外年龄约束。'}`,
     `- 只返回 JSON 对象，不要任何其他文字`,
-    `例：{"声望":30,"财富":-200,"学识":10,"颜值":0,"医术":0,"战功":0,"文采":0,"政绩":0,"义行":50,"month_delta":1}`,
+    `例：{"声望":30,"财富":-200,"学识":10,"颜值":0,"医术":0,"战功":0,"文采":0,"政绩":0,"义行":50,"month_delta":1,"items":{"茶包":-15}}`,
   ].join('\n')
 
   try {

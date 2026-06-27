@@ -25,7 +25,8 @@
       "timeout": 120,
       "memorySize": 512,
       "envVariables": {
-        "DS_API_KEY": "sk-26d0e090ed7b4d90803aae706d9b7247"
+        "DS_API_KEY": "sk-26d0e090ed7b4d90803aae706d9b7247",
+        "MM_API_KEY": "sk-cp-c5wSwWsnIcUkewTEe9JhETRKZNyJ1OBnphm_4B1HdOV0LMNh9vP80kJFBKZV5jpCtp22_xyBUtF0zRAwgWaxU4YECc_LL8GPzEj6GVOHmMiovcfwylDgCDM"
       },
       "installDependency": true,
       "handler": "index.main"

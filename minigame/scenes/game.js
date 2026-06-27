@@ -732,8 +732,22 @@ function handleAIResponse(result, action, userInput) {
 
   // 2. 基础 patch（coin/health — 来自 AI₁ 叙事 patch）
   const patch = branch.patch || {}
-  if (patch.coin !== undefined) state.coin = Math.max(0, state.coin + (patch.coin || 0))
-  if (patch.health !== undefined) state.health = Math.max(0, Math.min(100, state.health + (patch.health || 0)))
+  if (patch.coin !== undefined) {
+    const _coinDiff = patch.coin
+    state.coin = Math.max(0, state.coin + (patch.coin || 0))
+    // v3.0.14aie: patch 路径 coin 变化也飘字（先生 23:08 反馈"动画还在吗"——9 属性有飘, coin/health 这条路径漏了）
+    if (_coinDiff !== 0 && typeof spawnFloater === 'function') {
+      spawnFloater('铜钱' + (_coinDiff > 0 ? '+' : '') + _coinDiff, _coinDiff > 0 ? 'rgba(232,200,130,1)' : 'rgba(192,48,48,1)')
+    }
+  }
+  if (patch.health !== undefined) {
+    const _healthDiff = patch.health
+    state.health = Math.max(0, Math.min(100, state.health + (patch.health || 0)))
+    // v3.0.14aie: 同上, health 路径补飘字
+    if (_healthDiff !== 0 && typeof spawnFloater === 'function') {
+      spawnFloater('体力' + (_healthDiff > 0 ? '+' : '') + _healthDiff, _healthDiff > 0 ? 'rgba(232,200,130,1)' : 'rgba(192,48,48,1)')
+    }
+  }
   // D010（先生 2026-06-24 19:41 拍板）：AI 叙事回合不写 epitaph，全部由 ai_write_death 独立生成
   // v0.6.50j 旧逻辑删除：if (patch.epitaph) state.epitaph = patch.epitaph
   // D010 落地（先生 2026-06-27 01:51 反馈"为啥死亡还会输出 epitaph"顺手清）

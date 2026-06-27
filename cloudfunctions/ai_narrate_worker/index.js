@@ -541,7 +541,13 @@ function emitSystemMessages(oldState, newState) {
     lines.push(`身份: ${oldState.occupation} → ${newState.occupation}`)
   }
 
-  // 4) 九属性 — 任一变化时输出全部当前值
+  // 4) 气血（D008：变化 ≥10 才提示）
+  const healthDelta = (newState.health || 0) - (oldState.health || 0)
+  if (Math.abs(healthDelta) >= 10) {
+    lines.push(`气血: ${oldState.health || 0} → ${newState.health || 0}`)
+  }
+
+  // 5) 九属性 — 任一变化时输出全部当前值
   const ATTRS = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
   let anyAttrChanged = false
   for (const attr of ATTRS) {

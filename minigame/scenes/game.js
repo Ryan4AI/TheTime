@@ -57,7 +57,8 @@ const C = {
 var debugLog = []            // 最近 N 轮完整 input/result
 var debugOpen = false        // 浮窗展开/折叠
 var debugScroll = 0          // 浮窗内滚动偏移
-var dbgSelectorOpen = false  // 折叠态点 DBG 图标弹出的"选组复制"弹层
+var dbgActiveTab = 0          // v3.0.14aiij D035: 大浮窗顶部 tab 切换(0=AI原始 / 1=对话流 / 2=POLL / 3=渲染 / 4=场景)
+var dbgSelectorOpen = false  // 折叠态点 DBG 图标弹出的"选组复制"弹层(已废, D035 改为直接展开大浮窗)
 var dbgCopyToast = ''        // 复制成功的 toast（自动消失）
 var dbgCopyToastTs = 0       // toast 时间戳
 const DEBUG_MAX_ROUNDS = 3   // 保留最近 3 轮
@@ -447,7 +448,7 @@ function callAI(userInput) {
 // v3.0.14aic: 用 pollStartMs（函数级闭包）算真实秒数，不再用 debugLog.last.ts（脏数据）
 function pollNarrateResult(requestId, action, userInput, attempt, pollStartMs) {
   if (pollStartMs == null) pollStartMs = Date.now()  // v3.0.14aic: 首次调用记录起点
-  const MAX_ATTEMPTS = 60  // 60 秒兜底（流式一般 10-15s 内完成）
+  const MAX_ATTEMPTS = 120  // v3.0.14aiij: 60 秒兜底（POLL_INTERVAL_MS=500ms × 120 = 60s, 先生 23:55 拍板）
   const POLL_INTERVAL_MS = 500  // v3.0.14m: 500ms 高频轮询（先生 19:20 反馈"1 秒卡顿感强"）
 
   // v3.0.14aic: 用闭包里的 pollStartMs 算真实秒数（attempt*5 / debugLog.last.ts 都是错的）
@@ -2627,11 +2628,8 @@ function dbgDoCopy(text) {
 function drawDebugPanel(ctx) {
   if (debugLog.length === 0) return
 
-  // v3.0.14ai-dbg: 弹层（dbgSelectorOpen）覆盖在折叠态之上
-  if (dbgSelectorOpen) {
-    drawDbgSelector(ctx)
-    return
-  }
+  // D035（先生 2026-06-27 23:55 拍板 A 方案）：折叠态点 DBG 直接进大浮窗（顶部 tab 切换）, 去掉选组弹层
+  // if (dbgSelectorOpen) { drawDbgSelector(ctx); return }  // 已废
 
   if (!debugOpen) {
     // 折叠态：右上角小图标（v0.6.50: 移入状态栏右侧，避免与系统···叠一起）
@@ -2682,41 +2680,50 @@ function drawDebugPanel(ctx) {
   ctx.fillStyle = '#1a1a1a'
   ctx.fillRect(0, 0, w, closeBarH)
 
-  // v0.2.5-R（先生 2026-06-13 15:36 拍板）：两个复制按钮
-  //   - "全复制"（64px）：复制完整调试信息（system prompt + 对话 + 原始响应 + 分支 + 错误）
-  //   - "复制对话"（80px）：只复制 messages[1:]（跳过第一段 system prompt），先生反馈 system prompt 太长粘贴不下来
-  const copyBtnW = 64
-  const dialogBtnW = 80
-  const _ARROW_SIZE = 28  // 占位用，避免 const 重复声明
-  // 按钮布局（右到左）：▲ → 复制对话(80) → 全复制(64) → [关闭条左侧]
-  const dialogBtnX = w - _ARROW_SIZE - 8 - dialogBtnW - 4
-  const copyBtnX = dialogBtnX - copyBtnW - 4
-
-  // 1. "全复制"按钮
-  ctx.fillStyle = 'rgba(240,200,120,0.18)'
-  ctx.fillRect(copyBtnX, 4, copyBtnW, closeBarH - 8)
+  // D035（先生 2026-06-27 23:55 拍板 A 方案）：5 个 tab 切换 + 1 个"复制本 tab"按钮, 替代旧的"全复制/复制对话"
+  const _ARROW_SIZE = 28  // 占位用,避免 const 重复声明
+  const TAB_LABELS = ['AI原始', '对话流', 'POLL', '渲染', '场景']
+  const tabBtnW = 56
+  const tabBtnH = closeBarH - 8
+  const tabBtnY = 4
+  const tabBtnGap = 4
+  // 右侧：▲ → 复制本tab(72) → 关闭(28)
+  const copyTabBtnW = 72
+  const copyTabBtnX = w - _ARROW_SIZE - 8 - copyTabBtnW - 4
+  const closeBtnX = w - _ARROW_SIZE - 8
+  // 5 个 tab 从关闭按钮左侧开始往左排
+  let _curTabX = copyTabBtnX - tabBtnW - tabBtnGap
+  layout._dbgTabs = []
+  for (let _ti = 0; _ti < 5; _ti++) {
+    const isActive = _ti === dbgActiveTab
+    ctx.fillStyle = isActive ? 'rgba(240,200,120,0.45)' : 'rgba(240,200,120,0.12)'
+    ctx.fillRect(_curTabX, tabBtnY, tabBtnW, tabBtnH)
+    ctx.strokeStyle = isActive ? '#f0c878' : 'rgba(240,200,120,0.3)'
+    ctx.lineWidth = 1
+    ctx.strokeRect(_curTabX, tabBtnY, tabBtnW, tabBtnH)
+    ctx.fillStyle = isActive ? '#fff' : '#f0c878'
+    ctx.font = isActive ? 'bold 13px sans-serif' : '13px sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(TAB_LABELS[_ti], _curTabX + tabBtnW / 2, closeBarH / 2 + 1)
+    layout._dbgTabs.push({ x: _curTabX, y: 0, w: tabBtnW, h: closeBarH, tabIdx: _ti })
+    _curTabX -= tabBtnW + tabBtnGap
+  }
+  // "复制本 tab"按钮
+  ctx.fillStyle = 'rgba(240,200,120,0.32)'
+  ctx.fillRect(copyTabBtnX, tabBtnY, copyTabBtnW, tabBtnH)
   ctx.fillStyle = '#f0c878'
-  ctx.font = 'bold 13px sans-serif'
+  ctx.font = 'bold 12px sans-serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText('全复制', copyBtnX + copyBtnW / 2, closeBarH / 2 + 1)
-  layout._copyBtn = { x: copyBtnX, y: 0, w: copyBtnW, h: closeBarH }
-
-  // 2. "复制对话"按钮（更高亮 — 这是先生最常用的）
-  ctx.fillStyle = 'rgba(240,200,120,0.32)'  // 比"全复制"更亮的填充
-  ctx.fillRect(dialogBtnX, 4, dialogBtnW, closeBarH - 8)
-  ctx.fillStyle = '#f0c878'
-  ctx.font = 'bold 13px sans-serif'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText('复制对话', dialogBtnX + dialogBtnW / 2, closeBarH / 2 + 1)
-  layout._dialogBtn = { x: dialogBtnX, y: 0, w: dialogBtnW, h: closeBarH }
+  ctx.fillText('复制本tab', copyTabBtnX + copyTabBtnW / 2, closeBarH / 2 + 1)
+  layout._dbgCopyTabBtn = { x: copyTabBtnX, y: 0, w: copyTabBtnW, h: closeBarH }
 
   ctx.fillStyle = '#f0c878'
   ctx.font = 'bold 14px sans-serif'
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
-  ctx.fillText('DBG AI 调试 · 关闭 ↑', 12, closeBarH / 2)
+  ctx.fillText('DBG · ' + TAB_LABELS[dbgActiveTab] + ' · 关闭 ↑', 12, closeBarH / 2)
   ctx.textAlign = 'right'
   // 向上箭头（顶部右）
   const arrowSize = 28
@@ -2757,69 +2764,78 @@ function drawDebugPanel(ctx) {
   ctx.textBaseline = 'top'
   ctx.fillStyle = '#c0c0c0'
 
-  // 拼接所有轮次的完整文本（v0.2.5-K：先生 2026-06-13 11:08 拍板 — 只显示最近一轮）
-  // 之前显示最近 3 轮先生嫌太乱，单轮调试最直观
+  // D035（先生 2026-06-27 23:55 拍板 A 方案）：按 tab 筛选字段, 不再一锅炖
+  //   tab 0 = AI原始返回 (raw_response + all_branches + ERROR)
+  //   tab 1 = 对话流     (messages_to_ai + system_prompt + 玩家输入)
+  //   tab 2 = POLL       (perf_logs + poll_attempts + poll status)
+  //   tab 3 = 渲染       (BG prompt/url/seed + drawOptions_debug)
+  //   tab 4 = 场景       (state 全字段 + debugLog.length + currentItems)
   let allText = ''
-  const startIdx = Math.max(0, debugLog.length - 1)  // 只看最后一轮
+  const startIdx = Math.max(0, debugLog.length - 1)
   for (let i = startIdx; i < debugLog.length; i++) {
     const d = debugLog[i]
-    // v3.0.14b-fix: 把 perf_logs 移到最顶部（先生 13:51 反馈"没看到 perf_logs"）
-    if (d.perf_logs && d.perf_logs.length > 0) {
-      allText += `⏱️ [PERF 延迟诊断]\n`
-      for (const p of d.perf_logs) {
-        if (p.ms !== undefined) {
-          allText += `  ${p.stage}: ${p.ms}ms${p.model ? ' (' + p.model + ')' : ''}${p.prompt_chars ? ' prompt=' + p.prompt_chars : ''}${p.score_prompt_chars ? ' prompt=' + p.score_prompt_chars : ''}${p.first_chunk_ms !== undefined && p.first_chunk_ms >= 0 ? ' first_chunk=' + p.first_chunk_ms + 'ms' : ''}\n`
-        } else if (p.value !== undefined) {
-          allText += `  ${p.stage}: ${p.value}\n`
-        }
-      }
-      allText += '\n'
-    }
-    // v0.2.3: 错误轮次顶部加红色 ❌ 标记，方便先生一眼看出哪些轮出过错
     const errMark = d.resultError ? '❌ [出错] ' : '✅ '
     allText += `${errMark}== 第 ${i + 1}/${debugLog.length} 轮 round=${d.round} ==\n`
-    // v0.2.3: 状态摘要（让先生一眼看到上下文）
     const stateStr = d.data && d.data.state ? `[朝代=${d.data.state.dynasty || '?'} 身份=${d.data.state.occupation || '?'} 年=${d.data.state.year || '?'} 月=${d.data.state.month || '?'} 历史=${(d.data.history || []).length}条]` : ''
     allText += `${stateStr}\n`
-    // v3.0.14b-fix: perf_logs 已移到顶部,这里不再重复
     allText += `[INPUT 玩家选项]: ${d.input || '(空)'}\n`
     allText += `[is_retry]: ${d.data && d.data.is_retry ? 'true' : 'false'}, [action]: ${d.action || '?'}\n`
-    if (d.poll_attempts !== undefined) allText += `[poll_attempts]: ${d.poll_attempts}, [poll_elapsed_ms]: ${d.poll_elapsed_ms || 0}\n`
 
-    // v3.0.14aid: 画图 prompt/url/seed 显示（先生 22:54 反馈"图都一样"要能看到 prompt 到底变没变）
-    if (d.bg_prompt) {
-      allText += `[BG_DRAW] dynasty=${d.bg_dynasty || '?'}, city=${d.bg_city || '?'}, seed=${d.bg_seed}, load=${d.bg_load || 'pending'}\n`
-      allText += `[BG_PROMPT] ${d.bg_prompt}\n`
-      allText += `[BG_HINT] ${d.bg_narrative_hint || ''}\n`
-      allText += `[BG_URL] ${d.bg_url}\n`
-      allText += '\n'
+    if (dbgActiveTab === 0) {
+      // tab 0 = AI原始返回
+      if (d.raw_response) allText += `[AI 原始返回]:\n${d.raw_response}\n\n`
+      if (d.all_branches && d.all_branches.length > 0) {
+        allText += `[AI 生成 ${d.all_branches.length} 个分支]:\n`
+        d.all_branches.forEach((b, j) => {
+          allText += `  分支${j + 1} p=${b.p}\n  ${b.content || ''}\n  options: ${JSON.stringify(b.options)}\n\n`
+        })
+      }
+      if (d.resultError) allText += `\n╔════ ERROR ════╗\n${d.resultError}\n╚════════════════╝\n\n`
+    } else if (dbgActiveTab === 1) {
+      // tab 1 = 对话流
+      if (d.messages_to_ai && d.messages_to_ai.length > 0) {
+        allText += `[发给 AI 的 messages]:\n`
+        d.messages_to_ai.forEach((m, j) => {
+          allText += `  ── messages[${j}].role="${m.role}" ──\n${m.content}\n\n`
+        })
+      }
+    } else if (dbgActiveTab === 2) {
+      // tab 2 = POLL 状态
+      if (d.poll_attempts !== undefined) allText += `[poll_attempts]: ${d.poll_attempts}, [poll_elapsed_ms]: ${d.poll_elapsed_ms || 0}\n`
+      if (d.perf_logs && d.perf_logs.length > 0) {
+        allText += `⏱️ [PERF 延迟诊断]\n`
+        for (const p of d.perf_logs) {
+          if (p.ms !== undefined) {
+            allText += `  ${p.stage}: ${p.ms}ms${p.model ? ' (' + p.model + ')' : ''}${p.prompt_chars ? ' prompt=' + p.prompt_chars : ''}${p.score_prompt_chars ? ' prompt=' + p.score_prompt_chars : ''}${p.first_chunk_ms !== undefined && p.first_chunk_ms >= 0 ? ' first_chunk=' + p.first_chunk_ms + 'ms' : ''}\n`
+          } else if (p.value !== undefined) {
+            allText += `  ${p.stage}: ${p.value}\n`
+          }
+        }
+      }
+      if (d.poll_status) allText += `[poll_status]: ${d.poll_status}\n`
+    } else if (dbgActiveTab === 3) {
+      // tab 3 = 渲染（含画图 prompt/url/seed + drawOptions_debug）
+      if (d.bg_prompt) {
+        allText += `[BG_DRAW] dynasty=${d.bg_dynasty || '?'}, city=${d.bg_city || '?'}, seed=${d.bg_seed}, load=${d.bg_load || 'pending'}\n`
+        allText += `[BG_PROMPT] ${d.bg_prompt}\n`
+        allText += `[BG_HINT] ${d.bg_narrative_hint || ''}\n`
+        allText += `[BG_URL] ${d.bg_url}\n\n`
+      }
+      if (d.drawOptions_debug) allText += `[drawOptions_debug]\n${d.drawOptions_debug}\n`
+      if (d.layout_debug) allText += `[layout]\n${d.layout_debug}\n`
+    } else if (dbgActiveTab === 4) {
+      // tab 4 = 场景状态（state 全字段）
+      const s = state || {}
+      const sKeys = Object.keys(s).sort()
+      allText += `[state 全字段 ${sKeys.length} 个]:\n`
+      for (const k of sKeys) {
+        const v = s[k]
+        const vStr = typeof v === 'object' ? JSON.stringify(v) : String(v)
+        allText += `  ${k}: ${vStr.length > 100 ? vStr.slice(0, 100) + '...' : vStr}\n`
+      }
+      allText += `[debugLog.length]: ${debugLog.length}\n`
+      allText += `[currentItems.length]: ${(currentItems || []).length}\n`
     }
-
-    allText += '\n'
-
-    if (d.messages_to_ai && d.messages_to_ai.length > 0) {
-      allText += `[发给 AI 的 messages]:\n`
-      d.messages_to_ai.forEach((m, j) => {
-        allText += `  ── messages[${j}].role="${m.role}" ──\n${m.content}\n\n`
-      })
-    }
-
-    if (d.raw_response) {
-      allText += `[AI 原始返回]:\n${d.raw_response}\n\n`
-    }
-
-    if (d.all_branches && d.all_branches.length > 0) {
-      allText += `[AI 生成 ${d.all_branches.length} 个分支]:\n`
-      d.all_branches.forEach((b, j) => {
-        allText += `  分支${j + 1} p=${b.p}\n  ${b.content || ''}\n  options: ${JSON.stringify(b.options)}\n\n`
-      })
-    }
-
-    if (d.resultError) {
-      // v0.2.3: 错误时用醒目的分隔符包裹，方便识别
-      allText += `\n╔════ ERROR ════╗\n${d.resultError}\n╚════════════════╝\n\n`
-    }
-
     allText += '\n'
   }
 
@@ -3231,33 +3247,15 @@ function handleTouch(x, y, type) {
       const iconY = layout.safeTop + layout.topBarH + 1
       if (hitTest(x, y, iconX, iconY, iconSize, iconSize)) {
         if (type === 'end') {
-          // v3.0.14ai-dbg: 先生 02:34 拍板"折叠态点 DBG → 弹选组复制弹层（不全复制）"
-          dbgSelectorOpen = true
+          // D035（先生 23:55 拍板 A 方案）：折叠态点 DBG 直接进大浮窗顶部 tab 切换
+          debugOpen = true
+          debugScroll = 0
+          dbgActiveTab = 0  // 默认第一个 tab
         }
         return null  // 拦截，不传给游戏主流程
       }
-      // v3.0.14ai-dbg: 弹层打开时，命中 5 组按钮 / 完整大浮窗 / 关闭
-      if (dbgSelectorOpen && type === 'end') {
-        if (layout._dbgSelBtns) {
-          for (let i = 0; i < layout._dbgSelBtns.length; i++) {
-            const b = layout._dbgSelBtns[i]
-            if (hitTest(x, y, b.x, b.y, b.w, b.h)) {
-              dbgDoCopy(b.copy())
-              return null
-            }
-          }
-        }
-        if (layout._dbgSelFullBtn && hitTest(x, y, layout._dbgSelFullBtn.x, layout._dbgSelFullBtn.y, layout._dbgSelFullBtn.w, layout._dbgSelFullBtn.h)) {
-          dbgSelectorOpen = false
-          debugOpen = true
-          debugScroll = 0
-          return null
-        }
-        if (layout._dbgSelCloseBtn && hitTest(x, y, layout._dbgSelCloseBtn.x, layout._dbgSelCloseBtn.y, layout._dbgSelCloseBtn.w, layout._dbgSelCloseBtn.h)) {
-          dbgSelectorOpen = false
-          return null
-        }
-      }
+      // v3.0.14ai-dbg: 弹层打开时,命中 5 组按钮 / 完整大浮窗 / 关闭(D035 已废, 上面直接进大浮窗)
+      // (旧逻辑保留代码块但永远不触发——dbgSelectorOpen 永远是 false)
     } else {
       // 展开态：点顶部条 = 折叠；点箭头 = 滚动
       const closeBarH = 40
@@ -3265,89 +3263,37 @@ function handleTouch(x, y, type) {
       const _w = layout.windowW
       const _h = layout.windowH
 
-      // v0.1.75 复制按钮（顶部条右）
-      // v0.1.69 (D008): v10 prompt 单条 3000+ 字符 + history ×6 + AI 返回 = 单轮 txt 几万字符
-      // wx.setClipboardData 实测 4-5 万字符以上容易失败 → 改为"只复制最新一轮"
-      // v0.2.5-R（先生 15:36 拍板）：加第二个按钮"复制对话"，只复制 messages[1:] 不含 system prompt
-      if (type === 'end' && layout._copyBtn && y <= closeBarH
-          && x >= layout._copyBtn.x && x <= layout._copyBtn.x + layout._copyBtn.w) {
-        // "全复制"按钮：复制完整调试信息（包括 system prompt）
+      // D035（先生 2026-06-27 23:55 拍板 A 方案）：5 个 tab 切换 + "复制本 tab" 按钮
+      if (type === 'end' && layout._dbgTabs && y <= closeBarH) {
+        for (let _ti = 0; _ti < layout._dbgTabs.length; _ti++) {
+          const _tb = layout._dbgTabs[_ti]
+          if (x >= _tb.x && x <= _tb.x + _tb.w) {
+            dbgActiveTab = _tb.tabIdx
+            debugScroll = 0
+            return null
+          }
+        }
+      }
+      if (type === 'end' && layout._dbgCopyTabBtn && y <= closeBarH
+          && x >= layout._dbgCopyTabBtn.x && x <= layout._dbgCopyTabBtn.x + layout._dbgCopyTabBtn.w) {
+        // "复制本 tab" 按钮：复用 dbgCopyAIActual/History/PollStatus/Render/Scene
         if (debugLog.length === 0) {
           if (wx.showToast) wx.showToast({ title: '暂无调试数据', icon: 'none' })
           return null
         }
-        const d = debugLog[debugLog.length - 1]
-        let txt = `== 最新一轮 round=${d.round} ==\n`
-        txt += `[INPUT 玩家选项]: ${d.input || '(空)'}\n\n`
-        if (d.messages_to_ai && d.messages_to_ai.length > 0) {
-          txt += `[发给 AI 的 messages]:\n`
-          d.messages_to_ai.forEach((m, j) => {
-            txt += `  ── messages[${j}].role="${m.role}" ──\n${m.content}\n\n`
-          })
-        }
-        if (d.raw_response) txt += `[AI 原始返回]:\n${d.raw_response}\n\n`
-        if (d.all_branches && d.all_branches.length > 0) {
-          txt += `[AI 生成 ${d.all_branches.length} 个分支]:\n`
-          d.all_branches.forEach((b, j) => {
-            txt += `  分支${j + 1} p=${b.p}\n  ${b.content || ''}\n  options: ${JSON.stringify(b.options)}\n\n`
-          })
-        }
-        if (d.resultError) txt += `[ERROR]: ${d.resultError}\n`
+        const COPY_FNS = [dbgCopyAIActual, dbgCopyHistory, dbgCopyPollStatus, dbgCopyRender, dbgCopyScene]
+        const txt = COPY_FNS[dbgActiveTab]()
         if (typeof wx !== 'undefined' && wx.setClipboardData) {
           wx.setClipboardData({
             data: txt,
-            success: () => {
-              if (wx.showToast) wx.showToast({ title: '已复制 ' + txt.length + ' 字符（含 system prompt）', icon: 'none', duration: 1500 })
-            },
-            fail: (e) => {
-              if (wx.showToast) wx.showToast({ title: '复制失败：' + (e.errMsg || ''), icon: 'none' })
-            }
+            success: () => { if (wx.showToast) wx.showToast({ title: '已复制本 tab · ' + txt.length + ' 字符', icon: 'none', duration: 1500 }) },
+            fail: (e) => { if (wx.showToast) wx.showToast({ title: '复制失败：' + (e.errMsg || ''), icon: 'none' }) }
           })
         }
         return null
       }
 
-      // v0.2.5-R："复制对话"按钮 — 只复制 messages[1:] 跳过 system prompt（先生反馈太长粘贴不下来）
-      if (type === 'end' && layout._dialogBtn && y <= closeBarH
-          && x >= layout._dialogBtn.x && x <= layout._dialogBtn.x + layout._dialogBtn.w) {
-        if (debugLog.length === 0) {
-          if (wx.showToast) wx.showToast({ title: '暂无调试数据', icon: 'none' })
-          return null
-        }
-        const d = debugLog[debugLog.length - 1]
-        let txt = `== 最新一轮 round=${d.round} 对话（不含 system prompt）==\n`
-        txt += `[INPUT 玩家选项]: ${d.input || '(空)'}\n\n`
-        if (d.messages_to_ai && d.messages_to_ai.length > 1) {
-          txt += `[对话流]:\n`
-          // 跳过 messages[0]（system prompt），从 messages[1] 开始
-          d.messages_to_ai.slice(1).forEach((m, j) => {
-            txt += `  ── [${j + 1}] ${m.role} ──\n${m.content}\n\n`
-          })
-        } else {
-          txt += `[对话流]: (无)\n`
-        }
-        if (d.raw_response) txt += `[AI 原始返回]:\n${d.raw_response}\n\n`
-        if (d.all_branches && d.all_branches.length > 0) {
-          txt += `[AI 生成 ${d.all_branches.length} 个分支]:\n`
-          d.all_branches.forEach((b, j) => {
-            txt += `  分支${j + 1} p=${b.p}\n  ${b.content || ''}\n  options: ${JSON.stringify(b.options)}\n\n`
-          })
-        }
-        if (d.resultError) txt += `[ERROR]: ${d.resultError}\n`
-        if (typeof wx !== 'undefined' && wx.setClipboardData) {
-          wx.setClipboardData({
-            data: txt,
-            success: () => {
-              if (wx.showToast) wx.showToast({ title: '已复制 ' + txt.length + ' 字符（已跳 system prompt）', icon: 'none', duration: 1500 })
-            },
-            fail: (e) => {
-              if (wx.showToast) wx.showToast({ title: '复制失败：' + (e.errMsg || ''), icon: 'none' })
-            }
-          })
-        }
-        return null
-      }
-
+      // 顶部条非按钮区 = 关闭（折叠）
       if (type === 'end' && y <= closeBarH) {
         debugOpen = false
         return null

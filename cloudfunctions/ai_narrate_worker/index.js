@@ -292,7 +292,7 @@ async function backgroundTask(request_id, payload) {
       system_messages: systemMessages,  // v0.1.80 — 前端拿来渲染 [system · XXX]
       closest_board: closestBoardInfo,  // v0.6.35 — 前端展示榜单接近度
       is_retry: is_retry,
-      debug: { system_prompt: systemPrompt, user_prompt: userPrompt, messages, raw_response: rawContent, perf_logs: perfLogs },
+      debug: { system_prompt: systemPrompt, user_prompt: userPrompt, messages, raw_response: rawContent, perf_logs: perfLogs, attr_patch: attrPatch, picked_branch: picked },
     }
 
     // v0.1.76 新增：写独立的 narrate_result 集合（固定 schema，无动态字段问题）

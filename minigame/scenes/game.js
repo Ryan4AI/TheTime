@@ -551,6 +551,9 @@ function pollNarrateResult(requestId, action, userInput, attempt, pollStartMs) {
               last.messages_to_ai = result.debug.messages || null
               last.raw_response = result.debug.raw_response
               last.all_branches = result.branches || null
+              // D037（先生 2026-06-28 01:14 拍板 A 方案）：AI₂ 评分结果（attrPatch）从 worker 传过来, DBG tab 2 展示
+              if (result.debug.attr_patch) last.attr_patch = result.debug.attr_patch
+              if (result.debug.picked_branch) last.picked_branch = result.debug.picked_branch
             }
             last.poll_elapsed_ms = (pollResult.result && pollResult.result.elapsed_ms) || 0
             last.poll_attempts = attempt + 1
@@ -641,6 +644,9 @@ function handleAIResponse(result, action, userInput) {
         if (result.debug.user_prompt) last.user_prompt = result.debug.user_prompt
         if (result.debug.messages) last.messages_to_ai = result.debug.messages
         if (result.debug.perf_logs) last.perf_logs = result.debug.perf_logs
+        // D037（先生 2026-06-28 01:14 拍板 A 方案）：attrPatch 从 worker 写进 debug, 前端 DBG tab 2 AI₂ 评分展示
+        if (result.debug.attr_patch) last.attr_patch = result.debug.attr_patch
+        if (result.debug.picked_branch) last.picked_branch = result.debug.picked_branch
       }
     }
     errorMsg = `史官落笔卡壳了——${(result && result.error) || 'AI服务暂不可用'}。点此重试。`
@@ -2591,14 +2597,19 @@ function dbgTrunc(s) {
 function dbgGetLast() {
   return debugLog.length > 0 ? debugLog[debugLog.length - 1] : null
 }
+// D037（先生 2026-06-28 01:14 拍板 A 方案）：5 个 dbgCopy 函数对应 5 个 tab
 function dbgCopyAIActual() {
   const last = dbgGetLast()
-  return last && last.raw_response ? `[AI 原始返回]\n${dbgTrunc(last.raw_response)}` : '[AI 原始返回] 无数据（未收到 LLM 输出）'
+  return last && last.raw_response ? `[AI₁ 原始返回]\n${dbgTrunc(last.raw_response)}` : '[AI₁ 原始返回] 无数据'
+}
+function dbgCopyScoringAI() {
+  const last = dbgGetLast()
+  return last && last.attr_patch ? `[AI₂ attrPatch]\n${dbgTrunc(JSON.stringify(last.attr_patch, null, 2))}` : '[AI₂ attrPatch] 无数据'
 }
 function dbgCopyHistory() {
   const last = dbgGetLast()
-  if (last && last.messages) return `[对话流]\n${dbgTrunc(last.messages)}`
-  return '[对话流] 无数据（debugLog 没记录 messages）'
+  if (last && last.messages_to_ai) return `[对话流]\n${dbgTrunc(JSON.stringify(last.messages_to_ai, null, 2))}`
+  return '[对话流] 无数据'
 }
 function dbgCopyPollStatus() {
   const last = dbgGetLast()
@@ -2606,14 +2617,10 @@ function dbgCopyPollStatus() {
   const perfMs = last && last.perf_logs ? last.perf_logs.map(p => `${p.stage}=${p.ms}ms`).join(', ') : ''
   return `[POLL 状态]\n${dbgTrunc(status)}\n[PERF] ${perfMs || '无'}`
 }
-function dbgCopyRender() {
-  const last = dbgGetLast()
-  return `[DEBUG 渲染]\n${dbgTrunc(last && last.drawOptions_debug ? last.drawOptions_debug : 'drawOptions 还没被调用')}`
-}
 function dbgCopyScene() {
   const last = dbgGetLast()
-  const s = state || {}
-  return `[场景状态]\nround=${s.round||0}, month=${s.month||1}, year=${s.year||'?'}, age=${s.age||'?'}, alive=${alive}, debugLog.length=${debugLog.length}, currentItems=${(currentItems||[]).length}`
+  const _st = state || {}
+  return `[场景状态]\nround=${_st.round||0}, month=${_st.month||1}, year=${_st.year||'?'}, age=${_st.age||'?'}, alive=${alive}, debugLog.length=${debugLog.length}, currentItems=${(currentItems||[]).length}`
 }
 function dbgDoCopy(text) {
   if (typeof wx !== 'undefined' && wx.setClipboardData) {
@@ -2682,7 +2689,7 @@ function drawDebugPanel(ctx) {
 
   // D035（先生 2026-06-27 23:55 拍板 A 方案）：5 个 tab 切换 + 1 个"复制本 tab"按钮, 替代旧的"全复制/复制对话"
   const _ARROW_SIZE = 28  // 占位用,避免 const 重复声明
-  const TAB_LABELS = ['AI原始', '对话流', 'POLL', '渲染', '场景']
+  const TAB_LABELS = ['AI₁ 叙事', 'AI₂ 评分', '对话流', 'POLL', '场景']
   const tabBtnW = 56
   const tabBtnH = closeBarH - 8
   const tabBtnY = 4
@@ -2782,25 +2789,43 @@ function drawDebugPanel(ctx) {
     allText += `[is_retry]: ${d.data && d.data.is_retry ? 'true' : 'false'}, [action]: ${d.action || '?'}\n`
 
     if (dbgActiveTab === 0) {
-      // tab 0 = AI原始返回
-      if (d.raw_response) allText += `[AI 原始返回]:\n${d.raw_response}\n\n`
+      // tab 0 = AI₁ 叙事返回（叙事 AI 原始输出）
+      if (d.raw_response) allText += `[AI₁ 原始返回]:\n${d.raw_response}\n\n`
       if (d.all_branches && d.all_branches.length > 0) {
-        allText += `[AI 生成 ${d.all_branches.length} 个分支]:\n`
+        allText += `[AI₁ 生成 ${d.all_branches.length} 个分支]:\n`
         d.all_branches.forEach((b, j) => {
           allText += `  分支${j + 1} p=${b.p}\n  ${b.content || ''}\n  options: ${JSON.stringify(b.options)}\n\n`
         })
       }
+      if (d.picked_branch) {
+        allText += `[AI₁ 选中分支]:\n  content: ${(d.picked_branch.content || '').slice(0, 200)}...\n  options: ${JSON.stringify(d.picked_branch.options)}\n\n`
+      }
       if (d.resultError) allText += `\n╔════ ERROR ════╗\n${d.resultError}\n╚════════════════╝\n\n`
     } else if (dbgActiveTab === 1) {
-      // tab 1 = 对话流
+      // tab 1 = AI₂ 评分（attrPatch: 9 属性 + month_delta + items, D036 patch 字段从叙事 AI 拆出）
+      if (d.attr_patch) {
+        allText += `[AI₂ attrPatch 完整 JSON]:\n${JSON.stringify(d.attr_patch, null, 2)}\n\n`
+        if (d.attr_patch.month_delta !== undefined) allText += `[AI₂ month_delta] ${d.attr_patch.month_delta}\n`
+        if (d.attr_patch.items) allText += `[AI₂ items] ${JSON.stringify(d.attr_patch.items)}\n`
+        const attrs = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
+        for (const a of attrs) {
+          if (d.attr_patch[a] !== undefined) allText += `[AI₂ ${a}] ${d.attr_patch[a] >= 0 ? '+' : ''}${d.attr_patch[a]}\n`
+        }
+      } else {
+        allText += '[AI₂ attrPatch] 无数据(可能 AI₂ 未调用或失败)\n'
+      }
+    } else if (dbgActiveTab === 2) {
+      // tab 2 = 对话流（messages_to_ai 完整, 含 system prompt）
       if (d.messages_to_ai && d.messages_to_ai.length > 0) {
-        allText += `[发给 AI 的 messages]:\n`
+        allText += `[发给 AI₁ 的 messages]:\n`
         d.messages_to_ai.forEach((m, j) => {
           allText += `  ── messages[${j}].role="${m.role}" ──\n${m.content}\n\n`
         })
+      } else {
+        allText += '[messages_to_ai] 无数据\n'
       }
-    } else if (dbgActiveTab === 2) {
-      // tab 2 = POLL 状态
+    } else if (dbgActiveTab === 3) {
+      // tab 3 = POLL + 性能诊断
       if (d.poll_attempts !== undefined) allText += `[poll_attempts]: ${d.poll_attempts}, [poll_elapsed_ms]: ${d.poll_elapsed_ms || 0}\n`
       if (d.perf_logs && d.perf_logs.length > 0) {
         allText += `⏱️ [PERF 延迟诊断]\n`
@@ -2813,23 +2838,24 @@ function drawDebugPanel(ctx) {
         }
       }
       if (d.poll_status) allText += `[poll_status]: ${d.poll_status}\n`
-    } else if (dbgActiveTab === 3) {
-      // tab 3 = 渲染（含画图 prompt/url/seed + drawOptions_debug）
+    } else if (dbgActiveTab === 4) {
+      // tab 4 = 场景（合并旧 tab 3 渲染 + 旧 tab 4 场景）
+      // A: 渲染信息
       if (d.bg_prompt) {
+        allText += `── 渲染 ──\n`
         allText += `[BG_DRAW] dynasty=${d.bg_dynasty || '?'}, city=${d.bg_city || '?'}, seed=${d.bg_seed}, load=${d.bg_load || 'pending'}\n`
         allText += `[BG_PROMPT] ${d.bg_prompt}\n`
         allText += `[BG_HINT] ${d.bg_narrative_hint || ''}\n`
         allText += `[BG_URL] ${d.bg_url}\n\n`
       }
       if (d.drawOptions_debug) allText += `[drawOptions_debug]\n${d.drawOptions_debug}\n`
-      if (d.layout_debug) allText += `[layout]\n${d.layout_debug}\n`
-    } else if (dbgActiveTab === 4) {
-      // tab 4 = 场景状态（state 全字段）
-      const s = state || {}
-      const sKeys = Object.keys(s).sort()
-      allText += `[state 全字段 ${sKeys.length} 个]:\n`
+      if (d.layout_debug) allText += `[layout]\n${d.layout_debug}\n\n`
+      // B: state 全字段
+      const _st = state || {}
+      const sKeys = Object.keys(_st).sort()
+      allText += `── 场景状态 ──\n[state 全字段 ${sKeys.length} 个]:\n`
       for (const k of sKeys) {
-        const v = s[k]
+        const v = _st[k]
         const vStr = typeof v === 'object' ? JSON.stringify(v) : String(v)
         allText += `  ${k}: ${vStr.length > 100 ? vStr.slice(0, 100) + '...' : vStr}\n`
       }
@@ -3281,7 +3307,7 @@ function handleTouch(x, y, type) {
           if (wx.showToast) wx.showToast({ title: '暂无调试数据', icon: 'none' })
           return null
         }
-        const COPY_FNS = [dbgCopyAIActual, dbgCopyHistory, dbgCopyPollStatus, dbgCopyRender, dbgCopyScene]
+        const COPY_FNS = [dbgCopyAIActual, dbgCopyScoringAI, dbgCopyHistory, dbgCopyPollStatus, dbgCopyScene]
         const txt = COPY_FNS[dbgActiveTab]()
         if (typeof wx !== 'undefined' && wx.setClipboardData) {
           wx.setClipboardData({

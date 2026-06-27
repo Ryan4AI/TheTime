@@ -59,7 +59,7 @@ const MM_BASE_URL = 'https://api.minimaxi.com/v1'
 const MM_MODEL = 'MiniMax-M2.7-highspeed'
 const MM_FALLBACK_MODEL = 'MiniMax-M2.7-highspeed'
 const MAX_TOKENS = 1500  // v3.0.9: 单分支 narrative 只需 ~500 token，1500 给 LLM 推理余量
-const SCORE_MAX_TOKENS = 300
+const SCORE_MAX_TOKENS = 800  // D045：AI₂ JSON 9 属性 + month_delta + items 至少 200 token, 300 太短经常截断
 const TEMPERATURE = 0.85
 const LLM_TIMEOUT_MS = 110000
 
@@ -1157,8 +1157,7 @@ async function callScoringAI(content, prevState) {
     `剧情：`,
     content || '（平淡日常，无特殊事件）',
     ``,
-    `请根据剧情内容，分析玩家经历了什么、得到了什么、失去了什么、时间跨度如何、物品有什么变化。`,
-    `返回 JSON 对象（含 9 项属性变化 + month_delta + items）：`,
+    `请根据剧情内容评估属性变化。返回 JSON 对象(9 属性 + month_delta + items 可选)：`,
     `{`,
     `  "声望": 整数（-200~+500）· 官方表彰、民间传颂、英雄事迹 → +；声誉受损、被冤枉 → -`,
     `  "财富": 整数（-500~+1000）· 经商获利、赏赐、掠夺 → +；损失、被骗、缴纳 → -`,
@@ -1176,10 +1175,7 @@ async function callScoringAI(content, prevState) {
     `    - 6：半年跨度("秋去冬来")`,
     `    - 12：跨年("转眼一年")`,
     `    - 60：极端("十年后..."),不要常用`,
-    `  "items": 物品状态变化(可选字段, 没变化不写)：`,
-    `    - 物品名见"当前状态"段"携带物品"中的中文("茶包"/"针线包"/"镊子")`,
-    `    - "<物品名>": 数字 → 减少该物品 durability(数字 = 损耗值；durability 减到 0 时物品消失)`,
-    `    - 新物品获取：对象格式 {"id":"可选短id","name":"物品名","icon":"单 emoji","desc":"1-2 句描述","durability":100}`,
+    `  "items": 可选。物品耐久损耗：{"<物品名>": <损耗值>}。剧情中提到物品丢失/损坏就在这里写。新物品获取不由 AI₂ 处理(叙事 AI 决定)。`,
     `}`,
     ``,
     `规则：`,
@@ -1190,7 +1186,7 @@ async function callScoringAI(content, prevState) {
     `- 没有相关行为的属性 = 0（不要无中生有）`,
     `- 年龄约束：${age < 8 ? '玩家不足8岁，学识/医术/战功/文采/政绩/义行/财富均只能为0（幼儿不可能获得这些成就类属性）。声望最多±5。' : age < 15 ? '玩家不足15岁（少年），学识/文采最多±10；医术/战功/政绩最多±5；义行最多±10；财富最多±5。' : '成年玩家无额外年龄约束。'}`,
     `- 只返回 JSON 对象，不要任何其他文字`,
-    `例：{"声望":30,"财富":-200,"学识":10,"颜值":0,"医术":0,"战功":0,"文采":0,"政绩":0,"义行":50,"month_delta":1,"items":{"茶包":-15}}`,
+    `例：{"声望":30,"财富":-200,"学识":10,"颜值":0,"医术":0,"战功":0,"文采":0,"政绩":0,"义行":50,"month_delta":1}`,
   ].join('\n')
 
   try {
@@ -1221,9 +1217,12 @@ async function callScoringAI(content, prevState) {
   } catch (e) {
     console.error('[callScoringAI] 评分AI失败:', e.message)
   }
-  // 保底：全 0
+  // D045：fallback 改温和变动(财富-10 因吃饭, 其他 0), 避免玩家属性永远不变
   const fallback = {}; for (const a of ATTR_NAMES) fallback[a] = 0
-  return { attrPatch: fallback, scorePrompt, scoreRawResponse: '(解析失败)' }
+  fallback.财富 = -10
+  fallback.month_delta = 0
+  // 记录 raw 内容(不是字符串"(解析失败)")方便 D045 排查
+  return { attrPatch: fallback, scorePrompt, scoreRawResponse: raw || '(无响应)' }
 }
 
 function callLLM(messages, modelOverride) {

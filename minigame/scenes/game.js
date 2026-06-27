@@ -57,6 +57,9 @@ const C = {
 var debugLog = []            // 最近 N 轮完整 input/result
 var debugOpen = false        // 浮窗展开/折叠
 var debugScroll = 0          // 浮窗内滚动偏移
+var dbgSelectorOpen = false  // 折叠态点 DBG 图标弹出的"选组复制"弹层
+var dbgCopyToast = ''        // 复制成功的 toast（自动消失）
+var dbgCopyToastTs = 0       // toast 时间戳
 const DEBUG_MAX_ROUNDS = 3   // 保留最近 3 轮
 // v0.1.63: 小游戏没有 move 事件，改用 ▲▼ 箭头按钮滚动
 var bgImgEl = null           // <image> 元素缓存
@@ -418,7 +421,7 @@ function callAI(userInput) {
         }
         const requestId = submitResult.request_id
         // 开始轮询
-        pollNarrateResult(requestId, action, userInput, 0)
+        pollNarrateResult(requestId, action, userInput, 0, Date.now())  // v3.0.14aic: 传 pollStartMs
       },
       fail: (err) => {
         if (debugLog.length > 0) {
@@ -441,19 +444,24 @@ function callAI(userInput) {
 
 // ─────── 轮询 narrate_get_result ───────
 // v3.0.10: 流式版本·每 1 秒轮询一次（流式期间 partial_content 累积显示）·done 后走原路径
-function pollNarrateResult(requestId, action, userInput, attempt) {
+// v3.0.14aic: 用 pollStartMs（函数级闭包）算真实秒数，不再用 debugLog.last.ts（脏数据）
+function pollNarrateResult(requestId, action, userInput, attempt, pollStartMs) {
+  if (pollStartMs == null) pollStartMs = Date.now()  // v3.0.14aic: 首次调用记录起点
   const MAX_ATTEMPTS = 60  // 60 秒兜底（流式一般 10-15s 内完成）
   const POLL_INTERVAL_MS = 500  // v3.0.14m: 500ms 高频轮询（先生 19:20 反馈"1 秒卡顿感强"）
+
+  // v3.0.14aic: 用闭包里的 pollStartMs 算真实秒数（attempt*5 / debugLog.last.ts 都是错的）
+  const elapsedSec = Math.floor((Date.now() - pollStartMs) / 1000)
 
   if (attempt >= MAX_ATTEMPTS) {
     loading = false
     // v0.2.3: 超时时填齐 debugLog
     if (debugLog.length > 0) {
       const last = debugLog[debugLog.length - 1]
-      last.resultError = `[POLL_TIMEOUT] 超时 ${attempt * 5} 秒（attempt=${attempt}/${MAX_ATTEMPTS}）, ts=${Date.now()}, elapsed_ms=${Date.now() - last.ts}`
+      last.resultError = `[POLL_TIMEOUT] 超时 ${elapsedSec} 秒（attempt=${attempt}/${MAX_ATTEMPTS}）, ts=${Date.now()}, elapsed_ms=${Date.now() - last.ts}`
       last.poll_attempts = attempt
     }
-    errorMsg = `史官落笔太久没回音（已等 ${attempt * 5} 秒）。点此重试。`
+    errorMsg = `史官落笔太久没回音（已等 ${elapsedSec} 秒）。点此重试。`
     options = [{ label: '重试', key: '__retry__' }]
     optionsAppearTime = Date.now() + 300
     return
@@ -515,11 +523,10 @@ function pollNarrateResult(requestId, action, userInput, attempt) {
             // v3.0.14: 选项时机跟 streamedText 对齐（保持"打字完才出"习惯）
             optionsAppearTime = displayStartTime + streamedText.length * TYPEWRITE_SPEED + 300
           }
-          // 流式 loading 文案：只显示真实秒数（partialWriter 500ms 切片后字数跳太快，秒数更直观）
-          const elapsedSec = Math.round((Date.now() - (debugLog[debugLog.length - 1]?.ts || Date.now())) / 1000)
+          // v3.0.14aic: 流式 loading 文案用真实秒数（闭包 pollStartMs，不用 debugLog.last.ts）
           loadingText = `史官正在落笔… ${elapsedSec}秒`
           // 继续轮询
-          pollNarrateResult(requestId, action, userInput, attempt + 1)
+          pollNarrateResult(requestId, action, userInput, attempt + 1, pollStartMs)
           return
         }
 
@@ -565,8 +572,9 @@ function pollNarrateResult(requestId, action, userInput, attempt) {
           // v0.1.75 的 3 次（15 秒）只够等 10 秒 LLM 响应，现在 LLM 跑 37 秒，3 次放弃太激进
           // 24 次（120 秒）给 LLM 留 80 秒缓冲；超过 2 分钟基本就是 worker 真挂了
           if (attempt < 24) {
-            loadingText = `史官正在落笔…（已等 ${(attempt + 1) * 5} 秒）`
-            pollNarrateResult(requestId, action, userInput, attempt + 1)
+            // v3.0.14aic: 用真实秒数（attempt*5 是错的，每跳 +5 秒不准）
+            loadingText = `史官正在落笔…（已等 ${elapsedSec} 秒）`
+            pollNarrateResult(requestId, action, userInput, attempt + 1, pollStartMs)
           } else {
             loading = false
             // v0.2.3: 3 次后还 not_found，标记
@@ -583,7 +591,7 @@ function pollNarrateResult(requestId, action, userInput, attempt) {
           // processing — 更新 loading 文案让玩家知道还在等
           const elapsedSec = Math.round((pollResult.elapsed_ms || 0) / 1000)
           loadingText = `史官正在落笔…（已等 ${elapsedSec} 秒）`
-          pollNarrateResult(requestId, action, userInput, attempt + 1)
+          pollNarrateResult(requestId, action, userInput, attempt + 1, pollStartMs)
         }
       },
       fail: (err) => {
@@ -602,7 +610,7 @@ function pollNarrateResult(requestId, action, userInput, attempt) {
           return
         }
         // 继续轮询
-        pollNarrateResult(requestId, action, userInput, attempt + 1)
+        pollNarrateResult(requestId, action, userInput, attempt + 1, pollStartMs)
       },
     })
   }, POLL_INTERVAL_MS)
@@ -1669,6 +1677,15 @@ function drawOptions(ctx) {
   const fadeIn = layout.optionFadeIn || 0
   if (fadeIn <= 0) return
 
+  // v3.0.14ai-dbg: 每帧填一次 drawOptions 调试字段（只记首次进入，避免刷爆）
+  if (debugLog.length > 0) {
+    const last = debugLog[debugLog.length - 1]
+    if (!last.drawOptions_called) {
+      last.drawOptions_called = true
+      last.drawOptions_debug = `options.length=${options.length}, fadeIn=${fadeIn}, optionY=${layout.optionY}, displayedChars=${displayedChars}, narrative.length=${narrative.length}, streamedText.length=${(streamedText||'').length}`
+    }
+  }
+
   const optX = layout.padding
   const optW = layout.windowW - layout.padding * 2
   const optGap = layout.optionGap || 3
@@ -2542,8 +2559,60 @@ function drawError(ctx) {
 // ─────── AI 调试浮窗（v0.1.61）────
 // 折叠：右上角小图标"DBG"（v0.1.60 改 — Emoji 在 Canvas 2D 不显示）
 // 展开：全屏覆盖，显示最近 3 轮完整 input/result
+
+// v3.0.14ai-dbg: 5 组复制（先生 02:34 拍板"以后每加 DBG 数据都要有按钮可以复制"）
+// 折叠态点 DBG 图标先弹选组弹层（不发全量，文字太多微信发不过去）
+const DBG_COPY_MAX = 1500  // 微信消息字数限制，截断到 1500 字
+function dbgTrunc(s) {
+  if (typeof s !== 'string') s = JSON.stringify(s, null, 2)
+  if (s.length > DBG_COPY_MAX) return s.slice(0, DBG_COPY_MAX) + '\n... [已截断，共 ' + s.length + ' 字]'
+  return s
+}
+function dbgGetLast() {
+  return debugLog.length > 0 ? debugLog[debugLog.length - 1] : null
+}
+function dbgCopyAIActual() {
+  const last = dbgGetLast()
+  return last && last.raw_response ? `[AI 原始返回]\n${dbgTrunc(last.raw_response)}` : '[AI 原始返回] 无数据（未收到 LLM 输出）'
+}
+function dbgCopyHistory() {
+  const last = dbgGetLast()
+  if (last && last.messages) return `[对话流]\n${dbgTrunc(last.messages)}`
+  return '[对话流] 无数据（debugLog 没记录 messages）'
+}
+function dbgCopyPollStatus() {
+  const last = dbgGetLast()
+  const status = last ? (last.resultError || ('round=' + (last.round||'?') + ', result=' + (last.result?'OK':'null'))) : 'no last round'
+  const perfMs = last && last.perf_logs ? last.perf_logs.map(p => `${p.stage}=${p.ms}ms`).join(', ') : ''
+  return `[POLL 状态]\n${dbgTrunc(status)}\n[PERF] ${perfMs || '无'}`
+}
+function dbgCopyRender() {
+  const last = dbgGetLast()
+  return `[DEBUG 渲染]\n${dbgTrunc(last && last.drawOptions_debug ? last.drawOptions_debug : 'drawOptions 还没被调用')}`
+}
+function dbgCopyScene() {
+  const last = dbgGetLast()
+  const s = state || {}
+  return `[场景状态]\nround=${s.round||0}, month=${s.month||1}, year=${s.year||'?'}, age=${s.age||'?'}, alive=${alive}, debugLog.length=${debugLog.length}, currentItems=${(currentItems||[]).length}`
+}
+function dbgDoCopy(text) {
+  if (typeof wx !== 'undefined' && wx.setClipboardData) {
+    wx.setClipboardData({ data: text, success: () => { dbgCopyToast = '已复制到剪贴板 ✓'; dbgCopyToastTs = Date.now() } })
+  } else {
+    // 浏览器 mock 兜底
+    if (typeof console !== 'undefined') console.log('[DBG 复制]', text)
+    dbgCopyToast = '已复制到控制台（mock 环境）'
+    dbgCopyToastTs = Date.now()
+  }
+}
 function drawDebugPanel(ctx) {
   if (debugLog.length === 0) return
+
+  // v3.0.14ai-dbg: 弹层（dbgSelectorOpen）覆盖在折叠态之上
+  if (dbgSelectorOpen) {
+    drawDbgSelector(ctx)
+    return
+  }
 
   if (!debugOpen) {
     // 折叠态：右上角小图标（v0.6.50: 移入状态栏右侧，避免与系统···叠一起）
@@ -2774,6 +2843,124 @@ function drawDebugPanel(ctx) {
     ctx.fillStyle = 'rgba(240,200,120,0.4)'
     ctx.fillRect(w - 4, barY, 4, barH)
   }
+}
+
+// v3.0.14ai-dbg: 选组复制弹层（折叠态点 DBG 图标触发）
+// 5 组按钮（每组复制对应数据到剪贴板）+ 1 个"完整大浮窗"按钮
+// 弹层在 DBG 图标附近弹一个 200×260 的小窗，不抢屏
+function drawDbgSelector(ctx) {
+  const w = layout.windowW
+  const h = layout.windowH
+  const safeTop = layout.safeTop || 0
+  const topBarH = layout.topBarH || 0
+
+  // 半透遮罩
+  ctx.fillStyle = 'rgba(0,0,0,0.55)'
+  ctx.fillRect(0, 0, w, h)
+
+  // 弹层位置（DBG 图标下方）
+  const panelW = 220
+  const panelH = 360
+  const panelX = w - layout.padding - 12 - panelW
+  const panelY = safeTop + topBarH + 32
+  const headerH = 36
+  const footerH = 40
+  const btnH = 40
+  const btnGap = 6
+
+  // 弹层底
+  ctx.fillStyle = 'rgba(20,15,25,0.97)'
+  roundRect(ctx, panelX, panelY, panelW, panelH, 8)
+  ctx.fill()
+  ctx.strokeStyle = '#f0c878'
+  ctx.lineWidth = 1.2
+  roundRect(ctx, panelX, panelY, panelW, panelH, 8)
+  ctx.stroke()
+
+  // 弹层标题
+  ctx.fillStyle = '#f0c878'
+  ctx.font = 'bold 14px "STKaiti", "KaiTi", "楷体", sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('DBG 选组复制', panelX + panelW / 2, panelY + headerH / 2 + 1)
+
+  // 5 组按钮（先生 02:36 拍板：5 组够）
+  const groups = [
+    { label: 'AI 原始返回', copy: dbgCopyAIActual },
+    { label: '对话流', copy: dbgCopyHistory },
+    { label: 'POLL 状态', copy: dbgCopyPollStatus },
+    { label: 'DEBUG 渲染', copy: dbgCopyRender },
+    { label: '场景状态', copy: dbgCopyScene },
+  ]
+  let curY = panelY + headerH + 10
+  const btnX = panelX + 12
+  const btnW = panelW - 24
+  layout._dbgSelBtns = []  // 清空旧 bounds
+  for (let i = 0; i < groups.length; i++) {
+    const g = groups[i]
+    // 按钮底（半透金色）
+    ctx.fillStyle = 'rgba(240,200,120,0.18)'
+    roundRect(ctx, btnX, curY, btnW, btnH, 5)
+    ctx.fill()
+    ctx.strokeStyle = 'rgba(240,200,120,0.4)'
+    ctx.lineWidth = 1
+    roundRect(ctx, btnX, curY, btnW, btnH, 5)
+    ctx.stroke()
+    // 文字
+    ctx.fillStyle = '#f0c878'
+    ctx.font = '13px "STKaiti", "KaiTi", "楷体", sans-serif'
+    ctx.fillText(g.label, btnX + btnW / 2, curY + btnH / 2 + 1)
+    // 保存 bounds 给 onTouch 用
+    layout._dbgSelBtns.push({ x: btnX, y: curY, w: btnW, h: btnH, copy: g.copy })
+    curY += btnH + btnGap
+  }
+
+  // 底部"完整大浮窗"按钮 + "关闭"按钮
+  const footerY = panelY + panelH - footerH - 8
+  // 完整大浮窗按钮（蓝色高亮）
+  const fullBtnW = (panelW - 24 - 8) / 2
+  ctx.fillStyle = 'rgba(120,180,240,0.22)'
+  roundRect(ctx, btnX, footerY, fullBtnW, 32, 5)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(120,180,240,0.5)'
+  ctx.lineWidth = 1
+  roundRect(ctx, btnX, footerY, fullBtnW, 32, 5)
+  ctx.stroke()
+  ctx.fillStyle = '#a0d0f0'
+  ctx.font = '12px sans-serif'
+  ctx.fillText('完整大浮窗', btnX + fullBtnW / 2, footerY + 16 + 1)
+  layout._dbgSelFullBtn = { x: btnX, y: footerY, w: fullBtnW, h: 32 }
+
+  // 关闭按钮
+  const closeBtnX = btnX + fullBtnW + 8
+  ctx.fillStyle = 'rgba(192,80,80,0.22)'
+  roundRect(ctx, closeBtnX, footerY, fullBtnW, 32, 5)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(192,80,80,0.5)'
+  ctx.lineWidth = 1
+  roundRect(ctx, closeBtnX, footerY, fullBtnW, 32, 5)
+  ctx.stroke()
+  ctx.fillStyle = '#e0a0a0'
+  ctx.fillText('关闭', closeBtnX + fullBtnW / 2, footerY + 16 + 1)
+  layout._dbgSelCloseBtn = { x: closeBtnX, y: footerY, w: fullBtnW, h: 32 }
+
+  // toast（复制成功提示，2 秒自动消失）
+  if (dbgCopyToast && Date.now() - dbgCopyToastTs < 2000) {
+    const toastY = panelY + panelH + 8
+    const toastH = 28
+    const toastW = 180
+    const toastX = panelX + (panelW - toastW) / 2
+    ctx.fillStyle = 'rgba(40,80,40,0.92)'
+    roundRect(ctx, toastX, toastY, toastW, toastH, 4)
+    ctx.fill()
+    ctx.fillStyle = '#c0e8a0'
+    ctx.font = '12px sans-serif'
+    ctx.fillText(dbgCopyToast, toastX + toastW / 2, toastY + toastH / 2 + 1)
+  } else if (dbgCopyToast) {
+    dbgCopyToast = ''
+  }
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
 }
 
 // ─────── 触摸处理（支持长按呼出玉牒） ───────
@@ -3015,10 +3202,32 @@ function handleTouch(x, y, type) {
       const iconY = layout.safeTop + layout.topBarH + 1
       if (hitTest(x, y, iconX, iconY, iconSize, iconSize)) {
         if (type === 'end') {
-          debugOpen = true
-          debugScroll = 0
+          // v3.0.14ai-dbg: 先生 02:34 拍板"折叠态点 DBG → 弹选组复制弹层（不全复制）"
+          dbgSelectorOpen = true
         }
         return null  // 拦截，不传给游戏主流程
+      }
+      // v3.0.14ai-dbg: 弹层打开时，命中 5 组按钮 / 完整大浮窗 / 关闭
+      if (dbgSelectorOpen && type === 'end') {
+        if (layout._dbgSelBtns) {
+          for (let i = 0; i < layout._dbgSelBtns.length; i++) {
+            const b = layout._dbgSelBtns[i]
+            if (hitTest(x, y, b.x, b.y, b.w, b.h)) {
+              dbgDoCopy(b.copy())
+              return null
+            }
+          }
+        }
+        if (layout._dbgSelFullBtn && hitTest(x, y, layout._dbgSelFullBtn.x, layout._dbgSelFullBtn.y, layout._dbgSelFullBtn.w, layout._dbgSelFullBtn.h)) {
+          dbgSelectorOpen = false
+          debugOpen = true
+          debugScroll = 0
+          return null
+        }
+        if (layout._dbgSelCloseBtn && hitTest(x, y, layout._dbgSelCloseBtn.x, layout._dbgSelCloseBtn.y, layout._dbgSelCloseBtn.w, layout._dbgSelCloseBtn.h)) {
+          dbgSelectorOpen = false
+          return null
+        }
       }
     } else {
       // 展开态：点顶部条 = 折叠；点箭头 = 滚动

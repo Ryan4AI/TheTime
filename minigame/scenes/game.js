@@ -554,6 +554,9 @@ function pollNarrateResult(requestId, action, userInput, attempt, pollStartMs) {
               // D037（先生 2026-06-28 01:14 拍板 A 方案）：AI₂ 评分结果（attrPatch）从 worker 传过来, DBG tab 2 展示
               if (result.debug.attr_patch) last.attr_patch = result.debug.attr_patch
               if (result.debug.picked_branch) last.picked_branch = result.debug.picked_branch
+              // D043：AI₂ prompt + raw response 也存 debug, DBG tab 1 展示
+              if (result.debug.score_prompt) last.score_prompt = result.debug.score_prompt
+              if (result.debug.score_raw_response) last.score_raw_response = result.debug.score_raw_response
             }
             last.poll_elapsed_ms = (pollResult.result && pollResult.result.elapsed_ms) || 0
             last.poll_attempts = attempt + 1
@@ -647,6 +650,9 @@ function handleAIResponse(result, action, userInput) {
         // D037（先生 2026-06-28 01:14 拍板 A 方案）：attrPatch 从 worker 写进 debug, 前端 DBG tab 2 AI₂ 评分展示
         if (result.debug.attr_patch) last.attr_patch = result.debug.attr_patch
         if (result.debug.picked_branch) last.picked_branch = result.debug.picked_branch
+        // D043：AI₂ prompt + raw response 写进 debug
+        if (result.debug.score_prompt) last.score_prompt = result.debug.score_prompt
+        if (result.debug.score_raw_response) last.score_raw_response = result.debug.score_raw_response
       }
     }
     errorMsg = `史官落笔卡壳了——${(result && result.error) || 'AI服务暂不可用'}。点此重试。`
@@ -2604,7 +2610,13 @@ function dbgCopyAIActual() {
 }
 function dbgCopyScoringAI() {
   const last = dbgGetLast()
-  return last && last.attr_patch ? `[AI₂ attrPatch]\n${dbgTrunc(JSON.stringify(last.attr_patch, null, 2))}` : '[AI₂ attrPatch] 无数据'
+  // D043：tab 1 复制时同时含 prompt + raw + attrPatch
+  if (!last) return '[AI₂] 无数据'
+  let txt = ''
+  if (last.score_prompt) txt += `[AI₂ scorePrompt]\n${dbgTrunc(last.score_prompt)}\n\n`
+  if (last.score_raw_response) txt += `[AI₂ raw_response]\n${dbgTrunc(last.score_raw_response)}\n\n`
+  if (last.attr_patch) txt += `[AI₂ attrPatch]\n${dbgTrunc(JSON.stringify(last.attr_patch, null, 2))}`
+  return txt || '[AI₂] 无数据'
 }
 function dbgCopyHistory() {
   const last = dbgGetLast()
@@ -2821,6 +2833,12 @@ function drawDebugPanel(ctx) {
       if (d.resultError) allText += `\n╔════ ERROR ════╗\n${d.resultError}\n╚════════════════╝\n\n`
     } else if (dbgActiveTab === 1) {
       // tab 1 = AI₂ 评分（attrPatch: 9 属性 + month_delta + items, D036 patch 字段从叙事 AI 拆出）
+      if (d.score_prompt) {
+        allText += `[AI₂ scorePrompt] (长度 ${d.score_prompt.length}):\n${d.score_prompt}\n\n`
+      }
+      if (d.score_raw_response) {
+        allText += `[AI₂ raw_response]:\n${d.score_raw_response}\n\n`
+      }
       if (d.attr_patch) {
         allText += `[AI₂ attrPatch 完整 JSON]:\n${JSON.stringify(d.attr_patch, null, 2)}\n\n`
         if (d.attr_patch.month_delta !== undefined) allText += `[AI₂ month_delta] ${d.attr_patch.month_delta}\n`

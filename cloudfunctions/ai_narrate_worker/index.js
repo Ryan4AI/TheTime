@@ -210,7 +210,8 @@ async function backgroundTask(request_id, payload) {
     // D036（先生 2026-06-28 01:07 拍板）：patch 字段从叙事 AI 拆出, 由 AI₂ 属性评分函数统一生成
     // 先调 AI₂ 拿到 attrPatch（含 9 属性 + month_delta + items）, 再 applyPatch 合并 month_delta/items
     const t4 = Date.now()
-    const attrPatch = await callScoringAI(picked.content, preUpdate)
+    // D043：解构拿 attrPatch + scorePrompt + scoreRawResponse(前端 DBG 用)
+    const { attrPatch, scorePrompt, scoreRawResponse } = await callScoringAI(picked.content, preUpdate)
     const t5 = Date.now()
     console.log('[PERF] callScoringAI_ms=', t5 - t4)
     perfLogs.push({ stage: 'callScoringAI_ms', ms: t5 - t4 })
@@ -301,7 +302,7 @@ async function backgroundTask(request_id, payload) {
       system_messages: systemMessages,  // v0.1.80 — 前端拿来渲染 [system · XXX]
       closest_board: closestBoardInfo,  // v0.6.35 — 前端展示榜单接近度
       is_retry: is_retry,
-      debug: { system_prompt: systemPrompt, user_prompt: userPrompt, messages, raw_response: rawContent, perf_logs: perfLogs, attr_patch: attrPatch, picked_branch: picked },
+      debug: { system_prompt: systemPrompt, user_prompt: userPrompt, messages, raw_response: rawContent, perf_logs: perfLogs, attr_patch: attrPatch, picked_branch: picked, score_prompt: scorePrompt, score_raw_response: scoreRawResponse },
     }
 
     // v0.1.76 新增：写独立的 narrate_result 集合（固定 schema，无动态字段问题）
@@ -1107,31 +1108,6 @@ function buildSystemPrompt(state, monthEvent) {
     ``,
     `榜单接近度：玩家当前最接近【${closestBoardStr}】。`,
     ``,
-    `# 节奏指导`,
-    ``,
-    `month_delta 不是固定 1，按剧情真实跨度决定：`,
-    ``,
-    `- **回合内（month_delta=0）**：这一回合剧情全在同一月内`,
-    `  - 玩家出门办事、走亲戚、买东西、看病、做决定——这些是"回合内"动作`,
-    `  - content 里不写时间流逝暗示，写场景推进`,
-    `- **次日/几天（month_delta=1~2）**：`,
-    `  - "次日清晨"、"又过了两日"、"三天后"`,
-    `  - 大多数回合的默认`,
-    `- **季节跨度（month_delta=3~6）**：`,
-    `  - "过完冬天开春了"、"入夏了"、"转眼入秋"`,
-    `  - 适合"修养后"、"密谋后"、"等待后"`,
-    `- **年跨度（month_delta=12~24）**：`,
-    `  - "一年就这么过去了"、"两载光阴"`,
-    `  - 适合"战乱后重建"、"长期流放"、"家族衰败"`,
-    `- **极长跨度（month_delta=36~60）**：`,
-    `  - "十年后"、"半生已过"`,
-    `  - **慎用**——一旦用就是大跨度跳跃，玩家会失联感`,
-    `  - 用前必须在前一回合铺垫（"这天夜里你默默许下心愿——若能熬过这关，便用十年换太平"）`,
-    ``,
-    `**关键**：month_delta 是"客观时间推进"，与回合节奏独立。一回合可以跳 12 个月（比如"三年的仗打完"），也可以 12 回合都在同一个月（比如围城战）。`,
-    ``,
-    `**写时间跨度时**：content 里仍然用季节/节气（"入秋了"、"惊蛰前后"），不要写具体月份。month_delta 是"系统推进用"，content 是"叙事用"，两套语言独立。`,
-    ``,
     `约束：`,
     `现在只输出 1 个 narrative（不再有 p 字段）· 不需要管"分支 p 之和"`,
     `- content 中不要包含任何概率信息、不要写"你可以选择"`,
@@ -1239,14 +1215,15 @@ async function callScoringAI(content, prevState) {
           result[a] = 0
         }
       }
-      return result
+      // D043：返回完整结构(含 prompt + raw + parsed attrPatch), 前端 DBG tab 1 能展示
+      return { attrPatch: result, scorePrompt, scoreRawResponse: raw }
     }
   } catch (e) {
     console.error('[callScoringAI] 评分AI失败:', e.message)
   }
   // 保底：全 0
   const fallback = {}; for (const a of ATTR_NAMES) fallback[a] = 0
-  return fallback
+  return { attrPatch: fallback, scorePrompt, scoreRawResponse: '(解析失败)' }
 }
 
 function callLLM(messages, modelOverride) {

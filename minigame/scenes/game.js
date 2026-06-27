@@ -2687,83 +2687,101 @@ function drawDebugPanel(ctx) {
   ctx.fillStyle = '#1a1a1a'
   ctx.fillRect(0, 0, w, closeBarH)
 
-  // D035（先生 2026-06-27 23:55 拍板 A 方案）：5 个 tab 切换 + 1 个"复制本 tab"按钮, 替代旧的"全复制/复制对话"
-  const _ARROW_SIZE = 28  // 占位用,避免 const 重复声明
+  // D039（先生 2026-06-28 01:29 拍板）：tab 按钮放底部, 顶部只保留标题+关闭（避免灵动岛冲突）
   const TAB_LABELS = ['AI₁ 叙事', 'AI₂ 评分', '对话流', 'POLL', '场景']
-  const tabBtnW = 56
-  const tabBtnH = closeBarH - 8
-  const tabBtnY = 4
-  const tabBtnGap = 4
-  // 右侧：▲ → 复制本tab(72) → 关闭(28)
-  const copyTabBtnW = 72
-  const copyTabBtnX = w - _ARROW_SIZE - 8 - copyTabBtnW - 4
-  const closeBtnX = w - _ARROW_SIZE - 8
-  // 5 个 tab 从关闭按钮左侧开始往左排
-  let _curTabX = copyTabBtnX - tabBtnW - tabBtnGap
-  layout._dbgTabs = []
-  for (let _ti = 0; _ti < 5; _ti++) {
-    const isActive = _ti === dbgActiveTab
-    ctx.fillStyle = isActive ? 'rgba(240,200,120,0.45)' : 'rgba(240,200,120,0.12)'
-    ctx.fillRect(_curTabX, tabBtnY, tabBtnW, tabBtnH)
-    ctx.strokeStyle = isActive ? '#f0c878' : 'rgba(240,200,120,0.3)'
-    ctx.lineWidth = 1
-    ctx.strokeRect(_curTabX, tabBtnY, tabBtnW, tabBtnH)
-    ctx.fillStyle = isActive ? '#fff' : '#f0c878'
-    ctx.font = isActive ? 'bold 13px sans-serif' : '13px sans-serif'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(TAB_LABELS[_ti], _curTabX + tabBtnW / 2, closeBarH / 2 + 1)
-    layout._dbgTabs.push({ x: _curTabX, y: 0, w: tabBtnW, h: closeBarH, tabIdx: _ti })
-    _curTabX -= tabBtnW + tabBtnGap
-  }
-  // "复制本 tab"按钮
-  ctx.fillStyle = 'rgba(240,200,120,0.32)'
-  ctx.fillRect(copyTabBtnX, tabBtnY, copyTabBtnW, tabBtnH)
-  ctx.fillStyle = '#f0c878'
-  ctx.font = 'bold 12px sans-serif'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText('复制本tab', copyTabBtnX + copyTabBtnW / 2, closeBarH / 2 + 1)
-  layout._dbgCopyTabBtn = { x: copyTabBtnX, y: 0, w: copyTabBtnW, h: closeBarH }
-
+  const arrowSize = 28
+  // 顶部条：只显示标题 + 关闭按钮
   ctx.fillStyle = '#f0c878'
   ctx.font = 'bold 14px sans-serif'
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
-  ctx.fillText('DBG · ' + TAB_LABELS[dbgActiveTab] + ' · 关闭 ↑', 12, closeBarH / 2)
+  ctx.fillText('DBG · ' + TAB_LABELS[dbgActiveTab], 12, closeBarH / 2)
   ctx.textAlign = 'right'
-  // 向上箭头（顶部右）
-  const arrowSize = 28
-  ctx.fillStyle = 'rgba(240,200,120,0.2)'
+  // 关闭按钮（顶部右）
+  ctx.fillStyle = 'rgba(192,80,80,0.32)'
   ctx.fillRect(w - arrowSize - 8, 2, arrowSize, closeBarH - 4)
   ctx.fillStyle = '#f0c878'
-  ctx.font = 'bold 18px sans-serif'
+  ctx.font = 'bold 13px sans-serif'
   ctx.textAlign = 'center'
-  ctx.fillText('▲', w - arrowSize / 2 - 8, closeBarH / 2 + 1)
-  // 向下箭头（底部）
-  const downY = h - arrowSize - 8
-  ctx.fillStyle = 'rgba(240,200,120,0.2)'
-  ctx.fillRect(w - arrowSize - 8, downY, arrowSize, arrowSize)
-  ctx.fillStyle = '#f0c878'
-  ctx.fillText('▼', w - arrowSize / 2 - 8, downY + arrowSize / 2 + 1)
+  ctx.fillText('×', w - arrowSize / 2 - 8, closeBarH / 2 + 1)
+  layout._dbgCloseBtn = { x: w - arrowSize - 8, y: 0, w: arrowSize, h: closeBarH }
+  // 错误轮数角标（顶部右）
   ctx.textAlign = 'right'
   ctx.fillStyle = '#888'
   ctx.font = '11px sans-serif'
-  // v0.2.5-K（先生 2026-06-13 11:08 拍板）：只显示最近一轮
   ctx.fillText('最近 1 轮', w - arrowSize - 24, closeBarH / 2)
-  // v0.2.5-K：错误轮数角标只在当前轮出错时显示（之前会统计所有保留轮次的错误数）
   const lastRound = debugLog[debugLog.length - 1]
   if (lastRound && lastRound.resultError) {
     ctx.fillStyle = '#ff6060'
     ctx.font = 'bold 11px monospace'
-    ctx.textAlign = 'right'
     ctx.fillText('❌ 出错', w - arrowSize - 24, closeBarH / 2 + 16)
   }
 
-  // 内容区
+  // 底部条（高度 44px）：5 个 tab + 复制本tab + ▲▼ 滚动箭头
+  const bottomBarH = 44
+  const bottomBarY = h - bottomBarH
+  ctx.fillStyle = '#1a1a1a'
+  ctx.fillRect(0, bottomBarY, w, bottomBarH)
+  ctx.strokeStyle = '#444'
+  ctx.lineWidth = 0.5
+  ctx.beginPath()
+  ctx.moveTo(0, bottomBarY + 0.5)
+  ctx.lineTo(w, bottomBarY + 0.5)
+  ctx.stroke()
+
+  const tabBtnH2 = bottomBarH - 8
+  const tabBtnY2 = bottomBarY + 4
+  const tabBtnGap2 = 4
+  // 右侧：▲(28) → 复制本tab(64) → ▼(28)
+  const upBtnX = w - arrowSize * 2 - 16
+  const copyTabBtnW = 64
+  const copyTabBtnX = upBtnX - copyTabBtnW - tabBtnGap2
+  const downBtnX = w - arrowSize - 8
+  // 5 个 tab 从"复制本tab"左侧开始往左排
+  const _ARROW_SIZE = arrowSize  // 占位用,避免 const 重复声明
+  let _curTabX = copyTabBtnX - 56 - tabBtnGap2  // tabBtnW=56
+  layout._dbgTabs = []
+  for (let _ti = 0; _ti < 5; _ti++) {
+    const isActive = _ti === dbgActiveTab
+    ctx.fillStyle = isActive ? 'rgba(240,200,120,0.45)' : 'rgba(240,200,120,0.12)'
+    ctx.fillRect(_curTabX, tabBtnY2, 56, tabBtnH2)
+    ctx.strokeStyle = isActive ? '#f0c878' : 'rgba(240,200,120,0.3)'
+    ctx.lineWidth = 1
+    ctx.strokeRect(_curTabX, tabBtnY2, 56, tabBtnH2)
+    ctx.fillStyle = isActive ? '#fff' : '#f0c878'
+    ctx.font = isActive ? 'bold 12px sans-serif' : '12px sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(TAB_LABELS[_ti], _curTabX + 28, tabBtnY2 + tabBtnH2 / 2 + 1)
+    layout._dbgTabs.push({ x: _curTabX, y: tabBtnY2, w: 56, h: tabBtnH2, tabIdx: _ti })
+    _curTabX -= 56 + tabBtnGap2
+  }
+  // "复制本 tab"按钮
+  ctx.fillStyle = 'rgba(240,200,120,0.32)'
+  ctx.fillRect(copyTabBtnX, tabBtnY2, copyTabBtnW, tabBtnH2)
+  ctx.fillStyle = '#f0c878'
+  ctx.font = 'bold 11px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('复制本tab', copyTabBtnX + copyTabBtnW / 2, tabBtnY2 + tabBtnH2 / 2 + 1)
+  layout._dbgCopyTabBtn = { x: copyTabBtnX, y: tabBtnY2, w: copyTabBtnW, h: tabBtnH2 }
+
+  // ▲▼ 滚动箭头（底部右侧）
+  ctx.fillStyle = 'rgba(240,200,120,0.2)'
+  ctx.fillRect(upBtnX, tabBtnY2, arrowSize, tabBtnH2)
+  ctx.fillStyle = '#f0c878'
+  ctx.font = 'bold 16px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText('▲', upBtnX + arrowSize / 2, tabBtnY2 + tabBtnH2 / 2 + 1)
+  ctx.fillStyle = 'rgba(240,200,120,0.2)'
+  ctx.fillRect(downBtnX, tabBtnY2, arrowSize, tabBtnH2)
+  ctx.fillStyle = '#f0c878'
+  ctx.fillText('▼', downBtnX + arrowSize / 2, tabBtnY2 + tabBtnH2 / 2 + 1)
+
+  // 内容区（D039：减去底部 tab 条高度 bottomBarH）
   ctx.save()
   ctx.beginPath()
-  ctx.rect(0, closeBarH, w, h - closeBarH)
+  ctx.rect(0, closeBarH, w, h - closeBarH - bottomBarH)
   ctx.clip()
 
   ctx.font = '10px monospace'
@@ -3289,8 +3307,12 @@ function handleTouch(x, y, type) {
       const _w = layout.windowW
       const _h = layout.windowH
 
-      // D035（先生 2026-06-27 23:55 拍板 A 方案）：5 个 tab 切换 + "复制本 tab" 按钮
-      if (type === 'end' && layout._dbgTabs && y <= closeBarH) {
+      // D039（先生 2026-06-28 01:29 拍板）：tab 按钮在底部条, 顶部只保留关闭按钮
+      const _bottomBarH = 44
+      const _bottomBarY = _h - _bottomBarH
+      const _ARROW_SZ = 28
+      // 5 个 tab 按钮（在底部条）
+      if (type === 'end' && layout._dbgTabs && y >= _bottomBarY) {
         for (let _ti = 0; _ti < layout._dbgTabs.length; _ti++) {
           const _tb = layout._dbgTabs[_ti]
           if (x >= _tb.x && x <= _tb.x + _tb.w) {
@@ -3300,9 +3322,9 @@ function handleTouch(x, y, type) {
           }
         }
       }
-      if (type === 'end' && layout._dbgCopyTabBtn && y <= closeBarH
+      // "复制本 tab"按钮（在底部条）
+      if (type === 'end' && layout._dbgCopyTabBtn && y >= _bottomBarY
           && x >= layout._dbgCopyTabBtn.x && x <= layout._dbgCopyTabBtn.x + layout._dbgCopyTabBtn.w) {
-        // "复制本 tab" 按钮：复用 dbgCopyAIActual/History/PollStatus/Render/Scene
         if (debugLog.length === 0) {
           if (wx.showToast) wx.showToast({ title: '暂无调试数据', icon: 'none' })
           return null
@@ -3318,26 +3340,24 @@ function handleTouch(x, y, type) {
         }
         return null
       }
-
-      // 顶部条非按钮区 = 关闭（折叠）
-      if (type === 'end' && y <= closeBarH) {
+      // 顶部关闭按钮（x）
+      if (type === 'end' && layout._dbgCloseBtn && y <= closeBarH
+          && x >= layout._dbgCloseBtn.x && x <= layout._dbgCloseBtn.x + layout._dbgCloseBtn.w) {
         debugOpen = false
         return null
       }
-      // 向上箭头（顶部条右）
-      const upX = _w - arrowSize - 8
-      if (type === 'end' && y <= closeBarH && x >= upX) {
+      // ▲ 向上箭头（底部条右）
+      if (type === 'end' && y >= _bottomBarY && x >= _w - _ARROW_SZ * 2 - 16 && x < _w - _ARROW_SZ - 8) {
         debugScroll = Math.max(0, debugScroll - 80)
         return null
       }
-      // 向下箭头（底部）
-      const downY = _h - arrowSize - 8
-      if (type === 'end' && y >= downY) {
+      // ▼ 向下箭头（底部条最右）
+      if (type === 'end' && y >= _bottomBarY && x >= _w - _ARROW_SZ - 8) {
         debugScroll = debugScroll + 80
         return null
       }
       // 点击文本区任意位置 = 向下滚 1 屏
-      if (type === 'end' && y > closeBarH && y < downY) {
+      if (type === 'end' && y > closeBarH && y < _bottomBarY) {
         debugScroll = debugScroll + 100
         return null
       }

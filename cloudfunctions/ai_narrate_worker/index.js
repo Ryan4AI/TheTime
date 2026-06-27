@@ -198,10 +198,8 @@ async function backgroundTask(request_id, payload) {
     const t3 = Date.now()
     console.log('[PERF] pickBranch_ms=', t3 - t2)
     perfLogs.push({ stage: 'pickBranch_ms', ms: t3 - t2 })
-    // D031（先生 2026-06-27 23:13 拍板）：删 patch.coin / patch.health，铜钱=财富属性·前端不显示 health
-    // 先合并基础 patch（items/月—不含 9 属性，属性由 AI₂ 单独评分）
-    const baseUpdated = applyPatch(state, preUpdate, picked.patch || {})
-    // AI₂ 根据本回合剧情评估属性变化
+    // D036（先生 2026-06-28 01:07 拍板）：patch 字段从叙事 AI 拆出, 由 AI₂ 属性评分函数统一生成
+    // 先调 AI₂ 拿到 attrPatch（含 9 属性 + month_delta + items）, 再 applyPatch 合并 month_delta/items
     const t4 = Date.now()
     const attrPatch = await callScoringAI(picked.content, preUpdate)
     const t5 = Date.now()
@@ -209,6 +207,12 @@ async function backgroundTask(request_id, payload) {
     perfLogs.push({ stage: 'callScoringAI_ms', ms: t5 - t4 })
     console.log('[PERF] total_so_far_ms=', t5 - t0)
     perfLogs.push({ stage: 'total_so_far_ms', ms: t5 - t0 })
+    // D036（先生 2026-06-28 01:07 拍板）：applyPatch 输入从叙事 AI 的 picked.patch 改为 AI₂ 输出的 attrPatch
+    const synthPatch = {
+      month_delta: typeof attrPatch.month_delta === 'number' ? attrPatch.month_delta : 0,
+      items: attrPatch.items || {},
+    }
+    const baseUpdated = applyPatch(state, preUpdate, synthPatch)
     // 合并属性变化到 state
     const updated = { ...baseUpdated }
     for (const attr of ATTR_NAMES) {
@@ -970,31 +974,15 @@ function buildSystemPrompt(state, monthEvent) {
     `- 国家级事件月（5-10 轮）：遵循"历史事件段"的进度，不强行套起承转合。`,
     ``,
     `# 输出格式`,
-    `输出必须是合法 JSON 对象（**单对象，不是数组**），格式如下：`,
+    `输出必须是合法 JSON 对象（**单对象，不是数组**），只包含两个字段：`,
     `{`,
     `  "content": "白话文剧情，150~400字，直接进入场景",`,
-    `  "options": ["选项A（有真实差异）", "选项B", "选项C（可选）"],`,
-    `  "patch": {`,
-    `    "month_delta": 1,`,
-    `    "items": {`,
-    `      "茶包": -15`,
-    `    }`,
-    `  }`,
+    `  "options": ["选项A（有真实差异）", "选项B", "选项C（可选）"]`,
     `}`,
     ``,
-    `patch 字段含义（按需使用，不写 = 该字段不变）：`,
-    `- D031（2026-06-27）：删 coin / health 字段，铜钱 = 财富属性。前端没显示 health, patch 没必要。`,
-    `- items：物品状态变化。`,
-    `  - 物品名见"当前状态"段"携带物品"中的中文（如"茶包""针线包""镊子"）。`,
-    `  - "<物品名>": 数字 → 减少该物品 durability（数字 = 损耗值，AI 根据剧情定；durability 减到 0 时物品消失）。`,
-    `  - 没变化不写 items 字段。`,
-    `- month_delta：本次剧情跨度（整数，0~60）。worker 会自动 clamp。`,
-    `  - 0：同月内多事件（"看了一天病"、"街口闲坐半日"）。`,
-    `  - 1：默认节奏。`,
-    `  - 3：季度跨度。`,
-    `  - 6：半年跨度。`,
-    `  - 12：跨年。`,
-    `  - 60：极端上限（"十年后..."），不要常用。`,
+    `D036（2026-06-28 01:07 先生拍板）：patch 字段已从叙事 AI 输出中移除。`,
+    `本回合的 month_delta（时间推进）和 items（物品变化）由 AI₂ 属性评分函数在下一回合统一生成。`,
+    `你只负责写 content（剧情正文）和 options（玩家选项），不要在输出里写 patch 字段。`,
     ``,
     `# 质量自检`,
     ``,
@@ -1204,7 +1192,8 @@ async function callScoringAI(content, prevState) {
     `剧情：`,
     content || '（平淡日常，无特殊事件）',
     ``,
-    `请根据剧情内容，分析玩家经历了什么、得到了什么、失去了什么，返回以下 9 项属性的变化值（JSON对象，整数）：`,
+    `请根据剧情内容，分析玩家经历了什么、得到了什么、失去了什么、时间跨度如何、物品有什么变化。`,
+    `返回 JSON 对象（含 9 项属性变化 + month_delta + items）：`,
     `{`,
     `  "声望": 整数（-200~+500）· 官方表彰、民间传颂、英雄事迹 → +；声誉受损、被冤枉 → -`,
     `  "财富": 整数（-500~+1000）· 经商获利、赏赐、掠夺 → +；损失、被骗、缴纳 → -`,
@@ -1215,6 +1204,17 @@ async function callScoringAI(content, prevState) {
     `  "文采": 整数（-10~+500）· 写诗、作文、著书 → +；无相关 → 0`,
     `  "政绩": 整数（-50~+500）· 治理、改革、断案 → +；失职、被贬 → -`,
     `  "义行": 整数（-100~+300）· 行侠仗义、救人 → +；为恶 → -`,
+    `  "month_delta": 整数（0~60）· 本回合剧情时间跨度（D036 2026-06-28：patch 字段从叙事 AI 拆出, 由本函数统一生成）：`,
+    `    - 0：同月内多事件("看了一天病"、"街口闲坐半日")`,
+    `    - 1：默认节奏("过了一夜"、"次日清晨")`,
+    `    - 3：季度跨度("过完冬天开春了"、"夏天就这么过去了")`,
+    `    - 6：半年跨度("秋去冬来")`,
+    `    - 12：跨年("转眼一年")`,
+    `    - 60：极端("十年后..."),不要常用`,
+    `  "items": 物品状态变化(可选字段, 没变化不写)：`,
+    `    - 物品名见"当前状态"段"携带物品"中的中文("茶包"/"针线包"/"镊子")`,
+    `    - "<物品名>": 数字 → 减少该物品 durability(数字 = 损耗值；durability 减到 0 时物品消失)`,
+    `    - 新物品获取：对象格式 {"id":"可选短id","name":"物品名","icon":"单 emoji","desc":"1-2 句描述","durability":100}`,
     `}`,
     ``,
     `规则：`,
@@ -1225,7 +1225,7 @@ async function callScoringAI(content, prevState) {
     `- 没有相关行为的属性 = 0（不要无中生有）`,
     `- 年龄约束：${age < 8 ? '玩家不足8岁，学识/医术/战功/文采/政绩/义行/财富均只能为0（幼儿不可能获得这些成就类属性）。声望最多±5。' : age < 15 ? '玩家不足15岁（少年），学识/文采最多±10；医术/战功/政绩最多±5；义行最多±10；财富最多±5。' : '成年玩家无额外年龄约束。'}`,
     `- 只返回 JSON 对象，不要任何其他文字`,
-    `例：{"声望":30,"财富":-200,"学识":10,"颜值":0,"医术":0,"战功":0,"文采":0,"政绩":0,"义行":50}`,
+    `例：{"声望":30,"财富":-200,"学识":10,"颜值":0,"医术":0,"战功":0,"文采":0,"政绩":0,"义行":50,"month_delta":1,"items":{"茶包":-15}}`,
   ].join('\n')
 
   try {

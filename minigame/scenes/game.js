@@ -1128,13 +1128,14 @@ function buildPollinationsPrompt(narrativeText) {
   const cfg = PROMPT_BY_DYNASTY[era] || PROMPT_BY_DYNASTY['default']
   // 抓叙事前 80 字作为场景描述
   const hint = (narrativeText || '').slice(0, 80).replace(/\s+/g, ' ')
-  // p1 风格词 + p2 元素词 + p3 场景
+  // v3.0.14aid: 把叙事场景描述(hint+city)放最前 — flux 模型对 prompt 头部响应最强, 先生 22:54 反馈"图都一样"是 p1/p2 风格标签太靠前压住了叙事
+  const city = state.city || ''
+  const sceneDesc = [hint, city].filter(Boolean).join(', ')
   const p1 = cfg.style
   const p2 = cfg.elements
-  const p3 = hint
   // 固定水墨质感参数
   const suffix = 'ink wash, monochrome, rice paper texture, no text, no watermark, masterpiece, --ar 3:2'
-  return [p1, p2, p3, suffix].filter(Boolean).join(', ')
+  return [sceneDesc, p1, p2, suffix].filter(Boolean).join(', ')
 }
 
 function fetchBgImage(narrativeText) {
@@ -1155,6 +1156,17 @@ function fetchBgImage(narrativeText) {
   const encoded = encodeURIComponent(prompt)
   const url = `https://image.pollinations.ai/prompt/${encoded}?width=768&height=512&seed=${seed}&nologo=true&model=flux`
 
+  // v3.0.14aid: 每轮把画图 prompt / url / seed / 加载结果写进 debugLog（先生 22:54 反馈"图都一样"要看到底是不是 prompt 在变）
+  if (debugLog.length > 0) {
+    const last = debugLog[debugLog.length - 1]
+    last.bg_prompt = prompt
+    last.bg_url = url
+    last.bg_seed = seed
+    last.bg_dynasty = era
+    last.bg_city = city
+    last.bg_narrative_hint = hint
+  }
+
   bgImageLoading = true
   if (bgImgEl) { try { bgImgEl.src = '' } catch(e) {} }
   bgImgEl = typeof wx.createImage === 'function' ? wx.createImage() : new Image()
@@ -1162,10 +1174,19 @@ function fetchBgImage(narrativeText) {
     bgImageLoading = false
     bgImage = url
     imageRevealStart = Date.now()  // v0.6.50g: 开始从上到下展开
+    // v3.0.14aid: 加载成功也填 debugLog（区分"prompt 没变"vs"prompt 变了但 flux 输出相似"）
+    if (debugLog.length > 0) {
+      const last = debugLog[debugLog.length - 1]
+      last.bg_load = 'ok'
+    }
   }
   bgImgEl.onerror = () => {
     bgImageLoading = false
     console.warn('Pollinations 加载失败:', url.slice(0, 80))
+    if (debugLog.length > 0) {
+      const last = debugLog[debugLog.length - 1]
+      last.bg_load = 'fail'
+    }
   }
   bgImgEl.src = url
 }
@@ -2766,6 +2787,16 @@ function drawDebugPanel(ctx) {
     allText += `[INPUT 玩家选项]: ${d.input || '(空)'}\n`
     allText += `[is_retry]: ${d.data && d.data.is_retry ? 'true' : 'false'}, [action]: ${d.action || '?'}\n`
     if (d.poll_attempts !== undefined) allText += `[poll_attempts]: ${d.poll_attempts}, [poll_elapsed_ms]: ${d.poll_elapsed_ms || 0}\n`
+
+    // v3.0.14aid: 画图 prompt/url/seed 显示（先生 22:54 反馈"图都一样"要能看到 prompt 到底变没变）
+    if (d.bg_prompt) {
+      allText += `[BG_DRAW] dynasty=${d.bg_dynasty || '?'}, city=${d.bg_city || '?'}, seed=${d.bg_seed}, load=${d.bg_load || 'pending'}\n`
+      allText += `[BG_PROMPT] ${d.bg_prompt}\n`
+      allText += `[BG_HINT] ${d.bg_narrative_hint || ''}\n`
+      allText += `[BG_URL] ${d.bg_url}\n`
+      allText += '\n'
+    }
+
     allText += '\n'
 
     if (d.messages_to_ai && d.messages_to_ai.length > 0) {

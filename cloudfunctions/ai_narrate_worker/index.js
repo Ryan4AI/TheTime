@@ -198,7 +198,8 @@ async function backgroundTask(request_id, payload) {
     const t3 = Date.now()
     console.log('[PERF] pickBranch_ms=', t3 - t2)
     perfLogs.push({ stage: 'pickBranch_ms', ms: t3 - t2 })
-    // 先合并基础 patch（coin/health/items/月—不含属性，属性由 AI₂ 单独评分）
+    // D031（先生 2026-06-27 23:13 拍板）：删 patch.coin / patch.health，铜钱=财富属性·前端不显示 health
+    // 先合并基础 patch（items/月—不含 9 属性，属性由 AI₂ 单独评分）
     const baseUpdated = applyPatch(state, preUpdate, picked.patch || {})
     // AI₂ 根据本回合剧情评估属性变化
     const t4 = Date.now()
@@ -397,7 +398,7 @@ async function safeWriteResult(request_id, result_str, error_str) {
  *
  * patch 字段含义：
  *   - month_delta: 0~60（clamp）。0 = 同月内多事件，60 = 极端长跨度。
- *   - coin / health: 整数变化量
+ *   - 9 属性(声望/财富/学识/颜值/医术/战功/文采/政绩/义行): 整数变化量
  *   - items: { "物品名": 损耗值(数字) | { id?, name, icon?, desc?, durability? } }
  *     - 数字 = 减耐久（兼容旧）
  *     - 对象 = 新增物品（v0.6.88）
@@ -446,17 +447,12 @@ function applyPatch(oldState, preUpdate, patch) {
     s.health = Math.max(0, (s.health || 100) - totalDecay)
   }
 
-  // 2) 显式 health patch（在月衰减之后应用，允许 AI 单独扣血）
-  if (typeof patch.health === 'number' && Number.isFinite(patch.health)) {
-    s.health = Math.max(0, Math.min(100, (s.health || 100) + patch.health))
-  }
+  // D031（先生 2026-06-27 23:13 拍板）：删 patch.health / patch.coin 字段
+  // - 铜钱就是"财富"属性, 同一个东西不该两个字段名
+  // - 前端没显示 health, patch 没意义
+  // - AI 改用 patch.财富 / patch.声望 等 9 属性中文名
 
-  // 3) 显式 coin patch
-  if (typeof patch.coin === 'number' && Number.isFinite(patch.coin)) {
-    s.coin = Math.max(0, (s.coin || 0) + patch.coin)
-  }
-
-  // 4) items 损耗 + 新增（v0.6.88 扩展 patch.items 协议）
+  // 2) items 损耗 + 新增（v0.6.88 扩展 patch.items 协议）
   //   - 数字 = 减耐久（旧）
   //   - 对象 = 新增物品（新）{ id?, name, icon?, desc?, durability? }
   if (patch.items && typeof patch.items === 'object' && Array.isArray(s.items)) {
@@ -545,13 +541,7 @@ function emitSystemMessages(oldState, newState) {
     lines.push(`身份: ${oldState.occupation} → ${newState.occupation}`)
   }
 
-  // 4) 气血
-  const healthDelta = (newState.health || 0) - (oldState.health || 0)
-  if (Math.abs(healthDelta) >= 1) {
-    lines.push(`气血: ${oldState.health || 0} → ${newState.health || 0}`)
-  }
-
-  // 5) 九属性 — 任一变化时输出全部当前值
+  // 4) 九属性 — 任一变化时输出全部当前值
   const ATTRS = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
   let anyAttrChanged = false
   for (const attr of ATTRS) {
@@ -979,8 +969,6 @@ function buildSystemPrompt(state, monthEvent) {
     `  "content": "白话文剧情，150~400字，直接进入场景",`,
     `  "options": ["选项A（有真实差异）", "选项B", "选项C（可选）"],`,
     `  "patch": {`,
-    `    "coin": -200,`,
-    `    "health": -5,`,
     `    "month_delta": 1,`,
     `    "items": {`,
     `      "茶包": -15`,
@@ -989,8 +977,7 @@ function buildSystemPrompt(state, monthEvent) {
     `}`,
     ``,
     `patch 字段含义（按需使用，不写 = 该字段不变）：`,
-    `- coin：铜钱变化（整数，AI 根据剧情定幅度）。`,
-    `- health：健康变化（整数，AI 根据剧情定幅度）。`,
+    `- D031（2026-06-27）：删 coin / health 字段，铜钱 = 财富属性。前端没显示 health, patch 没必要。`,
     `- items：物品状态变化。`,
     `  - 物品名见"当前状态"段"携带物品"中的中文（如"茶包""针线包""镊子"）。`,
     `  - "<物品名>": 数字 → 减少该物品 durability（数字 = 损耗值，AI 根据剧情定；durability 减到 0 时物品消失）。`,

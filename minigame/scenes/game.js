@@ -836,6 +836,112 @@ function handleAIResponse(result, action, userInput) {
   optionsAppearTime = displayStartTime + narrative.length * TYPEWRITE_SPEED + 300
   monthChanged = month_changed
   newEvent = event || null
+
+  // D049b 阶段 3（2026-06-29 02:08 拍板）：自动调 player_save 存盘
+  // 先生每回合结束都自动存档（不阻塞游戏，失败仅 toast 提示）
+  autoSaveToCloud()
+}
+
+// D049b 阶段 3：自动存档 helper
+function autoSaveToCloud() {
+  if (typeof wx === 'undefined' || !wx.cloud || !wx.cloud.callFunction) return
+  // 先生 fromCloud 进游戏 → 才有 openid；新玩家（无存档）暂时不自动存（等先生手动触发或后续 D049c）
+  let openid = null
+  try {
+    openid = wx.getStorageSync && wx.getStorageSync('openid')
+  } catch (e) { /* ignore */ }
+  if (!openid) {
+    // 第一次存盘时从 wx.login code 换 openid（D049 完整流程要云函数 code2Session，先生 deploy 后才能用）
+    // 先生暂用 localStorage 标记"已存过"先记录 player_life
+    if (typeof wx.setStorageSync === 'function') {
+      wx.setStorageSync('player_life_cache', JSON.stringify(state))
+    }
+    return
+  }
+
+  // 构造 player_life record（用 state 字段映射到 player_life 字段）
+  const player_life = stateToPlayerLife(state)
+  const player = { _id: openid, life_number: state.life_number || 1, created_at: Date.now(), updated_at: Date.now() }
+  const narrate_history_list = buildNarrateHistoryList()
+
+  wx.cloud.callFunction({
+    name: 'player_save',
+    data: { player, player_life, narrate_history_list },
+    success: (res) => {
+      if (res && res.result && res.result.success) {
+        // 存档成功
+        if (typeof wx.setStorageSync === 'function') {
+          wx.setStorageSync('player_life_cache', JSON.stringify(state))
+        }
+        console.log('[D049b] player_save 成功, updated_at=', res.result.updated_at)
+      } else {
+        console.error('[D049b] player_save 失败:', (res && res.result && res.result.error) || 'unknown')
+        // 失败时仍存 localStorage，玩家下次进入有缓存
+        if (typeof wx.setStorageSync === 'function') {
+          wx.setStorageSync('player_life_cache', JSON.stringify(state))
+        }
+      }
+    },
+    fail: (err) => {
+      console.error('[D049b] player_save 失败:', (err && (err.errMsg || err.message)) || 'unknown')
+      if (typeof wx.setStorageSync === 'function') {
+        wx.setStorageSync('player_life_cache', JSON.stringify(state))
+      }
+    },
+  })
+}
+
+// D049b 阶段 3：state 转 player_life record
+function stateToPlayerLife(s) {
+  return {
+    life_number: s.life_number || 1,
+    alive: s.alive !== false,
+    name: s.name || 'Unnamed',
+    gender: (s.gender === '女' || s.gender === 'female') ? 'female' : 'male',
+    age: s.age || 0,
+    occupation: s.occupation || 'commoner',
+    social_class: s.socialClass || s.social_class || 'commoner',
+    dynasty: s.dynasty || '',
+    era_display: s.eraDisplay || s.eraDisplay || '',
+    city: s.city || 'unknown',
+    year: s.year || 0,
+    month: s.month || 1,
+    health: s.health || 100,
+    lifespan: s.lifespan || 70,
+    reputation: s['声望'] || 0,
+    wealth: s['财富'] || 0,
+    knowledge: s['学识'] || 0,
+    appearance: s['颜值'] || 0,
+    medical: s['医术'] || 0,
+    military: s['战功'] || 0,
+    literary: s['文采'] || 0,
+    political: s['政绩'] || 0,
+    righteous: s['义行'] || 0,
+    epitaph: s.epitaph || '',
+    current_items: currentItems || [],
+    created_at: s.created_at || Date.now(),
+    updated_at: Date.now(),
+  }
+}
+
+// D049b 阶段 3：把 narrativeHistory 转 narrate_history record 列表
+function buildNarrateHistoryList() {
+  if (!Array.isArray(narrativeHistory)) return []
+  const list = []
+  const openid = (typeof wx !== 'undefined' && wx.getStorageSync) ? wx.getStorageSync('openid') : 'unknown'
+  for (let i = 0; i < narrativeHistory.length; i++) {
+    const m = narrativeHistory[i]
+    list.push({
+      life_number: state.life_number || 1,
+      message_id: m.message_id || (Date.now() + i),  // 用 message_id 字段或回退到时间戳
+      role: m.role,
+      content: String(m.content || ''),
+      patch: m.patch || null,  // role='system' 时存
+      options: m.options || null,  // role='ai' 时存
+      created_at: m.created_at || Date.now(),
+    })
+  }
+  return list
 }
 
 // ─────── 渲染 ───────

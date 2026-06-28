@@ -1341,7 +1341,12 @@ async function callScoringAI(content, prevState, history) {
 
   try {
     const t_score_start = Date.now()
-    const response = await callLLM([{ role: 'system', content: scorePrompt }])
+    // v0.1.85 教训: MiniMax 单 system 消息会 2013（实测 2026-06-28 D048b 部署后 LLM 测试报 2013）
+    // 必须加 1 条 user 消息才能调通
+    const response = await callLLM([
+      { role: 'system', content: scorePrompt },
+      { role: 'user', content: '请根据 prompt 输出 JSON' },
+    ])
     const t_score_end = Date.now()
     console.log('[PERF] callScoringAI.llm_ms=', t_score_end - t_score_start, 'score_prompt_chars=', scorePrompt.length)
     if (typeof globalThis.__PERF_LOGS__ !== 'undefined') {

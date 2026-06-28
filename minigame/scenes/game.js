@@ -2565,6 +2565,17 @@ function dbgTrunc(s) {
   if (s.length > DBG_COPY_MAX) return s.slice(0, DBG_COPY_MAX) + '\n... [已截断，共 ' + s.length + ' 字]'
   return s
 }
+
+// D048i（2026-06-28 13:39 拍板·先生反馈 AI₂ 评分 tab 复制报 parameter error）：
+// wx.setClipboardData 在 iOS 上会拒绝含控制字符的 data（除 \n \r \t 外）
+// scorePrompt 4960 字符里可能含其他 control chars（来自 LLM 推理或云函数日志）
+// 过滤掉非换行/制表的控制字符再给 wx
+function dbgSafeForClipboard(s) {
+  if (typeof s !== 'string') return String(s || '')
+  // 过滤掉 0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F 这些控制字符（保留 \n=0x0A, \r=0x0D, \t=0x09）
+  // eslint-disable-next-line no-control-regex
+  return s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
+}
 function dbgGetLast() {
   return debugLog.length > 0 ? debugLog[debugLog.length - 1] : null
 }
@@ -3329,7 +3340,7 @@ function handleTouch(x, y, type) {
           return null
         }
         const COPY_FNS = [dbgCopyAIActual, dbgCopyScoringAI, dbgCopyHistory, dbgCopyPollStatus, dbgCopyScene]
-        const txt = COPY_FNS[dbgActiveTab]()
+        const txt = dbgSafeForClipboard(COPY_FNS[dbgActiveTab]())  // D048i: 过滤控制字符
         if (typeof wx !== 'undefined' && wx.setClipboardData) {
           wx.setClipboardData({
             data: txt,

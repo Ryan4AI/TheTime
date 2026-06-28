@@ -2570,11 +2570,14 @@ function dbgTrunc(s) {
 // wx.setClipboardData 在 iOS 上会拒绝含控制字符的 data（除 \n \r \t 外）
 // scorePrompt 4960 字符里可能含其他 control chars（来自 LLM 推理或云函数日志）
 // 过滤掉非换行/制表的控制字符再给 wx
+// D048l（2026-06-28 16:16 拍板·先生反馈对话流 tab 也复制失败）：
+//  还需过滤 0x7F (DEL) + 0xC2 0xA0 (NBSP 不间断空格，UTF-8 二字节) iOS wx 也拒
 function dbgSafeForClipboard(s) {
   if (typeof s !== 'string') return String(s || '')
-  // 过滤掉 0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F 这些控制字符（保留 \n=0x0A, \r=0x0D, \t=0x09）
   // eslint-disable-next-line no-control-regex
-  return s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
+  return s
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')  // 单字节控制字符 + DEL
+    .replace(/\u00A0/g, ' ')                              // NBSP (0xC2 0xA0) → 普通空格
 }
 function dbgGetLast() {
   return debugLog.length > 0 ? debugLog[debugLog.length - 1] : null

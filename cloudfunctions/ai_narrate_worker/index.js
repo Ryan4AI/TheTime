@@ -560,7 +560,25 @@ function emitSystemMessages(oldState, newState) {
     }
   }
   if (anyAttrChanged) {
-    lines.push(ATTRS.map(a => `${a}:${newState[a] || 0}`).join('  '))
+    // D048l（2026-06-28 16:16 拍板·先生反馈"没有变化幅度"）：改成"旧值→新值 (delta)"格式
+    // 修前：只列当前值 声望:80 财富:50
+    // 修后：声望:50→80 (+30)  财富:100→50 (-50)  其它无变化属性不列
+    const changedAttrs = []
+    for (const attr of ATTRS) {
+      const oldVal = oldState[attr] || 0
+      const newVal = newState[attr] || 0
+      if (oldVal !== newVal) {
+        const delta = newVal - oldVal
+        const sign = delta > 0 ? '+' : ''  // 负数自带 - 号
+        changedAttrs.push(`${attr}:${oldVal}→${newVal} (${sign}${delta})`)
+      }
+    }
+    if (changedAttrs.length > 0) {
+      lines.push(changedAttrs.join('  '))
+    } else {
+      // 兜底：万一 anyAttrChanged=true 但 all 0 不变
+      lines.push(ATTRS.map(a => `${a}:${newState[a] || 0}`).join('  '))
+    }
   }
 
   // 合并成一条 system message

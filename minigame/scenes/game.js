@@ -534,9 +534,10 @@ function pollNarrateResult(requestId, action, userInput, attempt, pollStartMs) {
         } else if (pollResult.status === 'not_found') {
           // v0.1.75: request_id 还没写入（CAP 滞后）或真不存在
           // v0.2.5-C: 改 3 → 24 次（120 秒）—— 配合 v0.2.5 prompt + LLM 实际跑 30-40 秒
-          // v0.1.75 的 3 次（15 秒）只够等 10 秒 LLM 响应，现在 LLM 跑 37 秒，3 次放弃太激进
-          // 24 次（120 秒）给 LLM 留 80 秒缓冲；超过 2 分钟基本就是 worker 真挂了
-          if (attempt < 24) {
+          // v1.0.0 时代 24 次只够 12 秒（500ms × 24）—— 但 v3.0.14aip 改后 LLM 跑 19.9 秒 + CAP 写库滞后
+          // D048m（2026-06-28 16:26 拍板·先生 16:19 报 [NOT_FOUND] attempt=25 elapsed=22.5s）：24 → 60 次（30 秒）
+          // 留 5-8 秒缓冲，覆盖 22-25 秒的总耗时；超过 30 秒基本就是 worker 真挂了
+          if (attempt < 60) {
             // v3.0.14aic: 用真实秒数（attempt*5 是错的，每跳 +5 秒不准）
             loadingText = `史官正在落笔…（已等 ${elapsedSec} 秒）`
             pollNarrateResult(requestId, action, userInput, attempt + 1, pollStartMs)

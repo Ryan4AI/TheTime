@@ -565,25 +565,23 @@ function emitSystemMessages(oldState, newState) {
     }
   }
   if (anyAttrChanged) {
-    // D048l（2026-06-28 16:16 拍板·先生反馈"没有变化幅度"）：改成"旧值→新值 (delta)"格式
-    // 修前：只列当前值 声望:80 财富:50
-    // 修后：声望:50→80 (+30)  财富:100→50 (-50)  其它无变化属性不列
-    const changedAttrs = []
+    // D048p（2026-06-28 20:24 拍板·先生"属性 message 改下"）：列全部 9 属性（变 + 不变）
+    // 修前（D048l）：只列变化属性 声望:50→80 (+30)  财富:100→50 (-50)
+    // 修后：变化属性带 delta，无变化属性只列当前值
+    // 例：声望:50→80 (+30)  财富:100→50 (-50)  学识:100  颜值:80  医术:0 ...
+    const allAttrs = []
     for (const attr of ATTRS) {
       const oldVal = oldState[attr] || 0
       const newVal = newState[attr] || 0
       if (oldVal !== newVal) {
         const delta = newVal - oldVal
         const sign = delta > 0 ? '+' : ''  // 负数自带 - 号
-        changedAttrs.push(`${attr}:${oldVal}→${newVal} (${sign}${delta})`)
+        allAttrs.push(`${attr}:${oldVal}→${newVal} (${sign}${delta})`)
+      } else {
+        allAttrs.push(`${attr}:${newVal}`)
       }
     }
-    if (changedAttrs.length > 0) {
-      lines.push(changedAttrs.join('  '))
-    } else {
-      // 兜底：万一 anyAttrChanged=true 但 all 0 不变
-      lines.push(ATTRS.map(a => `${a}:${newState[a] || 0}`).join('  '))
-    }
+    lines.push(allAttrs.join('  '))
   }
 
   // 合并成一条 system message
@@ -668,17 +666,11 @@ async function callAI(state, input, history, monthEvent, isRetry) {
   if (history && Array.isArray(history)) {
     const recent = history  // v0.1.84: 全量 history（不截断），prompt 长度不是瓶颈，叙事连贯性优先
     for (const msg of recent) {
-      // v0.1.86: system 消息以 user 角色喂给 LLM（避免 MiniMax 2013 多 system 报错）
-      // D048e（2026-06-28 11:50 拍板·修复 DBG [AI₁ 原始返回] 无数据 bug）：
-      //  v0.6.50 时代是 DeepSeek，无 2013 限制所以 history system 直接用 role:'system'
-      //  D034 修 MM_API_KEY 切回 MiniMax-M2.7-highspeed 后，MiniMax 2013 限制又生效
-      //  现象：第 2 轮起 history 含 system 消息（来自 D008 状态变化注入）
-      //        + 当前 callAI 自己的 system = 2 个 system → MiniMax 必 2013
-      //        → callLLM 抛错 → backgroundTask catch → raw_response 没存
-      //        → 前端 DBG [AI₁ 原始返回] 无数据
-      //  修：history 里 role='system' 全部标 'user' 喂给 LLM
+      // D048p（2026-06-28 20:24 拍板·先生"状态变化 message role 直接 system"）：
+      // D048e 当时把 history system 改成 user 喂（避免 MiniMax 2013）—— D048p 实测 MiniMax 3 system + 1 user → 200 OK
+      // MiniMax 2013 限制已过效（v0.1.86 教训过时），history 里 system 角色直接 push system
       if (msg.role === 'ai') messages.push({ role: 'assistant', content: msg.content })
-      else if (msg.role === 'system') messages.push({ role: 'user', content: '[系统提示] ' + String(msg.content || '').substring(0, 200) })
+      else if (msg.role === 'system') messages.push({ role: 'system', content: String(msg.content || '').substring(0, 500) })
       else messages.push({ role: 'user', content: msg.content })
     }
   }

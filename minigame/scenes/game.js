@@ -515,6 +515,8 @@ function pollNarrateResult(requestId, action, userInput, attempt, pollStartMs) {
               // D043：AI₂ prompt + raw response 也存 debug, DBG tab 1 展示
               if (result.debug.score_prompt) last.score_prompt = result.debug.score_prompt
               if (result.debug.score_raw_response) last.score_raw_response = result.debug.score_raw_response
+              // D048o（先生 16:38 拍板·"我看不到后端"）：D048f 埋点推给前端 DBG
+              if (result.debug.d048f_log) last.d048f_log = result.debug.d048f_log
             }
             last.poll_elapsed_ms = (pollResult.result && pollResult.result.elapsed_ms) || 0
             last.poll_attempts = attempt + 1
@@ -2892,6 +2894,7 @@ function drawDebugPanel(ctx) {
       }
       if (d.drawOptions_debug) allText += `[drawOptions_debug]\n${d.drawOptions_debug}\n`
       if (d.typewriter_debug) allText += `[typewriter_debug]\n${d.typewriter_debug}\n`
+      if (d.d048f_log) allText += `[D048f 偶现 bug 埋点]\n${d.d048f_log}\n`
       if (d.layout_debug) allText += `[layout]\n${d.layout_debug}\n\n`
       // B: state 全字段
       const _st = state || {}

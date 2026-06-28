@@ -188,6 +188,9 @@ async function backgroundTask(request_id, payload) {
     }
     // D048f（先生 2026-06-28 12:09 拍板·偶现 bug 排查）：applyPatch 前打印 attrPatch 全文 + state 关键字段
     console.log('[D048f-debug] applyPatch input: attrPatch=', JSON.stringify(attrPatch), ' state.age=', state.age, ' state.year=', state.year, ' state.month=', state.month, ' preUpdate.age=', preUpdate.age)
+    // D048o（先生 2026-06-28 16:38 拍板·"我看不到后端"）：埋点也推给前端 DBG（先生手机直接看到）
+    //   d048f_log 字段在 result.debug 里返回，前端 DBG 场景 tab 显示
+    globalThis.__D048F_LOG__ = (globalThis.__D048F_LOG__ || []).concat([`applyPatch input: attrPatch=${JSON.stringify(attrPatch)} state.age=${state.age} state.year=${state.year} state.month=${state.month} preUpdate.age=${preUpdate.age}`])
     const baseUpdated = applyPatch(state, preUpdate, synthPatch)
     // 合并属性变化到 state
     const updated = { ...baseUpdated }
@@ -269,7 +272,7 @@ async function backgroundTask(request_id, payload) {
       closest_board: closestBoardInfo,  // v0.6.35 — 前端展示榜单接近度
       is_retry: is_retry,
       attr_patch: attrPatch,  // D046：attrPatch 顶层暴露(前端读 patch.items)
-      debug: { system_prompt: systemPrompt, user_prompt: userPrompt, messages, raw_response: rawContent, perf_logs: perfLogs, attr_patch: attrPatch, picked_branch: picked, score_prompt: scorePrompt, score_raw_response: scoreRawResponse },
+      debug: { system_prompt: systemPrompt, user_prompt: userPrompt, messages, raw_response: rawContent, perf_logs: perfLogs, attr_patch: attrPatch, picked_branch: picked, score_prompt: scorePrompt, score_raw_response: scoreRawResponse, d048f_log: (globalThis.__D048F_LOG__ || []).join('\n') || null },
     }
 
     // v0.1.76 新增：写独立的 narrate_result 集合（固定 schema，无动态字段问题）
@@ -438,6 +441,8 @@ function applyPatch(oldState, preUpdate, patch) {
     // v0.6.99: 防止月推进过大导致 age 暴涨（先生截图 314 岁 bug 根因兜底）
     s.age = Math.max(0, Math.min(150, s.age))
     console.log('[D048f-debug] applyPatch 跨年: old.age=', oldState.age, ' old.year=', oldState.year, ' old.month=', oldState.month, ' patch.month_delta=', patch.month_delta, ' totalMonth=', (s.year || 0) * 12 + (s.month || 1) - 1, ' s.year=', s.year, ' s.month=', s.month, ' yearsPassed=', yearsPassed, ' new.age=', s.age)
+    // D048o：跨年埋点也推给前端 DBG
+    globalThis.__D048F_LOG__ = (globalThis.__D048F_LOG__ || []).concat([`applyPatch 跨年: old.age=${oldState.age} old.year=${oldState.year} old.month=${oldState.month} patch.month_delta=${patch.month_delta} yearsPassed=${yearsPassed} new.age=${s.age}`])
     // 健康按年龄段衰减（累积）
     let totalDecay = 0
     for (let i = 0; i < yearsPassed; i++) {

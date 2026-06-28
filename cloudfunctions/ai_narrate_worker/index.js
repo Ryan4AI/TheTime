@@ -607,10 +607,13 @@ async function callAI(state, input, history, monthEvent, isRetry) {
   // v3.0.14ai: 加回 formatReminder（先生 2026-06-27 02:22 拍板"可以"）
   // v3.0.9c 删了·v3.0.13-stable 回滚时丢了·v3.0.14w 时代加回过·又丢了
   // 真因：LLM 偶尔输出纯叙事不按 JSON（先生 01:12 DBG 截图 4 段纯叙事）
-  // 当前 prompt 期望 JSON 对象格式（v3.0.13 拍板）：{content, options, patch}
+  // D048d（2026-06-28 11:44 拍板）：文案对齐 prompt 主体
+  //  旧文案写"含 content/options/patch 三个字段"——错的，D036 后 AI₁ 不输出 patch（patch 由 AI₂ 评）
+  //  主体 prompt 实际只要求 {content, options} 两个字段（v3.0.9 砍 3/4 冗余分支后定案）
+  //  旧文案诱导 LLM 硬塞 patch → 行为偏差
   // ⚠️ MiniMax M2.7 限制（v0.1.85 教训）：一次调用只允许 1 个 system · 多 system 返 2013
   // 用 user 角色喂（v0.1.86 教训：标 user 喂给 LLM 既避免 2013 又保留提醒效果）
-  const formatReminder = '【输出格式提醒】请严格按 JSON 对象格式输出（含 content/options/patch 三个字段），不要任何 markdown 围栏或解释文字。content 是叙事正文，options 是 3 个字符串数组，patch 是字段变化对象（可省）。'
+  const formatReminder = '【输出格式提醒】请严格按 JSON 对象格式输出（含 content 和 options 两个字段），不要任何 markdown 围栏或解释文字。content 是叙事正文，options 是 3 个字符串数组。'
   // ↓ 不立即 push，等下面 user 之后追加
   var formatReminderMsg = { role: 'user', content: formatReminder }
   if (history && Array.isArray(history)) {

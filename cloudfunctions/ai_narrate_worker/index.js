@@ -636,11 +636,12 @@ async function callAI(state, input, history, monthEvent, isRetry) {
   //  旧文案写"含 content/options/patch 三个字段"——错的，D036 后 AI₁ 不输出 patch（patch 由 AI₂ 评）
   //  主体 prompt 实际只要求 {content, options} 两个字段（v3.0.9 砍 3/4 冗余分支后定案）
   //  旧文案诱导 LLM 硬塞 patch → 行为偏差
-  // ⚠️ MiniMax M2.7 限制（v0.1.85 教训）：一次调用只允许 1 个 system · 多 system 返 2013
-  // 用 user 角色喂（v0.1.86 教训：标 user 喂给 LLM 既避免 2013 又保留提醒效果）
+  // D048k（2026-06-28 16:14 拍板）：role: 'user' → 'system'
+  //  v0.1.86 教训"MiniMax 多 system 返 2013"——D048k 实测 2 system + 1 user 调 MiniMax 200 OK
+  //  v0.1.86 规则已过效（MiniMax 升级或调用方式变化），先生反馈 role 应是 system 更明确
   const formatReminder = '【输出格式提醒】请严格按 JSON 对象格式输出（含 content 和 options 两个字段），不要任何 markdown 围栏或解释文字。content 是叙事正文，options 是 3 个字符串数组。'
   // ↓ 不立即 push，等下面 user 之后追加
-  var formatReminderMsg = { role: 'user', content: formatReminder }
+  var formatReminderMsg = { role: 'system', content: formatReminder }
   if (history && Array.isArray(history)) {
     const recent = history  // v0.1.84: 全量 history（不截断），prompt 长度不是瓶颈，叙事连贯性优先
     for (const msg of recent) {

@@ -679,6 +679,11 @@ function handleAIResponse(result, action, userInput) {
 
   // 1. 应用 AI 返回的 state 更新（含 AI₂ 评分的属性变化）
   if (newState) {
+    // D048f（先生 2026-06-28 12:09 拍板·偶现 bug 排查）：merge 前打印关键字段
+    // 排查"7岁→150岁"偶现 bug——比对 newState 实际值与 state 旧值
+    if (typeof console !== 'undefined') {
+      console.log('[D048f-debug] frontend merge: newState.age=', newState.age, ' newState.year=', newState.year, ' newState.month=', newState.month, ' state.age=', state.age, ' state.year=', state.year, ' state.month=', state.month)
+    }
     if (newState.age) state.age = newState.age
     if (newState.health !== undefined) state.health = newState.health
     if (newState.coin !== undefined) state.coin = newState.coin

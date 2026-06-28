@@ -186,6 +186,8 @@ async function backgroundTask(request_id, payload) {
       month_delta: typeof attrPatch.month_delta === 'number' ? attrPatch.month_delta : 0,
       items: attrPatch.items || {},
     }
+    // D048f（先生 2026-06-28 12:09 拍板·偶现 bug 排查）：applyPatch 前打印 attrPatch 全文 + state 关键字段
+    console.log('[D048f-debug] applyPatch input: attrPatch=', JSON.stringify(attrPatch), ' state.age=', state.age, ' state.year=', state.year, ' state.month=', state.month, ' preUpdate.age=', preUpdate.age)
     const baseUpdated = applyPatch(state, preUpdate, synthPatch)
     // 合并属性变化到 state
     const updated = { ...baseUpdated }
@@ -430,10 +432,12 @@ function applyPatch(oldState, preUpdate, patch) {
 
   // 跨月时的 age 增长 + 健康衰减（按 D008 之前逻辑保留）
   const yearsPassed = s.year - (oldState.year || s.year)
+  // D048f（2026-06-28 12:09 拍板·偶现 7岁→150岁 bug 排查埋点）：跨年时打全字段
   if (yearsPassed > 0) {
     s.age = (oldState.age || s.age || 0) + yearsPassed
     // v0.6.99: 防止月推进过大导致 age 暴涨（先生截图 314 岁 bug 根因兜底）
     s.age = Math.max(0, Math.min(150, s.age))
+    console.log('[D048f-debug] applyPatch 跨年: old.age=', oldState.age, ' old.year=', oldState.year, ' old.month=', oldState.month, ' patch.month_delta=', patch.month_delta, ' totalMonth=', (s.year || 0) * 12 + (s.month || 1) - 1, ' s.year=', s.year, ' s.month=', s.month, ' yearsPassed=', yearsPassed, ' new.age=', s.age)
     // 健康按年龄段衰减（累积）
     let totalDecay = 0
     for (let i = 0; i < yearsPassed; i++) {

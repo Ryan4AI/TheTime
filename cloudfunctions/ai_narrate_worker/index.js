@@ -1331,10 +1331,12 @@ async function callScoringAI(content, prevState, history) {
     ``,
     `- 只返回 JSON 对象，不要任何其他文字、不要 markdown 围栏`,
     `- 整数，不写小数`,
-    `- 没变化的属性 = 0`,
+    `- **没变化的属性 = 不写**（不是写 0）——只输出真正有变化的字段`,
+    `- 9 项社会属性 + month_delta 全部无变化时，输出空对象 {}`,
     `- 没物品变化 = 不写 items 字段`,
     `- **不要重复算前情**：本回合剧情是"新发生"的事；上轮已结算的不要在本轮再加`,
-    `例：{"声望":30,"财富":-200,"学识":10,"颜值":0,"医术":0,"战功":0,"文采":0,"政绩":0,"义行":50,"month_delta":1}`,
+    `例（部分变化）：{"财富":-200,"学识":10,"义行":50,"month_delta":1}`,
+    `例（全无变化）：{}`,
   ].join('\n')
 
   try {
@@ -1350,14 +1352,23 @@ async function callScoringAI(content, prevState, history) {
     const lastObj = raw.lastIndexOf('}')
     if (firstObj !== -1 && lastObj !== -1) {
       const parsed = JSON.parse(raw.substring(firstObj, lastObj + 1))
-      // 只取正确的属性
+      // D048b：只取真正变化的属性（LLM 不写 = 没变化 = 不进 result）
+      // result 可能是 {}（全无变化）或 {财富:-200, ...}（部分变化）
+      // 兼容旧习惯：LLM 旧 prompt 会填 9 个 0 → 我们滤掉 0 值（0 视为"无变化"）
       const result = {}
       for (const a of ATTR_NAMES) {
-        if (typeof parsed[a] === 'number' && Number.isFinite(parsed[a])) {
+        if (typeof parsed[a] === 'number' && Number.isFinite(parsed[a]) && parsed[a] !== 0) {
           result[a] = Math.round(parsed[a])
-        } else {
-          result[a] = 0
         }
+        // 不是 number / 没写 / 值为 0 → 不进 result（保持空对象语义）
+      }
+      // month_delta 也是可选的（0 保留——month_delta=0 是合法语义"同月内"）
+      if (typeof parsed.month_delta === 'number' && Number.isFinite(parsed.month_delta)) {
+        result.month_delta = Math.round(parsed.month_delta)
+      }
+      // items 透传
+      if (parsed.items && typeof parsed.items === 'object') {
+        result.items = parsed.items
       }
       // D043：返回完整结构(含 prompt + raw + parsed attrPatch), 前端 DBG tab 1 能展示
       return { attrPatch: result, scorePrompt, scoreRawResponse: raw }

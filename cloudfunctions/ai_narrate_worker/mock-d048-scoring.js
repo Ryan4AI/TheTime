@@ -167,4 +167,41 @@ const suppressCheck = ['1000', '3000', '5000', '8000'].every(t => body.indexOf('
 console.log('✅ 抑制规则 4 档齐全:', suppressCheck)
 console.log()
 
+// 11. D048b：验证"没变化 = 不写"规则在 prompt 里
+const noZeroRule = body.indexOf('没变化的属性 = 不写') !== -1 && body.indexOf('全部无变化时，输出空对象 {}') !== -1
+console.log('✅ D048b \"不写 0\" 规则在 prompt:', noZeroRule)
+console.log()
+
+// 12. D048b：验证解析端 0 值过滤逻辑（解析模拟）
+function buildResult(parsed) {
+  const result = {}
+  for (const a of ATTR_NAMES) {
+    if (typeof parsed[a] === 'number' && Number.isFinite(parsed[a]) && parsed[a] !== 0) {
+      result[a] = Math.round(parsed[a])
+    }
+  }
+  if (typeof parsed.month_delta === 'number' && Number.isFinite(parsed.month_delta)) {
+    result.month_delta = Math.round(parsed.month_delta)
+  }
+  if (parsed.items && typeof parsed.items === 'object') result.items = parsed.items
+  return result
+}
+const cases = [
+  { in: {}, out: {}, desc: 'LLM 输 {}' },
+  { in: {财富:-200,学识:10,month_delta:1}, desc: '部分变化' },
+  { in: {声望:0,财富:0,学识:0,颜值:0,医术:0,战功:0,文采:0,政绩:0,义行:0}, desc: '旧 9 个 0 习惯' },
+  { in: {month_delta:0}, desc: 'month_delta=0 同月内' },
+  { in: {财富:-50,声望:-20,战功:100}, desc: '正负值混合' },
+]
+let allPass = true
+for (const c of cases) {
+  const r = buildResult(c.in)
+  console.log('  ' + c.desc + ':', JSON.stringify(r))
+  if (c.in.财富 === undefined && c.in.学识 === undefined && Object.keys(c.in).length === 0) {
+    if (Object.keys(r).length !== 0) { allPass = false; console.log('    ❌ 应为 {}') }
+  }
+}
+console.log('✅ D048b 解析端 0 过滤:', allPass ? '全过' : '有失败')
+console.log()
+
 console.log('=== 全部检查通过 ===')

@@ -2720,14 +2720,15 @@ function drawDebugPanel(ctx) {
   ctx.lineTo(w, bottomBarY + 0.5)
   ctx.stroke()
 
-  const tabBtnH2 = bottomBarH - 8
+  const tabBtnH2 = 20  // D048j（2026-06-28 13:46 拍板·修两行重叠）：tab 高 36→20（20×2+2=42<44 bottomBarH，不重叠）
   const tabBtnGap2 = 4
   // D048h（2026-06-28 13:27 拍板）：DBG 底部条改两行布局
-  //  - 上行：5 个 tab（高 24，不与右侧按钮挤）
-  //  - 下行：复制本tab + ▲▼ 滚动箭头（高 24）
+  //  - 上行：5 个 tab（高 20，不与右侧按钮挤）
+  //  - 下行：复制本tab + ▲▼ 滚动箭头（高 20）
   // 修前：单行 5tab(56) + 复制(64) + ▲▼ 拼 296+168px → 屏宽 393 不够 → 第一 tab 溢出
-  const row1Y = bottomBarY + 2          // 上行（5 tab）
-  const row2Y = bottomBarY + 22         // 下行（复制+箭头）
+  // D048j：上版本 tab 高 36，两行重叠 16px。现改 20。
+  const row1Y = bottomBarY + 2          // 上行（5 tab）y=[bottomBarY+2, bottomBarY+22]
+  const row2Y = bottomBarY + 22         // 下行（复制+箭头）y=[bottomBarY+22, bottomBarY+42]
 
   // ─── 上行：5 个 tab（占满整行，56px 宽 × 5 = 280，4 gap = 16，总 296，剩 97px 给边距）───
   // 重新算：393 / 5 = 78px 每个更宽松，但保持 56 兼容布局
@@ -3321,8 +3322,12 @@ function handleTouch(x, y, type) {
       const _bottomBarH = 44
       const _bottomBarY = _h - _bottomBarH - 34
       const _ARROW_SZ = 28
-      // 5 个 tab 按钮（在底部条）
-      if (type === 'end' && layout._dbgTabs && y >= _bottomBarY) {
+      // 5 个 tab 按钮（仅上行 row1Y 20px 区域）
+      // D048j（2026-06-28 13:46 拍板·修"点复制本tab 按钮被误判为切 POLL"）：加 y 上限
+      // 修前：tab 循环只检查 x 范围，5 tab 占满整行 6~386 → "复制本tab"按钮 x [261, 325]
+      //      落在 POLL tab [234, 310] 内 → onTouch 误判切 POLL，没复制
+      // 修：tab 循环加 y 上限 = row1Y + 20（只匹配上行 20px 高）
+      if (type === 'end' && layout._dbgTabs && y >= _bottomBarY && y < _bottomBarY + 22) {
         for (let _ti = 0; _ti < layout._dbgTabs.length; _ti++) {
           const _tb = layout._dbgTabs[_ti]
           if (x >= _tb.x && x <= _tb.x + _tb.w) {

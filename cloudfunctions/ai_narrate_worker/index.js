@@ -321,8 +321,29 @@ async function backgroundTask(request_id, payload) {
     const errBody = e.body ? ` | body: ${String(e.body).substring(0, 500)}` : ''
     const fullError = (e.message || 'AI服务暂不可用') + errBody
 
+    // D048e（2026-06-28 11:50 拍板·修 DBG [AI₁ 原始返回] 无数据 bug）：
+    // LLM 抛错时（不是 parseFailed）也构造 fakeResult 写进 result_str
+    // 这样前端 status=done 走正常渲染路径（虽然分支会是空），DBG 浮窗能显示错误 + 请求详情
+    // 之前：只写 error_str 到 narrate_result，raw_response 整段没存 → DBG "无数据"
+    const errFakeResult = {
+      success: false,
+      error: fullError,
+      branch: null,
+      branches: null,
+      state: null,
+      debug: {
+        raw_response: '',  // LLM 抛错时没有 raw（要么是 400/2013 等 API 层错）
+        system_prompt: (typeof systemPrompt !== 'undefined') ? systemPrompt : null,
+        user_prompt: (typeof userPrompt !== 'undefined') ? userPrompt : null,
+        messages: (typeof messages !== 'undefined') ? messages : null,
+        parse_error: e.message,
+        llm_error: true,  // 标记是 LLM 调用层错（不是 JSON 解析错）
+        err_status: e.statusCode || 0,
+      },
+    }
+
     // v0.2.4: 主异常时也要写 narrate_result（之前是有 try/catch 但如果 add 失败会被吞掉）
-    await safeWriteResult(request_id, '', fullError)
+    await safeWriteResult(request_id, JSON.stringify(errFakeResult), fullError)
   }
 }
 
@@ -620,9 +641,16 @@ async function callAI(state, input, history, monthEvent, isRetry) {
     const recent = history  // v0.1.84: 全量 history（不截断），prompt 长度不是瓶颈，叙事连贯性优先
     for (const msg of recent) {
       // v0.1.86: system 消息以 user 角色喂给 LLM（避免 MiniMax 2013 多 system 报错）
-      // v0.6.50: DeepSeek 无此限制，改回 role: 'system'（先生指示）
+      // D048e（2026-06-28 11:50 拍板·修复 DBG [AI₁ 原始返回] 无数据 bug）：
+      //  v0.6.50 时代是 DeepSeek，无 2013 限制所以 history system 直接用 role:'system'
+      //  D034 修 MM_API_KEY 切回 MiniMax-M2.7-highspeed 后，MiniMax 2013 限制又生效
+      //  现象：第 2 轮起 history 含 system 消息（来自 D008 状态变化注入）
+      //        + 当前 callAI 自己的 system = 2 个 system → MiniMax 必 2013
+      //        → callLLM 抛错 → backgroundTask catch → raw_response 没存
+      //        → 前端 DBG [AI₁ 原始返回] 无数据
+      //  修：history 里 role='system' 全部标 'user' 喂给 LLM
       if (msg.role === 'ai') messages.push({ role: 'assistant', content: msg.content })
-      else if (msg.role === 'system') messages.push({ role: 'system', content: msg.content })
+      else if (msg.role === 'system') messages.push({ role: 'user', content: '[系统提示] ' + String(msg.content || '').substring(0, 200) })
       else messages.push({ role: 'user', content: msg.content })
     }
   }

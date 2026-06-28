@@ -61,6 +61,27 @@
       },
       "installDependency": true,
       "handler": "index.main"
+    },
+    {
+      "name": "player_save",
+      "timeout": 30,
+      "memorySize": 256,
+      "installDependency": true,
+      "handler": "index.main"
+    },
+    {
+      "name": "player_load",
+      "timeout": 30,
+      "memorySize": 256,
+      "installDependency": true,
+      "handler": "index.main"
+    },
+    {
+      "name": "llm_io",
+      "timeout": 10,
+      "memorySize": 128,
+      "installDependency": true,
+      "handler": "index.main"
     }
   ]
 }

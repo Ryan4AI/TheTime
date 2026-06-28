@@ -1,19 +1,15 @@
 /**
  * 云函数：narrate_get_result
  *
- * v0.1.76 — 读独立的 narrate_result 集合（固定 schema）
- * 读 narrate_result（不在 narrate_pending）
- *
- * v0.2.5-H（先生 2026-06-13 拍板）：result_str 优先于 error_str
- * worker v0.2.5-H 在 JSON 解析失败时，会把 fakeResult（含 raw_response）写进 result_str
- * 同时 error_str 也写了"AI输出无法解析..."
- * 但 status=error 时前端忽略 result_str 走 [WORKER_ERROR] 分支，看不到 raw_response
- * 改：result_str 存在就优先返回 done + result，前端能渲染 debug 信息
+ * D049a 阶段 2（2026-06-29 01:16 拍板）：读 llm_io 集合（替代 narrate_result）
+ * llm_io 单一职责：AI 接口调用 IO（input/output/status/error/category）
+ * 业务数据（state/branch/attr_patch）全在 player_life
  *
  * 输入：{ request_id: "narrate_xxx" }
  * 输出：
- *   - { status: 'done', result: {...} }
- *   - { status: 'error', error: '...' }（仅 result_str 也为空时才返回 error）
+ *   - { status: 'success', llm_io: {...}, result: {...} }  // 业务数据从 result_str 读
+ *   - { status: 'error', error: '...' }
+ *   - { status: 'pending' }  // 还在跑
  *   - { status: 'not_found' }
  */
 
@@ -27,23 +23,33 @@ exports.main = async (event) => {
 
   try {
     // v0.1.77 修：用 where().get() 而非 doc().get()
-    // cloudbase NoSQL 用 add() 写入的数据，doc().get() 查不到（疑似 bug）
-    // where({_id: x}).get() 才能正确查到
-    const res = await db.collection('narrate_result').where({ _id: request_id }).get()
+    // D049a 改：读 llm_io 集合（替代 narrate_result）
+    const res = await db.collection('llm_io').where({ request_id }).get()
     const record = res.data && res.data[0]
     if (!record) return { status: 'not_found' }
 
-    // v0.2.5-H：result_str 优先（即使 error_str 也有内容）
-    // 让前端 status=done 能拿到 fakeResult，渲染 raw_response
-    if (record.result_str) {
-      let result
-      try { result = JSON.parse(record.result_str) } catch (e) { result = record.result_str }
-      // 如果 result 含 error 字段，也带 error 字段返回，前端 [RESPONSE_ERROR] 识别
-      return { status: 'done', result, error: record.error_str || null }
+    // 按 status 字段分发
+    if (record.status === 'pending') {
+      return { status: 'pending' }
     }
 
-    if (record.error_str) {
-      return { status: 'error', error: record.error_str }
+    if (record.status === 'success') {
+      // D049a: 业务数据现在不存 llm_io（只存 AI IO）—— 业务数据从 player_life 拉
+      // 但前端 D048 时代业务数据从 result_str 读—— 这里要兼容
+      // D049a 阶段 2：暂时 result 字段返回空，前端用 player_load 自己拉
+      return {
+        status: 'success',
+        llm_io: {
+          request_id: record.request_id,
+          category: record.category,
+          output: record.output,  // {raw_response, parsed}
+          created_at: record.created_at,
+        }
+      }
+    }
+
+    if (record.status === 'trigger_fail' || record.status === 'error') {
+      return { status: 'error', error: record.error || 'AI 调用失败' }
     }
 
     return { status: 'not_found' }

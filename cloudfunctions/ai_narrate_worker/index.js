@@ -272,24 +272,19 @@ async function backgroundTask(request_id, payload) {
       closest_board: closestBoardInfo,  // v0.6.35 — 前端展示榜单接近度
       is_retry: is_retry,
       attr_patch: attrPatch,  // D046：attrPatch 顶层暴露(前端读 patch.items)
-      debug: { system_prompt: systemPrompt, user_prompt: userPrompt, messages, raw_response: rawContent, perf_logs: perfLogs, attr_patch: attrPatch, picked_branch: picked, score_prompt: scorePrompt, score_raw_response: scoreRawResponse, d048f_log: (globalThis.__D048F_LOG__ || []).join('\n') || null },
     }
 
-    // v0.1.76 新增：写独立的 narrate_result 集合（固定 schema，无动态字段问题）
+    // D049a 阶段 2（2026-06-29 01:16 拍板）：写 llm_io 替代 narrate_result
+    // llm_io 单一职责：AI 接口 IO（不存业务数据）
     try {
-      // D048c（2026-06-28 09:42 拍板）：用 add（partialWriter 已删，_id 不会再有"已 add 过"情况）
-      await db.collection('narrate_result').add({
+      await db.collection('llm_io').where({ request_id }).update({
         data: {
-          _id: request_id,
-          result_str: JSON.stringify(result),  // 存 JSON 字符串，parse 回用
-          error_str: '',
-          created_at: Date.now(),
+          status: 'success',
+          output: { raw_response: rawContent, parsed: picked },
         },
       })
     } catch (e) {
-      console.error('[ai_narrate_worker] update narrate_result 失败:', e.message)
-      // v0.2.4: 写失败也不能让前端永久 NOT_FOUND，标记为 error
-      await safeWriteResult(request_id, '', '写narrate_result失败: ' + e.message)
+      console.error('[ai_narrate_worker] update llm_io 失败:', e.message)
     }
 
     console.log('[ai_narrate_worker] 完成, request_id=', request_id, ', elapsed_ms=', Date.now() - startTs)
@@ -347,50 +342,33 @@ async function backgroundTask(request_id, payload) {
       },
     }
 
-    // v0.2.4: 主异常时也要写 narrate_result（之前是有 try/catch 但如果 add 失败会被吞掉）
-    await safeWriteResult(request_id, JSON.stringify(errFakeResult), fullError)
+    // v0.2.4: 主异常时也要写 llm_io（之前是有 try/catch 但如果 add 失败会被吞掉）
+    // D049a 阶段 2：改写 llm_io 替代 narrate_result
+    try {
+      await db.collection('llm_io').where({ request_id }).update({
+        data: {
+          status: 'error',
+          error: fullError,
+        },
+      })
+    } catch (e) {
+      console.error('[ai_narrate_worker] 写 llm_io error 失败:', e.message)
+    }
   }
 }
 
-// v0.2.4: 安全写 narrate_result（任何错误都不抛，外层有兜底）
-// 之前是 try { add() } catch { console.error } —— 如果 add 失败就被吞了，前端永久 NOT_FOUND
-// 现在改成两次尝试 + 详细日志
-async function safeWriteResult(request_id, result_str, error_str) {
+// v0.2.4: 安全写 llm_io（任何错误都不抛，外层有兜底）
+// D049a 阶段 2 改：替代 safeWriteResult 的 narrate_result 写入
+async function safeWriteResult(request_id, error_str) {
   try {
-    await db.collection('narrate_result').add({
+    await db.collection('llm_io').where({ request_id }).update({
       data: {
-        _id: request_id,
-        result_str: result_str || '',
-        error_str: error_str || '',
-        created_at: Date.now(),
+        status: 'error',
+        error: error_str || '',
       },
     })
-  } catch (e1) {
-    console.error('[safeWriteResult] 第1次 add 失败:', e1.message, 'request_id=', request_id)
-    // 第2次尝试（可能是 CAP 一致性问题，重试一次）
-    try {
-      await db.collection('narrate_result').add({
-        data: {
-          _id: request_id,
-          result_str: result_str || '',
-          error_str: (error_str || '') + ' [retry_after_fail: ' + e1.message + ']',
-          created_at: Date.now(),
-        },
-      })
-    } catch (e2) {
-      console.error('[safeWriteResult] 第2次 add 失败:', e2.message, 'request_id=', request_id)
-      // 最后兜底：写 narrate_pending（前端不读 pending，但能查到日志）
-      try {
-        await db.collection('narrate_pending').where({ _id: request_id }).update({
-          data: {
-            error: '[safeWriteResult_failed] ' + (error_str || '') + ' | ' + e2.message,
-            finished_at: Date.now(),
-          },
-        })
-      } catch (e3) {
-        console.error('[safeWriteResult] 写 pending 也失败:', e3.message)
-      }
-    }
+  } catch (e) {
+    console.error('[safeWriteResult] 写 llm_io error 失败:', e.message, 'request_id=', request_id)
   }
 }
 

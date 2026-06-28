@@ -87,6 +87,68 @@ function calcLayout() {
 }
 
 function init(items, identity) {
+  // D049b 阶段 1（2026-06-29 01:42 拍板）：wx.login 拿 openid，存 storage 备用
+  // 先生有存档时后续 D049b 阶段 2 调 player_load 用
+  if (typeof wx !== 'undefined' && wx.login) {
+    try {
+      wx.login({
+        success: (res) => {
+          if (res && res.code) {
+            if (typeof wx.setStorageSync === 'function') {
+              wx.setStorageSync('wx_login_code', res.code)
+              console.log('[D049b] wx.login code 长度=', res.code.length)
+            }
+          }
+        },
+        fail: (err) => {
+          console.error('[D049b] wx.login 失败:', err && (err.errMsg || err.message))
+        }
+      })
+    } catch (e) {
+      console.error('[D049b] wx.login 异常:', e.message)
+    }
+  }
+
+  // D049b 阶段 2（2026-06-29 02:02 拍板）：异步调 player_load 检查存档
+  // 找到存档：标志位 cloudSaveFound = true（onTouch 时直接进 game 跳过身份生成）
+  // 没找到：标志位 false（走原 generate_identity 流程）
+  // 注意：player_load 是异步，IDENTITY 生成不能 await，先生点"开始"时再判断
+  if (typeof wx !== 'undefined' && wx.cloud && wx.cloud.callFunction && !identity) {
+    try {
+      wx.cloud.callFunction({
+        name: 'player_load',
+        data: {},
+        success: (res) => {
+          const r = (res && res.result) || {}
+          if (r.success && r.player_life) {
+            // 找到存档：存到全局 state，云端 openid 对应存档
+            console.log('[D049b] player_load 找到存档, life_number=', r.player.life_number, ' alive=', r.player_life.alive)
+            if (typeof wx.setStorageSync === 'function') {
+              wx.setStorageSync('cloud_save_data', {
+                player: r.player,
+                player_life: r.player_life,
+                narrate_history: r.narrate_history_list || []
+              })
+            }
+          } else {
+            console.log('[D049b] player_load 无存档或失败:', r.error || 'no_player')
+            if (typeof wx.setStorageSync === 'function') {
+              wx.setStorageSync('cloud_save_data', null)
+            }
+          }
+        },
+        fail: (err) => {
+          console.error('[D049b] player_load 失败:', err && (err.errMsg || err.message))
+          if (typeof wx.setStorageSync === 'function') {
+            wx.setStorageSync('cloud_save_data', null)
+          }
+        }
+      })
+    } catch (e) {
+      console.error('[D049b] player_load 异常:', e.message)
+    }
+  }
+
   // v0.6.31：科学属性生成模型
   // 阶层→总能力预算，职业→分配权重，年龄→分项微调
   if (identity) {
@@ -235,13 +297,28 @@ function init(items, identity) {
     }
   }
 
-  // v0.6.50j: 注入轮回数据（死亡页存储，下一世继承）
+  // v3.0.35: 删 deathCause 字段·legacy = { epRecord, epitaph }
+  // 兼容老格式（legacy 是字符串）→ 自动迁移到 epitaph
   if (typeof wx !== 'undefined' && wx.getStorageSync) {
     var rebirth = wx.getStorageSync('rebirth')
     if (rebirth) {
       IDENTITY.life_number = rebirth.life_number || 1
       IDENTITY.historical_shelter = rebirth.historical_shelter || 0
-      IDENTITY.legacy = rebirth.legacy || ''
+      if (typeof rebirth.legacy === 'string') {
+        // 老格式：legacy 是一句墓志铭
+        IDENTITY.legacy = {
+          epRecord: '',
+          epitaph: rebirth.legacy,
+        }
+      } else if (rebirth.legacy && typeof rebirth.legacy === 'object') {
+        // 新格式：legacy 是两字段
+        IDENTITY.legacy = {
+          epRecord: rebirth.legacy.epRecord || '',
+          epitaph: rebirth.legacy.epitaph || '',
+        }
+      } else {
+        IDENTITY.legacy = { epRecord: '', epitaph: '' }
+      }
     }
   }
 
@@ -274,6 +351,46 @@ function onTouch(x, y, type) {
   if (!state.hasTapped) {
     state.hasTapped = true
     state.fadeOutStart = Date.now()
+    // D049b 阶段 2（2026-06-29 02:02 拍板）：点击时检查云端存档
+    // 如果有存档且 alive=true，直接跳过身份生成进 game
+    var cloudSave = null
+    try {
+      if (typeof wx !== 'undefined' && wx.getStorageSync) {
+        cloudSave = wx.getStorageSync('cloud_save_data')
+      }
+    } catch (e) { /* ignore */ }
+    if (cloudSave && cloudSave.player && cloudSave.player_life && cloudSave.player_life.alive) {
+      // 有存档 → 把 player_life 转成 identity 格式直接进 game
+      var life = cloudSave.player_life
+      var restoredIdentity = {
+        life_number: life.life_number,
+        name: life.name,
+        gender: life.gender,
+        age: life.age,
+        occupation: life.occupation,
+        social_class: life.social_class,
+        dynasty: life.dynasty,
+        eraDisplay: life.era_display,
+        city: life.city,
+        year: life.year,
+        // 9 属性
+        '声望': life.reputation,
+        '财富': life.wealth,
+        '学识': life.knowledge,
+        '颜值': life.appearance,
+        '医术': life.medical,
+        '战功': life.military,
+        '文采': life.literary,
+        '政绩': life.political,
+        '义行': life.righteous,
+        // 标记：来自云端
+        fromCloud: true,
+        cloudPlayer: cloudSave.player,
+        cloudNarrateHistory: cloudSave.narrate_history || [],
+      }
+      console.log('[D049b] 使用云端存档, life=', life.life_number, ' name=', life.name)
+      IDENTITY = restoredIdentity
+    }
     return null
   }
   return null

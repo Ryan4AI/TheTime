@@ -1077,6 +1077,16 @@ function adjustFluidLayout() {
   layout.optionH = 36                       // v0.1.67: 38 → 36 缩 2px
   layout.optionGap = optionGap
   layout.itemBarY = layout.windowH - itemBarH - 10
+  // D048n（2026-06-28 16:36 拍板·修"选项不渲染"bug）：每帧写 debug 字段让 DBG 看到 typingDone 状态
+  // 先生反馈 16:34 narrative 完整显示但选项不出现——之前 drawOptions_debug 依赖 drawOptions 被调
+  // 实际可能 fadeIn<=0 早 return 导致 drawOptions 永不被调，drawOptions_debug 字段写不出来
+  // 现在独立写每帧状态到 debugLog，DBG 场景 tab 必能看到
+  if (debugLog.length > 0) {
+    const last = debugLog[debugLog.length - 1]
+    if (last) {
+      last.typewriter_debug = `typingDone=${typingDone}, narrative.length=${narrative.length}, displayedChars=${displayedChars}, optionsAppearTime-offset=${optionsAppearTime - Date.now()}, options.length=${options.length}`
+    }
+  }
 }
 
 // ─────── 生图背景（v0.1.69：前端直连 Pollinations.ai，跳过云函数） ───────
@@ -2881,6 +2891,7 @@ function drawDebugPanel(ctx) {
         allText += `[BG_URL] ${d.bg_url}\n\n`
       }
       if (d.drawOptions_debug) allText += `[drawOptions_debug]\n${d.drawOptions_debug}\n`
+      if (d.typewriter_debug) allText += `[typewriter_debug]\n${d.typewriter_debug}\n`
       if (d.layout_debug) allText += `[layout]\n${d.layout_debug}\n\n`
       // B: state 全字段
       const _st = state || {}

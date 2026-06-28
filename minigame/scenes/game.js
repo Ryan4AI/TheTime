@@ -15,8 +15,7 @@ var state = null
 var layout = null
 var currentItems = []
 var narrative = ''           // 当前显示的叙事文本
-var streamedText = ''        // v3.0.14: 流式期间累积显示（done 后合并到 narrative）
-var streamDone = false       // v3.0.14: 是否流式结束（true 后切回 narrative）
+var streamedText = ''        // D048c: 保留变量（兼容旧代码引用），非流式始终为空
 var showFateDetail = false    // v0.6.56: 点击命格区切换数值详情
 var systemLineCount = 0     // v0.1.80 (D008): 当前 narrative 顶部的 system 行数（淡灰色显示）
 var displayedChars = 0        // 打字机效果：已显示字符数
@@ -190,8 +189,7 @@ module.exports = {
 
     currentItems = items
     narrative = ''
-    streamedText = ''  // v3.0.14
-    streamDone = false  // v3.0.14
+    streamedText = ''  // D048c: 保留兼容
     displayedChars = 0
     displayStartTime = 0
     options = []
@@ -488,48 +486,8 @@ function pollNarrateResult(requestId, action, userInput, attempt, pollStartMs) {
       success: (res) => {
         const pollResult = (res && res.result) || {}
 
-        // v3.0.12: 流式状态·累积 partial_content + 抽取 content 字段
-        if (pollResult.status === 'streaming' && pollResult.partial_content) {
-          // v3.0.12: 流式期间填 raw_response 到 debugLog（让 DBG 浮窗显示）
-          if (debugLog.length > 0) {
-            const last = debugLog[debugLog.length - 1]
-            last.raw_response = pollResult.partial_content
-            last.partial_status = pollResult.partial_status
-          }
-
-          // v3.0.14: 用扫描器抽 content（替代脆弱正则）
-          // v3.0.14k-fix: 先生 19:03 反馈"DBG 显示内容但前端 0 字"
-          // 真因未知（partialWriter 协程 / globalThis 没生效 / 抽取逻辑？）→ 改为兜底：先显示抽取后的，
-          // 抽取为空则直接显示 partial_content（让玩家看到 LLM 在写什么）
-          let partialNarrative = extractContent(pollResult.partial_content)
-          if (!partialNarrative) {
-            // 兜底：直接显示 partial_content（可能含 JSON 语法，但至少能看到 LLM 在写）
-            partialNarrative = pollResult.partial_content || ''
-          }
-          // v3.0.14k-fix: 把 partial_content + extractContent 结果填 debugLog，先生能看到为什么 0 字
-          if (debugLog.length > 0) {
-            const last = debugLog[debugLog.length - 1]
-            last.partial_content_raw = pollResult.partial_content
-            last.partial_content_extracted = partialNarrative
-          }
-
-          // v3.0.14: 流式期间写入 streamedText（不动 narrative）
-          if (partialNarrative && partialNarrative.length > (streamedText || '').length) {
-            const isFirstChunk = !streamedText || streamedText.length === 0
-            streamedText = partialNarrative
-            if (isFirstChunk) {
-              displayedChars = 0
-              displayStartTime = Date.now()
-            }
-            // v3.0.14: 选项时机跟 streamedText 对齐（保持"打字完才出"习惯）
-            optionsAppearTime = displayStartTime + streamedText.length * TYPEWRITE_SPEED + 300
-          }
-          // v3.0.14aic: 流式 loading 文案用真实秒数（闭包 pollStartMs，不用 debugLog.last.ts）
-          loadingText = `史官正在落笔… ${elapsedSec}秒`
-          // 继续轮询
-          pollNarrateResult(requestId, action, userInput, attempt + 1, pollStartMs)
-          return
-        }
+        // D048c（2026-06-28 09:42 拍板）：删流式 partial_content 轮询块（callLLMStream 已删，后端无 partial 来源）
+        // 前端拿到 done 后用前端假打字机：streamedText 累积完整 content + TYPEWRITE_SPEED 显示
 
         if (pollResult.status === 'done') {
           // ── 成功：处理 result ──
@@ -626,7 +584,10 @@ function pollNarrateResult(requestId, action, userInput, attempt, pollStartMs) {
 // ─────── 处理 AI 返回 ───────
 function handleAIResponse(result, action, userInput) {
   loading = false
-  streamDone = true  // v3.0.14: 流式结束，渲染切回 narrative
+  // D048c（2026-06-28 09:42 拍板）：删 streamDone 引用（改回非流式）
+  // v0.2.5-D: 每轮重置 system 行计数（v0.1.80 D008 system 进 narrativeHistory 但渲染层没 reset）
+  // 之前会一直累计，导致 system 行越积越多
+  systemLineCount = 0
   // v0.2.5-D: 每轮重置 system 行计数（v0.1.80 D008 system 进 narrativeHistory 但渲染层没 reset）
   // 之前会一直累计，导致 system 行越积越多
   systemLineCount = 0
@@ -847,23 +808,24 @@ function handleAIResponse(result, action, userInput) {
   // 6. 准备显示
   // 系统状态变化不进 narrative 字符串（前端不显示 [system · XXX] 文字）
   // system message 仍然进 narrativeHistory（给 LLM 看）
-  // v3.0.14: 如果流式期间已经显示了一段且 branch.content 包含它，保留显示位置不重打字
+  // D048c（2026-06-28 09:42 拍板）：恢复打字机
+  // 改回 TYPEWRITE_SPEED 累加显示（前端假打字机：拿到完整 content 后逐字显示）
   const finalContent = (branch.content || '').slice(0, MAX_NARRATIVE_CHARS)
   if (streamedText && finalContent.length >= streamedText.length) {
+    // 兼容：done 来了但 streamedText 已被 done 路径填过（不再发生——后端非流式，streamedText 始终为空）
     narrative = finalContent
-    // v3.0.14ai: A3 无打字机·done 后立即显示
-    displayStartTime = Date.now() - streamedText.length  // 不用 TYPEWRITE_SPEED
+    displayStartTime = Date.now() - streamedText.length * TYPEWRITE_SPEED
   } else {
     narrative = finalContent
     displayedChars = 0
     displayStartTime = Date.now()
   }
-  streamedText = ''  // v3.0.14: 清空流式缓冲
+  streamedText = ''  // D048c: 保留变量（line 18/193 引用），无流式时始终为空
   systemLineCount = 0  // 前端不渲染 system 行
   userScrolledAway = false  // v0.6.85: 新叙事到达，重置用户手动滚动状态
   options = (branch.options || []).slice(0, 3).map(label => ({ label, key: label }))
-  // v3.0.14ai: A3 无打字机·选项 300ms 后立即出
-  optionsAppearTime = displayStartTime + 300
+  // D048c: 恢复打字机·选项等打字完再出（TYPEWRITE_SPEED × 字数 + 300ms）
+  optionsAppearTime = displayStartTime + narrative.length * TYPEWRITE_SPEED + 300
   monthChanged = month_changed
   newEvent = event || null
 }
@@ -1059,7 +1021,7 @@ function adjustFluidLayout() {
   // 加自由输入按钮高度 + 底缓冲
   optBlockH += freeGap + freeH + 8
 
-  const typingDone = (narrative && displayedChars >= narrative.length) || (streamedText && displayedChars >= streamedText.length)  // v3.0.14: 流式期间也按 streamedText 算 typingDone
+  const typingDone = narrative && displayedChars >= narrative.length  // D048c: 改回非流式（仅按 narrative 算）
   const optReserveH = typingDone ? optBlockH : 0
   const optionGap = 3
   const lineHeight = 22
@@ -1068,10 +1030,9 @@ function adjustFluidLayout() {
   const charPerLine = Math.max(8, Math.floor(innerW / fontSize))
 
   // 文字行数按 narrative 完整字符数算
-  // v3.0.14l-fix: 流式期间也要按 streamedText 算（先生 19:16 反馈"已收 200 字但没渲染"）
-  // 之前流式期间 narrative='' → lineCount=2（最小值）→ 叙事区被压成 2 行 → 文字溢出裁剪看不到
+  // D048c（2026-06-28 09:42 拍板）：改回非流式（仅按 narrative 算）
   let lineCount = 2
-  const sourceText = streamDone || !streamedText ? narrative : streamedText  // v3.0.14l-fix: 与 drawNarrative 一致
+  const sourceText = narrative  // D048c: 删流式分支
   if (sourceText) {
     const paras = sourceText.split('\n')
     let total = 0
@@ -1540,8 +1501,8 @@ const BOARD_FORMULAS = {
 
 // v0.2.2 — 叙事区（去白底卡片 + 文字直渲染 + 卷首小印 + 楷体）
 function drawNarrative(ctx) {
-  // v3.0.14: 流式期间用 streamedText，done 后用 narrative
-  const displaySrc = streamDone || !streamedText ? narrative : streamedText
+  // D048c（2026-06-28 09:42 拍板）：改回非流式（仅用 narrative）
+  const displaySrc = narrative  // D048c: 删流式分支
 
   // v0.2.5-P（先生 2026-06-13 11:49 拍板）：loading=true 且 narrative="" 时显示"史官正在落笔..."
   // 之前 v0.2.5-D 删了 drawLoading 调用，注释说"由 narrative 区显示"，但代码里没实现
@@ -1599,10 +1560,9 @@ function drawNarrative(ctx) {
 
   const elapsed = Date.now() - displayStartTime
   const totalChars = displaySrc.length
-  // v3.0.14ai: 先生 2026-06-27 02:15 拍板 A3 · 前端无打字机立即显示
-  // 后端 partialWriter 500ms 写库（云函数 cost +2x · 阈值 5 字）
-  // 依赖后端高频拉：每 500ms 拿到新 partial_content 就画
-  const targetChars = totalChars  // A3: 不再匀速打字·立即显示全部
+  // D048c（2026-06-28 09:42 拍板）：恢复打字机（前端假打字机）
+  // 拿到完整 content 后按 TYPEWRITE_SPEED 累加显示
+  const targetChars = Math.min(totalChars, Math.floor(elapsed / TYPEWRITE_SPEED))
   displayedChars = targetChars
 
   const text = displaySrc.slice(0, displayedChars)

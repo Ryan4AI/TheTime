@@ -157,48 +157,12 @@ async function backgroundTask(request_id, payload) {
     // 收集 PERF 数据供 DBG 浮窗展示（先生手机只能看 DBG）
     var perfLogs = []
     globalThis.__PERF_LOGS__ = perfLogs  // 让 callAI/callScoringAI 内部能 push
-    globalThis.__STREAMED_CONTENT__ = ''  // v3.0.10: 流式累积内容
 
-    // v3.0.10: 启动 partial_content 写库协程
-    // v3.0.14ai: 先生 2026-06-27 02:15 拍板 A3 · partialWriter 1000ms → 500ms（前端无打字机立即显示·靠后端高频拉）
-    var partialStopFlag = false
-    var lastPartialLen = 0
-    var partialWriter = (async function() {
-      while (!partialStopFlag) {
-        await new Promise(r => setTimeout(r, 500))  // A3: 500ms 写库
-        const cur = globalThis.__STREAMED_CONTENT__ || ''
-        if (cur.length > lastPartialLen + 5) {  // A3: 阈值降到 5 字（更灵敏）
-          lastPartialLen = cur.length
-          try {
-            // 先确保 narrate_result 文档存在（add 一个空文档）
-            const exists = await db.collection('narrate_result').where({ _id: request_id }).count()
-            if (exists.total === 0) {
-              await db.collection('narrate_result').add({
-                data: {
-                  _id: request_id,
-                  result_str: '',
-                  error_str: '',
-                  created_at: Date.now(),
-                  partial_content: cur,  // 关键：流式 partial_content
-                  partial_status: 'streaming',  // streaming / done
-                }
-              })
-            } else {
-              await db.collection('narrate_result').where({ _id: request_id }).update({
-                data: { partial_content: cur, partial_status: 'streaming' }
-              })
-            }
-            console.log('[PARTIAL] wrote', cur.length, 'chars to narrate_result')
-          } catch (e) {
-            console.error('[PARTIAL] write error:', e.message)
-          }
-        }
-      }
-    })()
+    // D048c（2026-06-28 09:42 拍板）：删 partialWriter 协程 + 流式 partial_content 写库
+    // 凌晨 12 小时 9 版本的真因：保留流式根本做不好（partialWriter 500ms 触发一堆 bug）
+    // 改非流式：callAI 走 callLLM（非流式），前端拿到完整 content 后用前端假打字机
 
     const { branches, systemPrompt, userPrompt, messages, rawContent } = await callAI(preUpdate, realInput, history, monthEvent, is_retry)
-    partialStopFlag = true  // 停止 partial 写库协程
-    await partialWriter.catch(e => console.error('partialWriter error:', e.message))
     const t2 = Date.now()
     console.log('[PERF] callAI_ms=', t2 - t1)
     perfLogs.push({ stage: 'queryMonthEvent_ms', ms: t1 - t0 })
@@ -308,14 +272,13 @@ async function backgroundTask(request_id, payload) {
 
     // v0.1.76 新增：写独立的 narrate_result 集合（固定 schema，无动态字段问题）
     try {
-      // v3.0.14d-fix: 用 upsert 替代 add（partialWriter 协程可能已经 add 过 _id）
-      // 之前 v0.2.4 的 add 检查 _id 已存在就跳过 → result_str 永远是空 → 前端永远拿不到 done
-      await db.collection('narrate_result').where({ _id: request_id }).update({
+      // D048c（2026-06-28 09:42 拍板）：用 add（partialWriter 已删，_id 不会再有"已 add 过"情况）
+      await db.collection('narrate_result').add({
         data: {
+          _id: request_id,
           result_str: JSON.stringify(result),  // 存 JSON 字符串，parse 回用
           error_str: '',
-          partial_content: '',  // v3.0.10: 流式完成·清空 partial_content（避免前端用旧 partial）
-          partial_status: 'done',  // 标记完成
+          created_at: Date.now(),
         },
       })
     } catch (e) {
@@ -694,37 +657,23 @@ async function callAI(state, input, history, monthEvent, isRetry) {
   // v0.6.9x: MiniMax 极简回退逻辑
   let response
   const t_llm_start = Date.now()
-  // v3.0.10: 流式接收·每 chunk 触发 onChunk
-  // 状态变量（callAI 内闭包）：累积 rawContent + 流式进度报告
-  let streamedContent = ''
-  let firstChunkAt = 0
-  let narrativeSent = 0  // 已经写到 partial_content 的 narrative 字数
+  // D048c（2026-06-28 09:42 拍板）：改非流式 callLLM（凌晨 9 版本真因：流式根本做不好）
+  // 前端拿完整 content 后用前端假打字机（streamedText + TYPEWRITE_SPEED）
   try {
-    const result = await callLLMStream(messages, MM_MODEL, (delta, full) => {
-      streamedContent = full
-      if (!firstChunkAt) firstChunkAt = Date.now()
-      // 通过 globalThis 把当前 partial_content 暴露给 backgroundTask 轮询写入
-      globalThis.__STREAMED_CONTENT__ = full
-    })
-    response = { choices: [{ message: { content: result.content } }] }
+    response = await callLLM(messages, MM_MODEL)
   } catch (e) {
     const status = e.statusCode || 0
     if (status === 400 || status === 429 || (status >= 500 && status < 600)) {
       console.error('[ai_narrate_worker] 主模型失败，回退:', status, e.message)
-      const result = await callLLMStream(messages, MM_FALLBACK_MODEL, (delta, full) => {
-        streamedContent = full
-        if (!firstChunkAt) firstChunkAt = Date.now()
-        globalThis.__STREAMED_CONTENT__ = full
-      })
-      response = { choices: [{ message: { content: result.content } }] }
+      response = await callLLM(messages, MM_FALLBACK_MODEL)
     } else {
       throw e
     }
   }
   const t_llm_end = Date.now()
-  console.log('[PERF] callAI.llm_ms=', t_llm_end - t_llm_start, 'model=', MM_MODEL, 'prompt_chars=', systemPrompt.length + userPrompt.length, 'first_chunk_ms=', firstChunkAt ? firstChunkAt - t_llm_start : -1)
+  console.log('[PERF] callAI.llm_ms=', t_llm_end - t_llm_start, 'model=', MM_MODEL, 'prompt_chars=', systemPrompt.length + userPrompt.length)
   if (typeof globalThis.__PERF_LOGS__ !== 'undefined') {
-    globalThis.__PERF_LOGS__.push({ stage: 'callAI.llm_ms', ms: t_llm_end - t_llm_start, model: MM_MODEL, prompt_chars: systemPrompt.length + userPrompt.length, first_chunk_ms: firstChunkAt ? firstChunkAt - t_llm_start : -1 })
+    globalThis.__PERF_LOGS__.push({ stage: 'callAI.llm_ms', ms: t_llm_end - t_llm_start, model: MM_MODEL, prompt_chars: systemPrompt.length + userPrompt.length })
   }
   const content = response.choices?.[0]?.message?.content || ''
   // 流式下 think 标签可能未关闭·前端展示时再剥
@@ -1425,68 +1374,6 @@ function callLLM(messages, modelOverride) {
   })
 }
 
-// v3.0.10: 流式调用 LLM（每 chunk 触发 onChunk callback）
-// 返回累积的完整 content + finishReason
-function callLLMStream(messages, modelOverride, onChunk) {
-  return new Promise((resolve, reject) => {
-    const useModel = modelOverride || MM_MODEL
-    const data = JSON.stringify({
-      model: useModel, messages,
-      max_tokens: MAX_TOKENS, temperature: TEMPERATURE, think: false,
-      reasoning_split: true,  // v3.0.14b: MiniMax 关 thinking（先生 13:44 拍板·reasoning_split 生效）
-      stream: true,
-    })
-    const url = new URL(MM_BASE_URL + '/chat/completions')
-    const req = https.request({
-      hostname: url.hostname, path: url.pathname, method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + MM_API_KEY },
-      timeout: LLM_TIMEOUT_MS,
-    }, res => {
-      if (res.statusCode !== 200) {
-        let errBody = ''
-        res.on('data', chunk => errBody += chunk)
-        res.on('end', () => {
-          console.error('[ai_narrate_worker] AI 非 200 流式响应, status=', res.statusCode, ', body:', errBody)
-          const err = new Error(`AI服务暂不可用 (${res.statusCode})`)
-          err.statusCode = res.statusCode
-          reject(err)
-        })
-        return
-      }
-
-      // SSE 解析：每行 data: {...}
-      let buffer = ''
-      let fullContent = ''
-      let chunkCount = 0
-      res.on('data', chunk => {
-        buffer += chunk.toString()
-        const lines = buffer.split('\n')
-        buffer = lines.pop()  // 最后一行可能不完整，留到下次
-        for (const line of lines) {
-          const trimmed = line.trim()
-          if (!trimmed || !trimmed.startsWith('data:')) continue
-          const payload = trimmed.substring(5).trim()
-          if (payload === '[DONE]') continue
-          try {
-            const obj = JSON.parse(payload)
-            const delta = obj.choices?.[0]?.delta?.content || ''
-            if (delta) {
-              fullContent += delta
-              chunkCount++
-              if (onChunk) onChunk(delta, fullContent)
-            }
-          } catch (e) {
-            // 解析失败的行忽略（SSE 偶尔有不规则行）
-          }
-        }
-      })
-      res.on('end', () => {
-        resolve({ content: fullContent, chunkCount })
-      })
-    })
-    req.on('error', reject)
-    req.on('timeout', () => { req.destroy(); reject(new Error('AI响应超时')) })
-    req.write(data)
-    req.end()
-  })
-}
+// D048c（2026-06-28 09:42 拍板）：删 callLLMStream（改非流式 callLLM）
+// 凌晨 9 版本真因：保留流式根本做不好（partialWriter 500ms 触发一堆 bug）
+// callLLM 还在用（line 1344 callScoringAI）

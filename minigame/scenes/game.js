@@ -2710,53 +2710,65 @@ function drawDebugPanel(ctx) {
   ctx.stroke()
 
   const tabBtnH2 = bottomBarH - 8
-  const tabBtnY2 = bottomBarY + 4
   const tabBtnGap2 = 4
-  // 右侧：▲(28) → 复制本tab(64) → ▼(28)
-  const upBtnX = w - arrowSize * 2 - 16
-  const copyTabBtnW = 64
-  const copyTabBtnX = upBtnX - copyTabBtnW - tabBtnGap2
-  const downBtnX = w - arrowSize - 8
-  // 5 个 tab 从"复制本tab"左侧开始往左排
-  const _ARROW_SIZE = arrowSize  // 占位用,避免 const 重复声明
-  let _curTabX = copyTabBtnX - 56 - tabBtnGap2  // tabBtnW=56
+  // D048h（2026-06-28 13:27 拍板）：DBG 底部条改两行布局
+  //  - 上行：5 个 tab（高 24，不与右侧按钮挤）
+  //  - 下行：复制本tab + ▲▼ 滚动箭头（高 24）
+  // 修前：单行 5tab(56) + 复制(64) + ▲▼ 拼 296+168px → 屏宽 393 不够 → 第一 tab 溢出
+  const row1Y = bottomBarY + 2          // 上行（5 tab）
+  const row2Y = bottomBarY + 22         // 下行（复制+箭头）
+
+  // ─── 上行：5 个 tab（占满整行，56px 宽 × 5 = 280，4 gap = 16，总 296，剩 97px 给边距）───
+  // 重新算：393 / 5 = 78px 每个更宽松，但保持 56 兼容布局
+  const tabBtnW2 = Math.floor((w - 12) / 5)  // 自适应屏宽：屏宽 393 → 76px
+  let _curTabX = 6
   layout._dbgTabs = []
   for (let _ti = 0; _ti < 5; _ti++) {
     const isActive = _ti === dbgActiveTab
     ctx.fillStyle = isActive ? 'rgba(240,200,120,0.45)' : 'rgba(240,200,120,0.12)'
-    ctx.fillRect(_curTabX, tabBtnY2, 56, tabBtnH2)
+    ctx.fillRect(_curTabX, row1Y, tabBtnW2, tabBtnH2)
     ctx.strokeStyle = isActive ? '#f0c878' : 'rgba(240,200,120,0.3)'
     ctx.lineWidth = 1
-    ctx.strokeRect(_curTabX, tabBtnY2, 56, tabBtnH2)
+    ctx.strokeRect(_curTabX, row1Y, tabBtnW2, tabBtnH2)
     ctx.fillStyle = isActive ? '#fff' : '#f0c878'
-    ctx.font = isActive ? 'bold 12px sans-serif' : '12px sans-serif'
+    ctx.font = isActive ? 'bold 11px sans-serif' : '11px sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(TAB_LABELS[_ti], _curTabX + 28, tabBtnY2 + tabBtnH2 / 2 + 1)
-    layout._dbgTabs.push({ x: _curTabX, y: tabBtnY2, w: 56, h: tabBtnH2, tabIdx: _ti })
-    _curTabX -= 56 + tabBtnGap2
+    ctx.fillText(TAB_LABELS[_ti], _curTabX + tabBtnW2 / 2, row1Y + tabBtnH2 / 2 + 1)
+    layout._dbgTabs.push({ x: _curTabX, y: row1Y, w: tabBtnW2, h: tabBtnH2, tabIdx: _ti })
+    _curTabX += tabBtnW2
   }
+
+  // ─── 下行：右侧 ▲(28) + 复制本tab(64) + ▼(28) ───
+  const upBtnX = w - arrowSize * 2 - 8
+  const copyTabBtnW = 64
+  const copyTabBtnX = upBtnX - copyTabBtnW - tabBtnGap2
+  const downBtnX = w - arrowSize - 4
+
   // "复制本 tab"按钮
   ctx.fillStyle = 'rgba(240,200,120,0.32)'
-  ctx.fillRect(copyTabBtnX, tabBtnY2, copyTabBtnW, tabBtnH2)
+  ctx.fillRect(copyTabBtnX, row2Y, copyTabBtnW, tabBtnH2)
   ctx.fillStyle = '#f0c878'
-  ctx.font = 'bold 11px sans-serif'
+  ctx.font = 'bold 10px sans-serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText('复制本tab', copyTabBtnX + copyTabBtnW / 2, tabBtnY2 + tabBtnH2 / 2 + 1)
-  layout._dbgCopyTabBtn = { x: copyTabBtnX, y: tabBtnY2, w: copyTabBtnW, h: tabBtnH2 }
+  ctx.fillText('复制本tab', copyTabBtnX + copyTabBtnW / 2, row2Y + tabBtnH2 / 2 + 1)
+  layout._dbgCopyTabBtn = { x: copyTabBtnX, y: row2Y, w: copyTabBtnW, h: tabBtnH2 }
 
   // ▲▼ 滚动箭头（底部右侧）
   ctx.fillStyle = 'rgba(240,200,120,0.2)'
-  ctx.fillRect(upBtnX, tabBtnY2, arrowSize, tabBtnH2)
+  ctx.fillRect(upBtnX, row2Y, arrowSize, tabBtnH2)
   ctx.fillStyle = '#f0c878'
   ctx.font = 'bold 16px sans-serif'
   ctx.textAlign = 'center'
-  ctx.fillText('▲', upBtnX + arrowSize / 2, tabBtnY2 + tabBtnH2 / 2 + 1)
+  ctx.fillText('▲', upBtnX + arrowSize / 2, row2Y + tabBtnH2 / 2 + 1)
   ctx.fillStyle = 'rgba(240,200,120,0.2)'
-  ctx.fillRect(downBtnX, tabBtnY2, arrowSize, tabBtnH2)
+  ctx.fillRect(downBtnX, row2Y, arrowSize, tabBtnH2)
   ctx.fillStyle = '#f0c878'
-  ctx.fillText('▼', downBtnX + arrowSize / 2, tabBtnY2 + tabBtnH2 / 2 + 1)
+  ctx.fillText('▼', downBtnX + arrowSize / 2, row2Y + tabBtnH2 / 2 + 1)
+  // 把 upBtn / downBtn 信息存到 layout 让 onTouch 用
+  layout._dbgUpBtn = { x: upBtnX, y: row2Y, w: arrowSize, h: tabBtnH2 }
+  layout._dbgDownBtn = { x: downBtnX, y: row2Y, w: arrowSize, h: tabBtnH2 }
 
   // 内容区（D039：减去底部 tab 条高度 bottomBarH）
   ctx.save()

@@ -2696,7 +2696,10 @@ function drawDebugPanel(ctx) {
 
   // 底部条（高度 44px）：5 个 tab + 复制本tab + ▲▼ 滚动箭头
   const bottomBarH = 44
-  const bottomBarY = h - bottomBarH
+  // D048g（2026-06-28 13:23 拍板·先生骂我是蠢货）：底部条上移 34px 避 iOS Home Indicator
+  // D039 拍板"tab 放底部"时没考虑小白条占位，现在补上
+  // 34px = iPhone 14 Pro+ Home Indicator 高度（其他 iPhone 同样 34px，Android 全面屏也兼容）
+  const bottomBarY = h - bottomBarH - 34
   ctx.fillStyle = '#1a1a1a'
   ctx.fillRect(0, bottomBarY, w, bottomBarH)
   ctx.strokeStyle = '#444'
@@ -3291,8 +3294,9 @@ function handleTouch(x, y, type) {
       const _h = layout.windowH
 
       // D039（先生 2026-06-28 01:29 拍板）：tab 按钮在底部条, 顶部只保留关闭按钮
+      // D048g（先生 2026-06-28 13:23 拍板·骂我是蠢货）：底部条上移 34px 避 iOS Home Indicator
       const _bottomBarH = 44
-      const _bottomBarY = _h - _bottomBarH
+      const _bottomBarY = _h - _bottomBarH - 34
       const _ARROW_SZ = 28
       // 5 个 tab 按钮（在底部条）
       if (type === 'end' && layout._dbgTabs && y >= _bottomBarY) {

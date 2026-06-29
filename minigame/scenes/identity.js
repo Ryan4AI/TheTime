@@ -175,8 +175,12 @@ function init(items, identity) {
   // D049b 阶段 2（2026-06-29 02:02 拍板）：异步调 player_load 检查存档
   // 找到存档：标志位 cloudSaveFound = true（onTouch 时直接进 game 跳过身份生成）
   // 没找到：标志位 false（走原 generate_identity 流程）
+  // D049 修复（2026-06-29 13:35 拍板）：删 `!identity` 判断——之前逻辑错！
+  //   之前认为"intro 传了 identity 就跳过 player_load"，但先生几乎永远有 identity
+  //   → player_load 永远被跳过 → openid 永远不存 → player_save 永远早退
+  //   修复：每次进 identity.js 都调 player_load（云端有存档就跳过身份生成）
   // 注意：player_load 是异步，IDENTITY 生成不能 await，先生点"开始"时再判断
-  if (typeof wx !== 'undefined' && wx.cloud && wx.cloud.callFunction && !identity) {
+  if (typeof wx !== 'undefined' && wx.cloud && wx.cloud.callFunction) {
     try {
       wx.cloud.callFunction({
         name: 'player_load',

@@ -233,14 +233,13 @@ module.exports = {
           break
         }
       }
-      // D049 修复 v13（2026-06-30 01:21 拍板）：如果 options 空（旧数据）→ 显示"继续"按钮让先生主动触发
-      // 真因：先生之前没点过选项就退出，云端 ai 消息 options=null → 重进时 options 空 → 没法继续
-      // 修复：如果 options 为空 → 设 continuePending=true，先生点"继续"按钮才调 callAI
-      //   避免一进 game 就自动 callAI 让先生感觉"重新生成"
+      // D049 修复 v14（2026-06-30 01:23 拍板）：options 空时不显示任何"继续"按钮
+      // 真因：v13 设计了"继续"按钮——这是为旧数据 bug 设计的功能，错了
+      // 修复：options 空时不动（先生看到上次叙事，无选项）——先生点屏幕任意位置走 handleOptionSelected 兜底
+      //   onTouch 检测到 options 空时调 callAI('继续')，先生主动触发——不增加产品功能
       if (!options || options.length === 0) {
-        console.log('[D049-fix-v13] options 空（旧数据），显示"继续"按钮让先生主动触发')
-        continuePending = true  // 让先生看到"继续"按钮
-        options = [{ label: '继续', key: '继续' }]  // 显示一个"继续"按钮
+        console.log('[D049-fix-v14] options 空（旧数据），不显示继续按钮，等先生点屏幕任意位置触发')
+        // 不设 options，让 onTouch 检测空时主动 callAI
       }
       optionsAppearTime = 0  // 立即显示
       displayedChars = narrative.length
@@ -3654,6 +3653,19 @@ function handleTouch(x, y, type) {
     if (isInOptionBounds(x, y, i)) {
       const opt = options[i]
       handleOptionSelected(opt)
+      return null
+    }
+  }
+
+  // D049 修复 v14（2026-06-30 01:23 拍板）：options 空时先生点屏幕任意位置 = "继续"
+  // 真因：先生旧数据 options=null，没法点选项
+  // 修复：先生点屏幕下半部分（叙事选项区）→ 当成"继续"调 callAI
+  //   不增加产品功能（不显示"继续"按钮）——先生点屏幕是自然操作
+  if (type === 'end' && (!options || options.length === 0) && !loading && !deathConfirmPending && !fadeOut) {
+    var storyAreaY = layout.windowH * 0.5
+    if (y >= storyAreaY) {
+      console.log('[D049-fix-v14] options 空 + 先生点屏幕下半, 触发继续')
+      callAI('继续')
       return null
     }
   }

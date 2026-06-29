@@ -3657,18 +3657,11 @@ function handleTouch(x, y, type) {
     }
   }
 
-  // D049 修复 v14（2026-06-30 01:23 拍板）：options 空时先生点屏幕任意位置 = "继续"
-  // 真因：先生旧数据 options=null，没法点选项
-  // 修复：先生点屏幕下半部分（叙事选项区）→ 当成"继续"调 callAI
-  //   不增加产品功能（不显示"继续"按钮）——先生点屏幕是自然操作
-  if (type === 'end' && (!options || options.length === 0) && !loading && !deathConfirmPending && !fadeOut) {
-    var storyAreaY = layout.windowH * 0.5
-    if (y >= storyAreaY) {
-      console.log('[D049-fix-v14] options 空 + 先生点屏幕下半, 触发继续')
-      callAI('继续')
-      return null
-    }
-  }
+  // D049 修复 v15（2026-06-30 01:25 拍板）：删 v14 兜底
+  // 先生反馈"兜底也不合理，应该直接删掉旧数据重新开始"
+  // 修复：删 v14 兜底逻辑（不为旧数据 bug 设计兜底）
+  //   v12 已修 push ai 存 options（永久）——以后新数据不会出 options=null
+  //   先生云端旧数据 options=null → 走新玩家流程（从 player_load 端处理残缺）
 
   // 检查自由输入（v0.6.50g: 用 _freeInputBtn 替代旧版 _topFreeIcon）
   if (layout._freeInputBtn && hitTest(x, y, layout._freeInputBtn.x, layout._freeInputBtn.y, layout._freeInputBtn.w, layout._freeInputBtn.h)) {

@@ -137,16 +137,11 @@ function init() {
 
   for (var key in anims) anims[key].start(now)
 
-  // D049 修复 v9（2026-06-30 01:12 拍板）：init 调 player_load 时设 loading=true
-  // 真因：先生 01:10 反馈"v8 直接进入叙事页但重新生成"——说明先生重进时
-  //   init 异步 player_load 还没回就点踏入长河 → cloudSave 空 → 走 v4 路径 else 走 selection
-  //   然后 v8 1.5s 后才补跳 game——但先生已经在 selection，1.5s 后 game 跳出来
-  //   → 先生看到 game 但 cloudNarrateHistory 还在 loading 状态（异步没回）
-  // 修复：init 时设 loading=true，渲染时画"加载存档中..."提示
-  //   玩家看到 loading 提示，知道要等 1-2 秒再点踏入长河
-  //   异步 player_load 回来后设 loading=false（隐藏提示）
-  layout.loading = true
-  layout.loadingText = '正在加载存档...'
+  // D049 修复 v11（2026-06-30 01:18 拍板）：删 init 时的 loading 提示
+  // 真因：v9/v10 在 init 时设 loading=true + '正在加载存档...'，先生进 entry scene 就看到提示
+  //   → 用户体验差（先生还没做任何操作就被告知"等一下"）
+  // 修复：删 init 时的 loading——先生进 entry scene 不显示任何加载提示
+  //   只在先生点"踏入长河"时（onTouch 内）才显示 loading（告诉先生"程序在加载，别再点"）
 
   if (typeof wx !== 'undefined' && wx.cloud && wx.cloud.callFunction) {
     try {

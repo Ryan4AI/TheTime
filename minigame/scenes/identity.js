@@ -13,6 +13,69 @@ var anims = {}
 // 身份数据（由入世引擎生成）
 var IDENTITY = null
 
+// D049c（2026-06-29 09:31 拍板）：身份生成完调 player_save helper
+// 9 属性是新身份的关键数据，跨设备续作必须存云端
+// D049d（2026-06-29 09:31 拍板）：删 player_life_cache localStorage 兜底
+function identitySaveToCloud(identity) {
+  if (typeof wx === 'undefined' || !wx.cloud || !wx.cloud.callFunction) return
+  let openid = null
+  try {
+    openid = wx.getStorageSync && wx.getStorageSync('openid')
+  } catch (e) { /* ignore */ }
+  if (!openid) {
+    // D049d：没 openid 时不再写 localStorage 兜底
+    return
+  }
+
+  // 构造 player_life record（IDENTITY 字段 → player_life 字段）
+  const player_life = {
+    openid: openid,
+    life_number: identity.life_number || 1,
+    alive: true,  // 身份生成时默认活着
+    name: identity.name || '无名',
+    gender: (identity.gender === '女' || identity.gender === 'female') ? 'female' : 'male',
+    age: identity.age || 25,
+    occupation: identity.occupation || 'commoner',
+    social_class: identity.socialClass || identity.social_class || 'commoner',
+    dynasty: identity.dynasty || '',
+    era_display: identity.eraDisplay || '',
+    city: identity.city || '某地',
+    year: identity.year || 0,
+    month: identity.month || 1,
+    health: 100,  // 初始健康
+    lifespan: identity.lifespan || (55 + Math.floor(Math.random() * 25)),  // 55-80
+    reputation: identity['声望'] || 0,
+    wealth: identity['财富'] || 0,
+    knowledge: identity['学识'] || 0,
+    appearance: identity['颜值'] || 0,
+    medical: identity['医术'] || 0,
+    military: identity['战功'] || 0,
+    literary: identity['文采'] || 0,
+    political: identity['政绩'] || 0,
+    righteous: identity['义行'] || 0,
+    current_items: identity.items || [],
+    created_at: Date.now(),
+    updated_at: Date.now(),
+  }
+  const player = { _id: openid, life_number: player_life.life_number, created_at: Date.now(), updated_at: Date.now() }
+  const narrate_history_list = []  // 身份生成时还没叙事历史
+
+  wx.cloud.callFunction({
+    name: 'player_save',
+    data: { player, player_life, narrate_history_list },
+    success: (res) => {
+      if (res && res.result && res.result.success) {
+        console.log('[D049c] 身份存档成功, life_number=', player_life.life_number, ' name=', player_life.name)
+      } else {
+        console.error('[D049c] 身份存档失败:', (res && res.result && res.result.error) || 'unknown')
+      }
+    },
+    fail: (err) => {
+      console.error('[D049c] 身份存档失败:', (err && (err.errMsg || err.message)) || 'unknown')
+    },
+  })
+}
+
 function calcLayout() {
   var sys = getSystemInfo()
   var w = sys.width
@@ -390,6 +453,10 @@ function onTouch(x, y, type) {
       }
       console.log('[D049b] 使用云端存档, life=', life.life_number, ' name=', life.name)
       IDENTITY = restoredIdentity
+    } else {
+      // D049c（2026-06-29 09:31 拍板）：身份生成完（9 属性赋值后）自动存档
+      // 先生 9 属性是新身份的关键数据，跨设备续作必须存云端
+      identitySaveToCloud(IDENTITY)
     }
     return null
   }

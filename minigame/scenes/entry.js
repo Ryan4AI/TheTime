@@ -449,8 +449,61 @@ function onTouch(x, y, type) {
     } catch (e) { /* ignore */ }
 
     if (!cloudSave || !cloudSave.player || !cloudSave.player_life || !cloudSave.player_life.alive) {
-      // cloud_save_data 还没存 → 走 selection（init 异步没回来）
-      console.log('[D049-fix-v4] cloud_save_data 空, 走 selection（init 异步未回）')
+      // D049 修复 v8（2026-06-30 01:10 拍板）：cloud_save_data 空时再调一次 player_load + 延迟 1.5 秒
+      // 真因：先生 01:07 反馈"还是重新生成"——先生进 entry 后立即点"踏入长河"（< 1 秒）
+      //   init 异步调 player_load 还没回 → cloud_save_data 空 → 走 selection → 走新玩家流程
+      //   → identity 来自 generate_identity（不是 fromCloud）→ game.init 调 callAI → 重新生成
+      // 修复：cloud_save_data 空时再调一次 player_load + setTimeout 1.5s 后再处理
+      //   1.5s 内 player_load 回调回来 → 跳 game（用云端 state）
+      //   1.5s 后还没回 → 走 selection（新玩家）
+      if (typeof wx !== 'undefined' && wx.cloud && wx.cloud.callFunction) {
+        wx.cloud.callFunction({
+          name: 'player_load',
+          data: {},
+          success: (res) => {
+            const r = (res && res.result) || {}
+            if (r.openid && typeof wx.setStorageSync === 'function') {
+              wx.setStorageSync('openid', r.openid)
+            }
+            if (r.success && r.player_life && r.player_life.alive) {
+              if (typeof wx.setStorageSync === 'function') {
+                wx.setStorageSync('cloud_save_data', {
+                  player: r.player,
+                  player_life: r.player_life,
+                  narrate_history: r.narrate_history_list || []
+                })
+                console.log('[D049-fix-v8] onTouch 二次 player_load 找到云端存档, life=', r.player.life_number)
+              }
+            } else {
+              if (typeof wx.setStorageSync === 'function') {
+                wx.setStorageSync('cloud_save_data', null)
+              }
+            }
+          }
+        })
+        // setTimeout 1.5 秒后再决定跳哪个 scene
+        setTimeout(function() {
+          var cs = null
+          try { cs = wx.getStorageSync && wx.getStorageSync('cloud_save_data') } catch (e) {}
+          if (cs && cs.player && cs.player_life && cs.player_life.alive) {
+            var life2 = cs.player_life
+            var ri = {
+              life_number: life2.life_number, name: life2.name, gender: life2.gender, age: life2.age,
+              occupation: life2.occupation, social_class: life2.social_class,
+              dynasty: life2.dynasty, eraDisplay: life2.era_display, city: life2.city, year: life2.year,
+              '声望': life2.reputation, '财富': life2.wealth, '学识': life2.knowledge, '颜值': life2.appearance,
+              '医术': life2.medical, '战功': life2.military, '文采': life2.literary, '政绩': life2.political, '义行': life2.righteous,
+              fromCloud: true, cloudPlayer: cs.player, cloudNarrateHistory: cs.narrate_history || [],
+            }
+            console.log('[D049-fix-v8] 1.5s 后跳 game, life=', life2.life_number)
+            // 用 module.exports.autoNext 让 game.js 切场景
+            if (module.exports.autoNext !== undefined) {
+              module.exports.autoNext = { scene: 'game', items: life2.current_items || [], identity: ri }
+            }
+          }
+        }, 1500)
+      }
+      console.log('[D049-fix-v8] cloud_save_data 空, onTouch 二次 player_load + 等 1.5s, 暂时走 selection')
       return { scene: 'selection' }
     }
 

@@ -843,19 +843,18 @@ function handleAIResponse(result, action, userInput) {
 }
 
 // D049b 阶段 3：自动存档 helper
+// D049d（2026-06-29 09:31 拍板）：删 state 纯前端缓存（player_life_cache）
+// 改：失败时不再写 localStorage 兜底——先生依赖 player_load 拉云端 state
+//     没 openid 时也不写缓存（依赖 wx.login code2Session 流程后续补）
 function autoSaveToCloud() {
   if (typeof wx === 'undefined' || !wx.cloud || !wx.cloud.callFunction) return
-  // 先生 fromCloud 进游戏 → 才有 openid；新玩家（无存档）暂时不自动存（等先生手动触发或后续 D049c）
   let openid = null
   try {
     openid = wx.getStorageSync && wx.getStorageSync('openid')
   } catch (e) { /* ignore */ }
   if (!openid) {
-    // 第一次存盘时从 wx.login code 换 openid（D049 完整流程要云函数 code2Session，先生 deploy 后才能用）
-    // 先生暂用 localStorage 标记"已存过"先记录 player_life
-    if (typeof wx.setStorageSync === 'function') {
-      wx.setStorageSync('player_life_cache', JSON.stringify(state))
-    }
+    // D049d：没 openid 时不再写 localStorage 兜底（D049b 阶段 3 是用 player_life_cache 兜底）
+    // 后续先生 deploy wx.login code2Session 后才有 openid
     return
   }
 
@@ -869,24 +868,16 @@ function autoSaveToCloud() {
     data: { player, player_life, narrate_history_list },
     success: (res) => {
       if (res && res.result && res.result.success) {
-        // 存档成功
-        if (typeof wx.setStorageSync === 'function') {
-          wx.setStorageSync('player_life_cache', JSON.stringify(state))
-        }
+        // 存档成功（不再写 localStorage 兜底）
         console.log('[D049b] player_save 成功, updated_at=', res.result.updated_at)
       } else {
+        // D049d：失败时不再写 localStorage 兜底（先生依赖 player_load 拉云端）
         console.error('[D049b] player_save 失败:', (res && res.result && res.result.error) || 'unknown')
-        // 失败时仍存 localStorage，玩家下次进入有缓存
-        if (typeof wx.setStorageSync === 'function') {
-          wx.setStorageSync('player_life_cache', JSON.stringify(state))
-        }
       }
     },
     fail: (err) => {
+      // D049d：失败时不再写 localStorage 兜底
       console.error('[D049b] player_save 失败:', (err && (err.errMsg || err.message)) || 'unknown')
-      if (typeof wx.setStorageSync === 'function') {
-        wx.setStorageSync('player_life_cache', JSON.stringify(state))
-      }
     },
   })
 }

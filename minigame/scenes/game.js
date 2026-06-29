@@ -922,6 +922,7 @@ function autoSaveToCloud() {
 // D049b 阶段 3：state 转 player_life record
 function stateToPlayerLife(s) {
   return {
+    openid: (typeof wx !== 'undefined' && wx.getStorageSync) ? (wx.getStorageSync('openid') || '') : '',
     life_number: s.life_number || 1,
     alive: s.alive !== false,
     name: s.name || 'Unnamed',

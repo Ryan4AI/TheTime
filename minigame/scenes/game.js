@@ -957,10 +957,14 @@ function stateToPlayerLife(s) {
 function buildNarrateHistoryList() {
   if (!Array.isArray(narrativeHistory)) return []
   const list = []
-  const openid = (typeof wx !== 'undefined' && wx.getStorageSync) ? wx.getStorageSync('openid') : 'unknown'
+  const openid = (typeof wx !== 'undefined' && wx.getStorageSync) ? (wx.getStorageSync('openid') || '') : ''
   for (let i = 0; i < narrativeHistory.length; i++) {
     const m = narrativeHistory[i]
     list.push({
+      openid: openid,  // D049 修复 v7（2026-06-30 00:55 拍板）：narrate_history record 加 openid
+      // 真因：之前只算了 openid 变量，list.push 时没写 → 云函数 validateNarrateHistory
+      //   if (!record.openid || typeof record.openid !== 'string') return 'invalid_openid' 失败
+      //   → 00:52:55 player_save 报 'narrate_history:invalid_openid'
       life_number: state.life_number || 1,
       message_id: m.message_id || (Date.now() + i),  // 用 message_id 字段或回退到时间戳
       role: m.role,

@@ -233,10 +233,19 @@ module.exports = {
           break
         }
       }
+      // D049 修复 v13（2026-06-30 01:21 拍板）：如果 options 空（旧数据）→ 显示"继续"按钮让先生主动触发
+      // 真因：先生之前没点过选项就退出，云端 ai 消息 options=null → 重进时 options 空 → 没法继续
+      // 修复：如果 options 为空 → 设 continuePending=true，先生点"继续"按钮才调 callAI
+      //   避免一进 game 就自动 callAI 让先生感觉"重新生成"
+      if (!options || options.length === 0) {
+        console.log('[D049-fix-v13] options 空（旧数据），显示"继续"按钮让先生主动触发')
+        continuePending = true  // 让先生看到"继续"按钮
+        options = [{ label: '继续', key: '继续' }]  // 显示一个"继续"按钮
+      }
       optionsAppearTime = 0  // 立即显示
       displayedChars = narrative.length
       displayStartTime = Date.now()
-      console.log('[D049-fix-v3] game.init 从云端恢复, history=', narrativeHistory.length, '条, narrative 长度=', narrative.length)
+      console.log('[D049-fix-v3] game.init 从云端恢复, history=', narrativeHistory.length, '条, narrative 长度=', narrative.length, ' options=', options.length)
     } else {
       // 首次调用 AI
       callAI('初始回合')

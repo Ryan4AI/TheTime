@@ -212,8 +212,35 @@ module.exports = {
     closestBoardInfo = computeClosestBoard(state)
     fetchClosestBoard()  // 云函数后台刷新（稍后覆盖）
 
-    // 首次调用 AI
-    callAI('初始回合')
+    // D049 修复 v3（2026-06-29 14:05 拍板）：从云端恢复时不调 callAI
+    // 之前：game.init 总是调 callAI('初始回合') → 先生点"踏入长河"（有云端存档）也走重新生成
+    // 修复：identity.fromCloud = true 时跳过 callAI，恢复 narrativeHistory 让玩家看到上次剧情
+    if (id.fromCloud && id.cloudNarrateHistory && Array.isArray(id.cloudNarrateHistory) && id.cloudNarrateHistory.length > 0) {
+      narrativeHistory = id.cloudNarrateHistory
+      // 找到最近 1 条 ai 消息作为 narrative 显示
+      for (var hi = narrativeHistory.length - 1; hi >= 0; hi--) {
+        var m = narrativeHistory[hi]
+        if (m && m.role === 'ai' && m.content) {
+          narrative = m.content
+          break
+        }
+      }
+      // 找到最近 1 轮的 options 恢复
+      for (var hi2 = narrativeHistory.length - 1; hi2 >= 0; hi2--) {
+        var m2 = narrativeHistory[hi2]
+        if (m2 && m2.role === 'ai' && m2.options) {
+          options = m2.options.slice(0, 3).map(function(label){ return { label: label, key: label } })
+          break
+        }
+      }
+      optionsAppearTime = 0  // 立即显示
+      displayedChars = narrative.length
+      displayStartTime = Date.now()
+      console.log('[D049-fix-v3] game.init 从云端恢复, history=', narrativeHistory.length, '条, narrative 长度=', narrative.length)
+    } else {
+      // 首次调用 AI
+      callAI('初始回合')
+    }
 
     module.exports.autoNext = null
   },

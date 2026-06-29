@@ -12,8 +12,8 @@ const { CharAnim, SlideFadeAnim, FadeAnim } = require('../engine/anim')
 const TITLE = '穿越日记'
 const SUBTITLE = '留名青史，或无名而亡'
 const BTN_START = '踏入长河'
-const BTN_LEADERBOARD = '群英录'
-const BTN_TEST_POEM = '试写墓志铭'  // v0.7.0
+const BTN_LEADERBOARD = '金榜题名'
+const BTN_TEST_POEM = '追忆前尘'  // v3.0.6
 const FOOTER = 'AI演绎 · 历史真实数据'
 
 // v0.7.11: 测试墓志铭按钮 → 直接切到 death scene，由 death.js 内部画骨架屏+调云函数
@@ -40,7 +40,7 @@ const TEST_CASES = [
   {
     name: '沈青禾', gender: '女', age: 28, occupation: '女医', socialClass: '平民',
     dynasty: '北宋', city: '开封', year: 1075, life_number: 1,
-    lifespan: 75, deathType: '剧情杀',
+    lifespan: 75, deathType: '意外',
     narrativeHistory: [
       { role: 'ai', content: '沈青禾自幼随父习医，能辨百草。' },
       { role: 'user', content: '我去城里行医' },
@@ -136,6 +136,47 @@ function init() {
   }
 
   for (var key in anims) anims[key].start(now)
+
+  // D049 修复 v3（2026-06-29 14:05 拍板）：entry.js 启动时调 player_load 查云端存档
+  // 之前：先生点"踏入长河"永远跳 selection → 选物 → intro 重新生成身份 → 走新玩家流程
+  //   哪怕云端有 alive 存档也走重头
+  // 修复：init 时异步调 player_load，把云端存档存到 cloud_save_data
+  //   onTouch 时如果有云端 alive 存档 → 直接跳 game（用云端 state 恢复）
+  //   没有 → 走原 selection
+  if (typeof wx !== 'undefined' && wx.cloud && wx.cloud.callFunction) {
+    try {
+      wx.cloud.callFunction({
+        name: 'player_load',
+        data: {},
+        success: (res) => {
+          const r = (res && res.result) || {}
+          if (r.openid && typeof wx.setStorageSync === 'function') {
+            wx.setStorageSync('openid', r.openid)
+          }
+          if (r.success && r.player_life && r.player_life.alive) {
+            // 有云端 alive 存档 → 存到 storage, onTouch 用
+            if (typeof wx.setStorageSync === 'function') {
+              wx.setStorageSync('cloud_save_data', {
+                player: r.player,
+                player_life: r.player_life,
+                narrate_history: r.narrate_history_list || []
+              })
+              console.log('[D049-fix-v3] entry 找到云端存档, life=', r.player.life_number)
+            }
+          } else {
+            if (typeof wx.setStorageSync === 'function') {
+              wx.setStorageSync('cloud_save_data', null)
+            }
+          }
+        },
+        fail: (err) => {
+          console.error('[D049-fix-v3] entry player_load 失败:', err && (err.errMsg || err.message))
+        }
+      })
+    } catch (e) {
+      console.error('[D049-fix-v3] entry player_load 异常:', e.message)
+    }
+  }
 }
 
 // ─── Ink wash mountain range ───
@@ -391,6 +432,50 @@ function onTouch(x, y, type) {
         items: [],
         identity: { testPoemPending: true, testPoemCase: tc },
         gender: tc.gender,
+      }
+    }
+
+    // D049 修复 v3（2026-06-29 14:05 拍板）：点"踏入长河"前先检查云端存档
+    // 之前永远跳 selection → 选物 → intro 重生成身份 → 重头开始
+    // 修复：有 alive 存档 → 直接跳 game（带 restoredIdentity），跳过 selection+intro+identity
+    var cloudSave = null
+    try {
+      if (typeof wx !== 'undefined' && wx.getStorageSync) {
+        cloudSave = wx.getStorageSync('cloud_save_data')
+      }
+    } catch (e) { /* ignore */ }
+    if (cloudSave && cloudSave.player && cloudSave.player_life && cloudSave.player_life.alive) {
+      var life = cloudSave.player_life
+      var restoredIdentity = {
+        life_number: life.life_number,
+        name: life.name,
+        gender: life.gender,
+        age: life.age,
+        occupation: life.occupation,
+        social_class: life.social_class,
+        dynasty: life.dynasty,
+        eraDisplay: life.era_display,
+        city: life.city,
+        year: life.year,
+        // 9 属性
+        '声望': life.reputation,
+        '财富': life.wealth,
+        '学识': life.knowledge,
+        '颜值': life.appearance,
+        '医术': life.medical,
+        '战功': life.military,
+        '文采': life.literary,
+        '政绩': life.political,
+        '义行': life.righteous,
+        fromCloud: true,
+        cloudPlayer: cloudSave.player,
+        cloudNarrateHistory: cloudSave.narrate_history || [],
+      }
+      console.log('[D049-fix-v3] entry 踏入长河 → 直接进 game（用云端存档）, life=', life.life_number)
+      return {
+        scene: 'game',
+        items: life.current_items || [],
+        identity: restoredIdentity,
       }
     }
 

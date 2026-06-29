@@ -808,12 +808,6 @@ function handleAIResponse(result, action, userInput) {
     state.health = 0
   }
 
-  // D049c 阶段 2（2026-06-29 09:39 拍板）：每次状态变化都独立存档
-  // 覆盖：9 属性（V2_ATTRS 循环 line 705-714） + 基础字段（age/health/coin/month/year/round/epitaph line 691-697）+
-  //       物品（items 循环 line 775） + 寿限覆盖（line 782）
-  // 不在循环内逐次存（避免 N 次 callFunction）—— patch 应用后统一存
-  autoSaveToCloud()
-
   // 3. 死亡判定（社会性死亡由云函数判定后写入 newState）
   // 先生 2026-06-27 01:51 拍板 A：临终只走 drawDeathConfirm 覆盖层路径
   // 不再 branch.options = ['封笔']，避免双路径打架（drawOptions 画的"封笔"+ drawDeathConfirm 覆盖层按钮）
@@ -839,6 +833,14 @@ function handleAIResponse(result, action, userInput) {
   lastRawAiResp = (result.debug && result.debug.raw_response) || lastRawAiResp  // v0.6.85: 存原始JSON，history送AI时替代最后一条
   // v0.6.93: 玩家选项 push 移到 callAI 入口（先生 11:40 拍板修"顺序反"bug）
   // 这里不再 push user，narrativeHistory 顺序：[user, ai, user, ai, ...]
+
+  // D049 修复 v5（2026-06-30 00:42 拍板）：存档移到 narrativeHistory.push ai 之后
+  // 真因：之前 autoSaveToCloud 在 line 815（narrativeHistory.push ai 之前）
+  //   → autoSaveToCloud 调 buildNarrateHistoryList 时 narrativeHistory 还没 ai 消息
+  //   → 永远只存 [user] 或 []（narrate_history_list 空）
+  //   → narrate_history 集合 0 条（v4 修复后 player_save 成功了，但 narrate_history 仍 0）
+  // 修复：存档移到 push ai 之后（先生重进时能恢复上次剧情）
+  autoSaveToCloud()
 
   // 5. round 计数 +1（P1.6: AI 响应后递增）
   state.round = (state.round || 0) + 1

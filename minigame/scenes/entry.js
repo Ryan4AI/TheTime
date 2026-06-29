@@ -473,14 +473,16 @@ function onTouch(x, y, type) {
     } catch (e) { /* ignore */ }
 
     if (!cloudSave || !cloudSave.player || !cloudSave.player_life || !cloudSave.player_life.alive) {
-      // D049 修复 v8（2026-06-30 01:10 拍板）：cloud_save_data 空时再调一次 player_load + 延迟 1.5 秒
-      // 真因：先生 01:07 反馈"还是重新生成"——先生进 entry 后立即点"踏入长河"（< 1 秒）
-      //   init 异步调 player_load 还没回 → cloud_save_data 空 → 走 selection → 走新玩家流程
-      //   → identity 来自 generate_identity（不是 fromCloud）→ game.init 调 callAI → 重新生成
-      // 修复：cloud_save_data 空时再调一次 player_load + setTimeout 1.5s 后再处理
-      //   1.5s 内 player_load 回调回来 → 跳 game（用云端 state）
-      //   1.5s 后还没回 → 走 selection（新玩家）
+      // D049 修复 v10（2026-06-30 01:16 拍板）：cloud_save_data 空时**不切场景**
+      // 之前 v8 return { scene: 'selection' } → 先生立刻看到选物（1.5s 后 v8 setTimeout 跳 game）—— 闪屏
+      // 正确做法：return null 停在 entry scene，调 player_load 等 success 回调里设 autoNext 跳 game
+      //   先生看到的是"点按钮 → loading → 直接跳 game"，不显示选物
       if (typeof wx !== 'undefined' && wx.cloud && wx.cloud.callFunction) {
+        // 显示 loading 提示（在 render 里靠 layout.loading 标志位）
+        if (typeof layout === 'object') {
+          layout.loading = true
+          layout.loadingText = '正在加载存档...'
+        }
         wx.cloud.callFunction({
           name: 'player_load',
           data: {},
@@ -496,39 +498,57 @@ function onTouch(x, y, type) {
                   player_life: r.player_life,
                   narrate_history: r.narrate_history_list || []
                 })
-                console.log('[D049-fix-v8] onTouch 二次 player_load 找到云端存档, life=', r.player.life_number)
+                console.log('[D049-fix-v10] onTouch player_load 找到云端存档, life=', r.player.life_number)
+              }
+              // 构造 identity 直接跳 game（不走 selection）
+              var life3 = r.player_life
+              var ri2 = {
+                life_number: life3.life_number, name: life3.name, gender: life3.gender, age: life3.age,
+                occupation: life3.occupation, social_class: life3.social_class,
+                dynasty: life3.dynasty, eraDisplay: life3.era_display, city: life3.city, year: life3.year,
+                '声望': life3.reputation, '财富': life3.wealth, '学识': life3.knowledge, '颜值': life3.appearance,
+                '医术': life3.medical, '战功': life3.military, '文采': life3.literary, '政绩': life3.political, '义行': life3.righteous,
+                fromCloud: true, cloudPlayer: r.player, cloudNarrateHistory: r.narrate_history_list || [],
+              }
+              // 隐藏 loading + 设 autoNext 跳 game
+              if (typeof layout === 'object') {
+                layout.loading = false
+                layout.loadingText = ''
+              }
+              if (module.exports.autoNext !== undefined) {
+                module.exports.autoNext = { scene: 'game', items: life3.current_items || [], identity: ri2 }
+                console.log('[D049-fix-v10] autoNext 跳 game, life=', life3.life_number)
               }
             } else {
+              // 没找到云端存档（新玩家）→ 隐藏 loading 走 selection
               if (typeof wx.setStorageSync === 'function') {
                 wx.setStorageSync('cloud_save_data', null)
               }
+              if (typeof layout === 'object') {
+                layout.loading = false
+                layout.loadingText = ''
+              }
+              if (module.exports.autoNext !== undefined) {
+                module.exports.autoNext = { scene: 'selection' }
+                console.log('[D049-fix-v10] 无云端存档, autoNext 跳 selection')
+              }
+            }
+          },
+          fail: (err) => {
+            console.error('[D049-fix-v10] player_load 失败:', err && (err.errMsg || err.message))
+            // 失败时也走 selection
+            if (typeof layout === 'object') {
+              layout.loading = false
+              layout.loadingText = ''
+            }
+            if (module.exports.autoNext !== undefined) {
+              module.exports.autoNext = { scene: 'selection' }
             }
           }
         })
-        // setTimeout 1.5 秒后再决定跳哪个 scene
-        setTimeout(function() {
-          var cs = null
-          try { cs = wx.getStorageSync && wx.getStorageSync('cloud_save_data') } catch (e) {}
-          if (cs && cs.player && cs.player_life && cs.player_life.alive) {
-            var life2 = cs.player_life
-            var ri = {
-              life_number: life2.life_number, name: life2.name, gender: life2.gender, age: life2.age,
-              occupation: life2.occupation, social_class: life2.social_class,
-              dynasty: life2.dynasty, eraDisplay: life2.era_display, city: life2.city, year: life2.year,
-              '声望': life2.reputation, '财富': life2.wealth, '学识': life2.knowledge, '颜值': life2.appearance,
-              '医术': life2.medical, '战功': life2.military, '文采': life2.literary, '政绩': life2.political, '义行': life2.righteous,
-              fromCloud: true, cloudPlayer: cs.player, cloudNarrateHistory: cs.narrate_history || [],
-            }
-            console.log('[D049-fix-v8] 1.5s 后跳 game, life=', life2.life_number)
-            // 用 module.exports.autoNext 让 game.js 切场景
-            if (module.exports.autoNext !== undefined) {
-              module.exports.autoNext = { scene: 'game', items: life2.current_items || [], identity: ri }
-            }
-          }
-        }, 1500)
       }
-      console.log('[D049-fix-v8] cloud_save_data 空, onTouch 二次 player_load + 等 1.5s, 暂时走 selection')
-      return { scene: 'selection' }
+      console.log('[D049-fix-v10] cloud_save_data 空, onTouch 调 player_load 等待回调, 停在 entry')
+      return null  // 不切场景，等 success 回调设 autoNext
     }
 
     var life = cloudSave.player_life

@@ -781,6 +781,12 @@ function handleAIResponse(result, action, userInput) {
     state.health = 0
   }
 
+  // D049c 阶段 2（2026-06-29 09:39 拍板）：每次状态变化都独立存档
+  // 覆盖：9 属性（V2_ATTRS 循环 line 705-714） + 基础字段（age/health/coin/month/year/round/epitaph line 691-697）+
+  //       物品（items 循环 line 775） + 寿限覆盖（line 782）
+  // 不在循环内逐次存（避免 N 次 callFunction）—— patch 应用后统一存
+  autoSaveToCloud()
+
   // 3. 死亡判定（社会性死亡由云函数判定后写入 newState）
   // 先生 2026-06-27 01:51 拍板 A：临终只走 drawDeathConfirm 覆盖层路径
   // 不再 branch.options = ['封笔']，避免双路径打架（drawOptions 画的"封笔"+ drawDeathConfirm 覆盖层按钮）
@@ -838,8 +844,10 @@ function handleAIResponse(result, action, userInput) {
   newEvent = event || null
 
   // D049b 阶段 3（2026-06-29 02:08 拍板）：自动调 player_save 存盘
-  // 先生每回合结束都自动存档（不阻塞游戏，失败仅 toast 提示）
-  autoSaveToCloud()
+  // D049c 阶段 2（2026-06-29 09:39 拍板）：删除此处——patch 应用时（line 785）已存
+  //   删理由：先生要求"每次状态变化都独立存档"，寿限覆盖 line 782 后已统一调一次
+  //   此处再调会重复（每回合 2 次 callFunction）
+  // autoSaveToCloud()  // D049c 阶段 2 删除
 }
 
 // D049b 阶段 3：自动存档 helper

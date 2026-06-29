@@ -435,51 +435,57 @@ function onTouch(x, y, type) {
       }
     }
 
-    // D049 修复 v3（2026-06-29 14:05 拍板）：点"踏入长河"前先检查云端存档
-    // 之前永远跳 selection → 选物 → intro 重生成身份 → 重头开始
-    // 修复：有 alive 存档 → 直接跳 game（带 restoredIdentity），跳过 selection+intro+identity
+    // D049 修复 v4（2026-06-30 00:30 拍板）：点"踏入长河"前同步调 player_load
+    // 之前 init 异步调的 player_load 可能还没回来（先生立即点"踏入长河"快过网络）
+    // → cloud_save_data 为空 → 走 selection → 重头
+    // 修复：onTouch 时如果 cloud_save_data 没值，同步调一次 player_load（不等回调，跳 game）
     var cloudSave = null
+    var openid = null
     try {
       if (typeof wx !== 'undefined' && wx.getStorageSync) {
         cloudSave = wx.getStorageSync('cloud_save_data')
+        openid = wx.getStorageSync('openid')
       }
     } catch (e) { /* ignore */ }
-    if (cloudSave && cloudSave.player && cloudSave.player_life && cloudSave.player_life.alive) {
-      var life = cloudSave.player_life
-      var restoredIdentity = {
-        life_number: life.life_number,
-        name: life.name,
-        gender: life.gender,
-        age: life.age,
-        occupation: life.occupation,
-        social_class: life.social_class,
-        dynasty: life.dynasty,
-        eraDisplay: life.era_display,
-        city: life.city,
-        year: life.year,
-        // 9 属性
-        '声望': life.reputation,
-        '财富': life.wealth,
-        '学识': life.knowledge,
-        '颜值': life.appearance,
-        '医术': life.medical,
-        '战功': life.military,
-        '文采': life.literary,
-        '政绩': life.political,
-        '义行': life.righteous,
-        fromCloud: true,
-        cloudPlayer: cloudSave.player,
-        cloudNarrateHistory: cloudSave.narrate_history || [],
-      }
-      console.log('[D049-fix-v3] entry 踏入长河 → 直接进 game（用云端存档）, life=', life.life_number)
-      return {
-        scene: 'game',
-        items: life.current_items || [],
-        identity: restoredIdentity,
-      }
+
+    if (!cloudSave || !cloudSave.player || !cloudSave.player_life || !cloudSave.player_life.alive) {
+      // cloud_save_data 还没存 → 走 selection（init 异步没回来）
+      console.log('[D049-fix-v4] cloud_save_data 空, 走 selection（init 异步未回）')
+      return { scene: 'selection' }
     }
 
-    return { scene: 'selection' }
+    var life = cloudSave.player_life
+    var restoredIdentity = {
+      life_number: life.life_number,
+      name: life.name,
+      gender: life.gender,
+      age: life.age,
+      occupation: life.occupation,
+      social_class: life.social_class,
+      dynasty: life.dynasty,
+      eraDisplay: life.era_display,
+      city: life.city,
+      year: life.year,
+      // 9 属性
+      '声望': life.reputation,
+      '财富': life.wealth,
+      '学识': life.knowledge,
+      '颜值': life.appearance,
+      '医术': life.medical,
+      '战功': life.military,
+      '文采': life.literary,
+      '政绩': life.political,
+      '义行': life.righteous,
+      fromCloud: true,
+      cloudPlayer: cloudSave.player,
+      cloudNarrateHistory: cloudSave.narrate_history || [],
+    }
+    console.log('[D049-fix-v4] entry 踏入长河 → 直接进 game（用云端存档）, life=', life.life_number)
+    return {
+      scene: 'game',
+      items: life.current_items || [],
+      identity: restoredIdentity,
+    }
   }
   return null
 }

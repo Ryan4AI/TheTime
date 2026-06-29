@@ -66,7 +66,11 @@ exports.main = async (event) => {
     if (player) {
       const playerErr = validatePlayer(player)
       if (playerErr) return { success: false, error: 'player:' + playerErr }
-      await db.collection('player').doc(player._id).set({ data: player })
+      // D049 修复 v4（2026-06-30 00:32 拍板）：set 时去掉 _id 字段
+      // 真因：set({ data: player }) 含 _id → -501007 invalid parameters. 不能更新_id的值
+      // 微信云数据库：set 不允许包含 _id 字段（_id 是 doc 第一个参数指定的）
+      const { _id, ...playerData } = player
+      await db.collection('player').doc(_id).set({ data: playerData })
     }
 
     // 2) upsert player_life

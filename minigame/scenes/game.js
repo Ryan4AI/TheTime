@@ -829,7 +829,12 @@ function handleAIResponse(result, action, userInput) {
       narrativeHistory.push({ role: 'system', content: sm.content })
     }
   }
-  narrativeHistory.push({ role: 'ai', content: branch.content })  // 普通轮次只存选中分支
+  // D049 修复 v12（2026-06-30 01:20 拍板）：narrativeHistory push ai 时存 options
+  // 真因：先生 01:18 反馈"加载了叙事文字但没加载选项"——因为 narrativeHistory.push ai 时没存 options
+  //   → 云端 narrate_history 存的 ai 消息 options=null
+  //   → game.init 恢复时 if (m2.options) 判 false → options 不恢复 → 先生看不到选项
+  // 修复：push ai 时也存 options（这样 v10 端到端真生效，叙事+选项都恢复）
+  narrativeHistory.push({ role: 'ai', content: branch.content, options: branch.options || null })  // 普通轮次只存选中分支
   lastRawAiResp = (result.debug && result.debug.raw_response) || lastRawAiResp  // v0.6.85: 存原始JSON，history送AI时替代最后一条
   // v0.6.93: 玩家选项 push 移到 callAI 入口（先生 11:40 拍板修"顺序反"bug）
   // 这里不再 push user，narrativeHistory 顺序：[user, ai, user, ai, ...]

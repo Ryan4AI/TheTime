@@ -183,6 +183,13 @@ function init(items, identity) {
         data: {},
         success: (res) => {
           const r = (res && res.result) || {}
+          // D049 修复（2026-06-29 09:57 拍板）：先存 openid 到 storage
+          // 之前 autoSaveToCloud / identitySaveToCloud 用 wx.getStorageSync('openid') 永远拿到空 → 早退 → 永远没存
+          // player_load 拿到的 openid 是 wxContext 真实值（云函数从微信拿），存到前端 storage
+          if (r.openid && typeof wx.setStorageSync === 'function') {
+            wx.setStorageSync('openid', r.openid)
+            console.log('[D049-修复] 存 openid 到 storage 长度=', r.openid.length)
+          }
           if (r.success && r.player_life) {
             // 找到存档：存到全局 state，云端 openid 对应存档
             console.log('[D049b] player_load 找到存档, life_number=', r.player.life_number, ' alive=', r.player_life.alive)

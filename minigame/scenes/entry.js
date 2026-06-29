@@ -137,12 +137,17 @@ function init() {
 
   for (var key in anims) anims[key].start(now)
 
-  // D049 修复 v3（2026-06-29 14:05 拍板）：entry.js 启动时调 player_load 查云端存档
-  // 之前：先生点"踏入长河"永远跳 selection → 选物 → intro 重新生成身份 → 走新玩家流程
-  //   哪怕云端有 alive 存档也走重头
-  // 修复：init 时异步调 player_load，把云端存档存到 cloud_save_data
-  //   onTouch 时如果有云端 alive 存档 → 直接跳 game（用云端 state 恢复）
-  //   没有 → 走原 selection
+  // D049 修复 v9（2026-06-30 01:12 拍板）：init 调 player_load 时设 loading=true
+  // 真因：先生 01:10 反馈"v8 直接进入叙事页但重新生成"——说明先生重进时
+  //   init 异步 player_load 还没回就点踏入长河 → cloudSave 空 → 走 v4 路径 else 走 selection
+  //   然后 v8 1.5s 后才补跳 game——但先生已经在 selection，1.5s 后 game 跳出来
+  //   → 先生看到 game 但 cloudNarrateHistory 还在 loading 状态（异步没回）
+  // 修复：init 时设 loading=true，渲染时画"加载存档中..."提示
+  //   玩家看到 loading 提示，知道要等 1-2 秒再点踏入长河
+  //   异步 player_load 回来后设 loading=false（隐藏提示）
+  layout.loading = true
+  layout.loadingText = '正在加载存档...'
+
   if (typeof wx !== 'undefined' && wx.cloud && wx.cloud.callFunction) {
     try {
       wx.cloud.callFunction({
@@ -163,14 +168,21 @@ function init() {
               })
               console.log('[D049-fix-v3] entry 找到云端存档, life=', r.player.life_number)
             }
+            // D049 修复 v9：异步回来后设 loading=false
+            layout.loading = false
+            layout.loadingText = ''
           } else {
             if (typeof wx.setStorageSync === 'function') {
               wx.setStorageSync('cloud_save_data', null)
             }
+            layout.loading = false
+            layout.loadingText = ''
           }
         },
         fail: (err) => {
           console.error('[D049-fix-v3] entry player_load 失败:', err && (err.errMsg || err.message))
+          layout.loading = false
+          layout.loadingText = ''
         }
       })
     } catch (e) {
@@ -399,6 +411,18 @@ function render(ctx) {
   if (b3.opacity > 0) {
     drawButton(ctx, l.btnX, l.btnY3, l.btnW, l.btnH, BTN_TEST_POEM,
       { fontSize: l.btnS - 2, opacity: b3.opacity * 0.7 })
+  }
+
+  // D049 修复 v9（2026-06-30 01:12 拍板）：loading 提示
+  // 画在"踏入长河"按钮下方，让玩家知道要等 1-2 秒再点
+  if (layout.loading && layout.loadingText) {
+    ctx.save()
+    ctx.fillStyle = 'rgba(232,200,130,0.85)'  // 暖金提示色
+    ctx.font = '14px ' + (ui.fontFamily || 'sans-serif')
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(layout.loadingText, l.cx, l.btnY1 + l.btnH + 28)
+    ctx.restore()
   }
 
   // 9.7 v0.7.11: 测试按钮不再画蒙层（已删除蒙层逻辑）

@@ -524,7 +524,10 @@ function pollNarrateResult(requestId, action, userInput, attempt, pollStartMs) {
         // D048c（2026-06-28 09:42 拍板）：删流式 partial_content 轮询块（callLLMStream 已删，后端无 partial 来源）
         // 前端拿到 done 后用前端假打字机：streamedText 累积完整 content + TYPEWRITE_SPEED 显示
 
-        if (pollResult.status === 'done') {
+        // D050 修复（2026-07-03 01:01 先生拍板·B 方案）：前端识别 narrate_get_result 的 success 状态
+        // 真因：D049a 阶段 2 重构后，narrate_get_result 返回 status='success' 不是 'done'，前端永远走不到这里
+        // 修复：把 'done' 改成 'success'，并加 'done' 兜底（兼容老 DBG / 历史回放）
+        if (pollResult.status === 'success' || pollResult.status === 'done') {
           // ── 成功：处理 result ──
           const result = pollResult.result || {}
           // v0.2.5-H（先生 2026-06-13 拍板）：即使 done 也带 error 字段

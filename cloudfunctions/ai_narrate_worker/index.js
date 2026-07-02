@@ -276,11 +276,18 @@ async function backgroundTask(request_id, payload) {
 
     // D049a 阶段 2（2026-06-29 01:16 拍板）：写 llm_io 替代 narrate_result
     // llm_io 单一职责：AI 接口 IO（不存业务数据）
+    // D050 修复（2026-07-03 01:01 先生拍板）：补存完整 result（branch/state/month_changed/event/system_messages/closest_board）
+    // 真因：D049a 阶段 2 只存 { raw_response, parsed }，前端轮询拿不到 result → 永远渲染空对象 → 卡死
+    // 修复：worker 成功路径把 result 整个快照存进 llm_io.output.result（不是改前端，是补后端数据完整性）
     try {
       await db.collection('llm_io').where({ request_id }).update({
         data: {
           status: 'success',
-          output: { raw_response: rawContent, parsed: picked },
+          output: {
+            raw_response: rawContent,
+            parsed: picked,
+            result: result,  // D050: 完整业务数据快照（branch/state/month_changed/event/system_messages/closest_board/attr_patch）
+          },
         },
       })
     } catch (e) {

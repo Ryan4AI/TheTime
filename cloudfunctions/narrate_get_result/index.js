@@ -34,15 +34,18 @@ exports.main = async (event) => {
     }
 
     if (record.status === 'success') {
-      // D049a: 业务数据现在不存 llm_io（只存 AI IO）—— 业务数据从 player_life 拉
-      // 但前端 D048 时代业务数据从 result_str 读—— 这里要兼容
-      // D049a 阶段 2：暂时 result 字段返回空，前端用 player_load 自己拉
+      // D050 修复（2026-07-03 01:01 先生拍板·B 方案）：透传 result 字段给前端
+      // 真因：D049a 阶段 2 只存 llm_io 不存业务数据，前端轮询拿不到 result 字段
+      // 修复：把 llm_io.output.result（worker 写入的完整业务快照）透传给前端
+      // 前端 game.js 等 pollResult.result || {} → 现在能拿到完整 result 对象
+      const output = record.output || {}
       return {
         status: 'success',
+        result: output.result || null,  // D050: 完整业务数据快照（branch/state/month_changed/event/system_messages/closest_board/attr_patch）
         llm_io: {
           request_id: record.request_id,
           category: record.category,
-          output: record.output,  // {raw_response, parsed}
+          output: output,  // {raw_response, parsed, result}
           created_at: record.created_at,
         }
       }

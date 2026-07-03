@@ -60,6 +60,7 @@ var dbgActiveTab = 0          // v3.0.14aiij D035: 大浮窗顶部 tab 切换(0=
 var dbgSelectorOpen = false  // 折叠态点 DBG 图标弹出的"选组复制"弹层(已废, D035 改为直接展开大浮窗)
 var dbgCopyToast = ''        // 复制成功的 toast（自动消失）
 var dbgCopyToastTs = 0       // toast 时间戳
+var dbgLastRenderedText = ''  // D051（2026-07-03 22:07 先生拍板·①方案）：DBG 浮窗最后一次渲染的完整文本，复制按钮读这个（所见即所得）
 const DEBUG_MAX_ROUNDS = 3   // 保留最近 3 轮
 // v0.1.63: 小游戏没有 move 事件，改用 ▲▼ 箭头按钮滚动
 var bgImgEl = null           // <image> 元素缓存
@@ -3084,6 +3085,11 @@ function drawDebugPanel(ctx) {
     allText += '\n'
   }
 
+  // D051（2026-07-03 22:07 先生拍板·①方案）：把当前 tab 完整文本缓存，"复制本 tab"按钮读这个
+  // 修复前：dbgCopyAIActual() 调 dbgGetLast() 重新取 last，如果点复制前 push 了新条目（重试），新 last.raw_response=null → "无数据"
+  // 修复后：drawDebugPanel 渲染时缓存 allText，复制按钮读 dbgLastRenderedText（所见即所得）
+  dbgLastRenderedText = allText
+
   // 简单自动换行
   const charW = 6   // 10px monospace 一字约 6px
   const lineH = 13
@@ -3536,7 +3542,16 @@ function handleTouch(x, y, type) {
           return null
         }
         const COPY_FNS = [dbgCopyAIActual, dbgCopyScoringAI, dbgCopyHistory, dbgCopyPollStatus, dbgCopyScene]
-        const txt = dbgSafeForClipboard(COPY_FNS[dbgActiveTab]())  // D048i: 过滤控制字符
+        // D051（2026-07-03 22:07 先生拍板·①方案）：优先读 dbgLastRenderedText（drawDebugPanel 渲染时缓存）
+        // 修复前：COPY_FNS[dbgActiveTab]() 调 dbgGetLast() 重新取，debugLog 新 push 会拿到错的 last
+        // 修复后：所见即所得，DBG 浮窗显示什么就复制什么
+        let txt
+        if (dbgLastRenderedText) {
+          txt = dbgSafeForClipboard(dbgLastRenderedText)
+        } else {
+          // 兜底：DBG 浮窗未打开过（不常见）→ 走原 dbgCopy* 路径
+          txt = dbgSafeForClipboard(COPY_FNS[dbgActiveTab]())
+        }
         if (typeof wx !== 'undefined' && wx.setClipboardData) {
           wx.setClipboardData({
             data: txt,

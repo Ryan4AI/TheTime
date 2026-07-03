@@ -267,6 +267,23 @@ async function backgroundTask(request_id, payload) {
       month_changed: monthChanged,
       new_month: monthChanged ? updated.month : null,
       new_year: monthChanged ? updated.year : null,
+      // D053（2026-07-03 23:37 先生拍板·①方案）：成功路径补 debug 字段
+      // 真因：D049a 重构后 result 没存 debug → DBG 浮窗 messages_to_ai/system_prompt/raw_response 全空
+      //       → 先生 23:30 反馈"LLM 跑偏, 选 A 给 B 叙事"无法排查
+      // 修复：成功路径 result 也加 debug（含 messages/system_prompt/user_prompt/raw_response/perf_logs/picked_branch/score_prompt/score_raw_response/d048f_log）
+      // 先生看到完整 LLM 上下文，明早能查 D052 + 跑偏真因
+      debug: {
+        system_prompt: systemPrompt,
+        user_prompt: userPrompt,
+        messages: messages,
+        raw_response: rawContent,
+        perf_logs: perfLogs,
+        attr_patch: attrPatch,
+        picked_branch: picked,
+        score_prompt: scorePrompt,
+        score_raw_response: scoreRawResponse,
+        d048f_log: (globalThis.__D048F_LOG__ || []).join('\n') || null,
+      },
       event: monthEvent,
       system_messages: systemMessages,  // v0.1.80 — 前端拿来渲染 [system · XXX]
       closest_board: closestBoardInfo,  // v0.6.35 — 前端展示榜单接近度

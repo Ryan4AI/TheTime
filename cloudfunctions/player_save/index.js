@@ -31,11 +31,13 @@ function validatePlayerLife(record) {
 }
 
 // schema 校验：narrate_history 入库前必走
+// D056（先生 00:30 拍板·①方案）：删 message_id 校验（云数据库 _id 自带去重）
+// 修复时间：2026-07-04 00:30
 function validateNarrateHistory(record) {
   if (!record || typeof record !== 'object') return 'record_not_object'
   if (!record.openid || typeof record.openid !== 'string') return 'invalid_openid'
   if (typeof record.life_number !== 'number' || record.life_number < 1) return 'invalid_life_number'
-  if (typeof record.message_id !== 'number' || record.message_id <= 0) return 'invalid_message_id'
+  // D056: 删 message_id 字段校验（云数据库 _id 自带去重，不需要 message_id）
   if (!VALID_ROLES.includes(record.role)) return 'invalid_role'
   if (typeof record.content !== 'string') return 'invalid_content'
   if (record.patch !== undefined && record.patch !== null && !Array.isArray(record.patch)) return 'invalid_patch'

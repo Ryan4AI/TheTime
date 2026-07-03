@@ -135,6 +135,8 @@ exports.main = async (event) => {
 // v0.2.4 — 主逻辑移到 backgroundTask（与 main 分离）
 async function backgroundTask(request_id, payload) {
   const startTs = Date.now()
+  // D056: 拿 openid 写 narrate_history（从前端传，fallback 云函数 ctx）
+  const openid = (payload && payload.openid) || (cloud.getWXContext && cloud.getWXContext().OPENID) || ''
 
   try {
     const { state, input, history, is_retry } = payload
@@ -267,6 +269,12 @@ async function backgroundTask(request_id, payload) {
       month_changed: monthChanged,
       new_month: monthChanged ? updated.month : null,
       new_year: monthChanged ? updated.year : null,
+      // D056（先生 00:30 拍板·①方案）：worker 实时 add ai + system_messages 到 narrate_history
+      // 真因：现在 narrate_history 由前端 player_save 写，message_id 同时间戳冲突
+      // 修法：worker 跑完直接 add 一次 + system_messages 各 add 一次，用云数据库 _id 自动去重
+      // 先生体验：不会再有 106 条同 message_id 的脏数据
+      narrate_history_added_ids: null,  // D056: 后面 add 完填 _id
+
       // D053（2026-07-03 23:37 先生拍板·①方案）：成功路径补 debug 字段
       // 真因：D049a 重构后 result 没存 debug → DBG 浮窗 messages_to_ai/system_prompt/raw_response 全空
       //       → 先生 23:30 反馈"LLM 跑偏, 选 A 给 B 叙事"无法排查
@@ -309,6 +317,46 @@ async function backgroundTask(request_id, payload) {
       })
     } catch (e) {
       console.error('[ai_narrate_worker] update llm_io 失败:', e.message)
+    }
+
+    // D056（先生 00:30 拍板·①方案）：worker 实时 add ai + system_messages 到 narrate_history
+    // 真因：narrate_history 由前端 player_save 写 → message_id 同时间戳冲突 → 106 条脏数据
+    // 修法：worker 跑完直接 db.collection('narrate_history').add()，用云数据库 _id 自带去重
+    // 前端不再写 narrate_history，player_save 只写 player + player_life
+    try {
+      const addedIds = []
+      // 1) add ai 消息
+      const aiRes = await db.collection('narrate_history').add({
+        data: {
+          openid: openid,
+          life_number: state.life_number || 1,
+          role: 'ai',
+          content: picked.content || '',
+          options: picked.options || null,
+          // 删 message_id 字段（D056：云数据库 _id 自带去重，不需要 message_id）
+          created_at: Date.now(),
+        }
+      })
+      addedIds.push(aiRes._id)
+      // 2) add system_messages（状态变化，每条 add 一次）
+      if (Array.isArray(systemMessages)) {
+        for (const sm of systemMessages) {
+          const sysRes = await db.collection('narrate_history').add({
+            data: {
+              openid: openid,
+              life_number: state.life_number || 1,
+              role: 'system',
+              content: (sm && sm.content) || '',
+              created_at: Date.now(),
+            }
+          })
+          addedIds.push(sysRes._id)
+        }
+      }
+      console.log('[D056] narrate_history add 完成, ids=', addedIds.length)
+      result.narrate_history_added_ids = addedIds
+    } catch (e) {
+      console.error('[D056] narrate_history add 失败:', e.message)
     }
 
     console.log('[ai_narrate_worker] 完成, request_id=', request_id, ', elapsed_ms=', Date.now() - startTs)

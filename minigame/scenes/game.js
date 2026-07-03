@@ -931,11 +931,13 @@ function autoSaveToCloud() {
   // 构造 player_life record（用 state 字段映射到 player_life 字段）
   const player_life = stateToPlayerLife(state)
   const player = { _id: openid, life_number: state.life_number || 1, created_at: Date.now(), updated_at: Date.now() }
-  const narrate_history_list = buildNarrateHistoryList()
+  // D056（先生 00:30 拍板·①方案）：前端不再写 narrate_history，worker 实时 add
+  // 真因：前端写时 message_id 同时间戳冲突 → 106 条脏数据
+  // 修法：player_save 只写 player + player_life，narrate_history 由 worker 写
 
   wx.cloud.callFunction({
     name: 'player_save',
-    data: { player, player_life, narrate_history_list },
+    data: { player, player_life },
     success: (res) => {
       if (res && res.result && res.result.success) {
         // 存档成功（不再写 localStorage 兜底）
@@ -986,29 +988,10 @@ function stateToPlayerLife(s) {
   }
 }
 
-// D049b 阶段 3：把 narrativeHistory 转 narrate_history record 列表
-function buildNarrateHistoryList() {
-  if (!Array.isArray(narrativeHistory)) return []
-  const list = []
-  const openid = (typeof wx !== 'undefined' && wx.getStorageSync) ? (wx.getStorageSync('openid') || '') : ''
-  for (let i = 0; i < narrativeHistory.length; i++) {
-    const m = narrativeHistory[i]
-    list.push({
-      openid: openid,  // D049 修复 v7（2026-06-30 00:55 拍板）：narrate_history record 加 openid
-      // 真因：之前只算了 openid 变量，list.push 时没写 → 云函数 validateNarrateHistory
-      //   if (!record.openid || typeof record.openid !== 'string') return 'invalid_openid' 失败
-      //   → 00:52:55 player_save 报 'narrate_history:invalid_openid'
-      life_number: state.life_number || 1,
-      message_id: m.message_id || (Date.now() + i),  // 用 message_id 字段或回退到时间戳
-      role: m.role,
-      content: String(m.content || ''),
-      patch: m.patch || null,  // role='system' 时存
-      options: m.options || null,  // role='ai' 时存
-      created_at: m.created_at || Date.now(),
-    })
-  }
-  return list
-}
+// D056（先生 00:30 拍板·①方案）：删 buildNarrateHistoryList
+// 真因：前端构造时 message_id 同时间戳冲突 → 106 条脏数据
+// 修法：worker 跑完直接 db.collection('narrate_history').add()，云数据库 _id 自带去重
+// 前端只 push narrativeHistory 给 UI 用，narrate_history 入库由 worker 完成
 
 // ─────── 渲染 ───────
 

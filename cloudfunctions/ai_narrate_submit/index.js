@@ -65,6 +65,8 @@ exports.main = async (event) => {
             input: event.input || '',
             history: event.history || [],
             is_retry: !!event.is_retry,
+            // D056: 传 openid 给 worker，worker 写 narrate_history 用
+            openid: (cloud.getWXContext && cloud.getWXContext().OPENID) || '',
           },
         },
       }),

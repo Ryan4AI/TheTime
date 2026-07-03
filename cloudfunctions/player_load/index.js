@@ -27,9 +27,10 @@ exports.main = async (event) => {
     const player_life = lifeRes.data[0]
 
     // 3) 查全部 narrate_history（D055 拍板：不截断，给前端完整上下文）
+    // D056: 改用 _id desc 排序（云数据库自动 _id，不需要 message_id）
     const nhRes = await db.collection('narrate_history')
       .where({ openid, life_number: player.life_number })
-      .orderBy('message_id', 'asc')
+      .orderBy('_id', 'asc')  // _id 包含时间戳，asc = 旧→新
       .get()
     const narrate_history_list = nhRes.data
 

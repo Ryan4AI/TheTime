@@ -226,26 +226,21 @@ module.exports = {
           break
         }
       }
-      // 找到最近 1 轮的 options 恢复
-      for (var hi2 = narrativeHistory.length - 1; hi2 >= 0; hi2--) {
-        var m2 = narrativeHistory[hi2]
-        if (m2 && m2.role === 'ai' && m2.options) {
-          options = m2.options.slice(0, 3).map(function(label){ return { label: label, key: label } })
-          break
-        }
-      }
-      // D049 修复 v14（2026-06-30 01:23 拍板）：options 空时不显示任何"继续"按钮
-      // 真因：v13 设计了"继续"按钮——这是为旧数据 bug 设计的功能，错了
-      // 修复：options 空时不动（先生看到上次叙事，无选项）——先生点屏幕任意位置走 handleOptionSelected 兜底
-      //   onTouch 检测到 options 空时调 callAI('继续')，先生主动触发——不增加产品功能
-      if (!options || options.length === 0) {
-        console.log('[D049-fix-v14] options 空（旧数据），不显示继续按钮，等先生点屏幕任意位置触发')
-        // 不设 options，让 onTouch 检测空时主动 callAI
-      }
-      optionsAppearTime = 0  // 立即显示
+      // D052（2026-07-03 23:09 先生拍板·A 方案）：recover 时不恢复 options，避免先生重选同一选项
+      // 真因：先生 22:59 反馈——重进游戏时显示上轮 options，点同一选项 → push 重复 user + 月份推进
+      // 修法：先生重进时自动触发新一轮（不显示上轮 options，不污染 narrativeHistory）
+      // 用 __continue__ 内部信号走 D005 路径：skip push user + 从末尾 user 拿 realInput + is_retry=true
+      // 先生体验：像开新游戏，零操作，LLM 看到上轮 user 继续推
+      options = []  // 先生重进时看不到上轮选项
+      optionsAppearTime = 0
       displayedChars = narrative.length
       displayStartTime = Date.now()
-      console.log('[D049-fix-v3] game.init 从云端恢复, history=', narrativeHistory.length, '条, narrative 长度=', narrative.length, ' options=', options.length)
+      console.log('[D052] game.init 从云端恢复, history=', narrativeHistory.length, '条, narrative 长度=', narrative.length, ' options=空(先生重进时不显示上轮选项,自动 callAI(__continue__))')
+      // D052: 恢复后自动触发新一轮（先生零操作，AI 自然继续）
+      // 用 setTimeout(0) 让恢复代码先跑完，再触发 LLM
+      setTimeout(() => {
+        callAI('__continue__')
+      }, 100)
     } else {
       // 首次调用 AI
       callAI('初始回合')
@@ -359,7 +354,8 @@ function callAI(userInput) {
   // v0.6.93: 用户消息先 push（在 AI 返回前）→ narrativeHistory 顺序变为 [user, ai, user, ai]
   // 修"顺序反"bug：之前 push user 在 handleAIResponse 里，导致 [ai, user, ai, user]，LLM 看到的 messages 顺序反了
   // 跳过 __retry__（D005 不污染对话流）
-  if (userInput && userInput !== '__retry__') {
+  // D052（2026-07-03 23:09 先生拍板·A 方案）：__continue__ 也走 D005 路径（先生重进时自动 continue）
+  if (userInput && userInput !== '__retry__' && userInput !== '__continue__') {
     narrativeHistory.push({ role: 'user', content: userInput })
   }
 
@@ -369,7 +365,8 @@ function callAI(userInput) {
   errorMsg = ''
 
   const action = (narrativeHistory && narrativeHistory.length > 0) ? 'continue' : 'init'
-  const isRetry = userInput === '__retry__'
+  // D052：__continue__ 也走 D005 路径（先生重进时自动 continue，语义同 retry：skip push + 不消耗月份）
+  const isRetry = userInput === '__retry__' || userInput === '__continue__'
   // v0.2.5-B（D005 改进）：retry 时云函数收到的 input = 上轮真 input（不是 __retry__ 占位符）
   // narrativeHistory 仍然不入（line 526 判断 isRetry 不 push）—— D005 不污染叙事流的承诺不变
   // 从 narrativeHistory 倒数第一条 user 拿上轮真 input；空时用 userInput 兜底

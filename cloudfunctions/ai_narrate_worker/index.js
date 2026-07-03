@@ -318,7 +318,8 @@ async function backgroundTask(request_id, payload) {
       }
       // 写 result_str + error_str 双重保险
       // 但前端 status=error 会忽略 result_str —— 所以同步改 narrate_get_result 优先返回 done + result
-      await safeWriteResult(request_id, JSON.stringify(fakeResult), 'AI输出无法解析为JSON对象: ' + e.debugInfo.parse_error + ' | raw[:1500]=' + e.debugInfo.raw_response.substring(0, 1500))
+      // D050 修复 v2：把 fakeResult 整个存进 output.result，前端能看到完整 debug（含 raw_response / system_prompt / messages）
+      await safeWriteResult(request_id, 'AI输出无法解析为JSON对象: ' + e.debugInfo.parse_error + ' | raw[:1500]=' + e.debugInfo.raw_response.substring(0, 1500), fakeResult)
       console.log('[ai_narrate_worker] JSON解析失败已写 fake result, raw_response 长度=', e.debugInfo.raw_response.length)
       return
     }
@@ -351,11 +352,15 @@ async function backgroundTask(request_id, payload) {
 
     // v0.2.4: 主异常时也要写 llm_io（之前是有 try/catch 但如果 add 失败会被吞掉）
     // D049a 阶段 2：改写 llm_io 替代 narrate_result
+    // D050 修复 v2（2026-07-03 21:33）：errFakeResult（含 debug.raw_response 等）也存进 output.result
+    // 修复前：主 catch 只写 status=error + error_str 字符串，DBG 看不到 AI 请求详情
+    // 修复后：前端能拿到完整 fakeResult 进 [RESPONSE_ERROR] 路径，DBG 看到 system_prompt / messages
     try {
       await db.collection('llm_io').where({ request_id }).update({
         data: {
           status: 'error',
           error: fullError,
+          output: { result: errFakeResult },  // D050 v2: 把 errFakeResult 整个存进 output
         },
       })
     } catch (e) {
@@ -366,13 +371,23 @@ async function backgroundTask(request_id, payload) {
 
 // v0.2.4: 安全写 llm_io（任何错误都不抛，外层有兜底）
 // D049a 阶段 2 改：替代 safeWriteResult 的 narrate_result 写入
-async function safeWriteResult(request_id, error_str) {
+// D050 修复 v2（2026-07-03 21:33 先生拍板·A 方案）：加 result 参数透传 fakeResult
+// 真因：safeWriteResult 只写 status=error + error_str 字符串，fakeResult 里的 debug.raw_response 整段没存
+//       → narrate_get_result 错误分支没 result 字段 → 前端 error 分支不调 handleAIResponse
+//       → DBG 浮窗看不到 raw_response，先生排查不到 JSON 解析失败真因
+// 修复：safeWriteResult 第三个参数 result 可选，传了就序列化存进 output.result
+async function safeWriteResult(request_id, error_str, result) {
   try {
+    const data = {
+      status: 'error',
+      error: error_str || '',
+    }
+    if (result) {
+      // 把 fakeResult 序列化存进 output.result，前端 narrate_get_result 错误分支能透传
+      data.output = { result: result }
+    }
     await db.collection('llm_io').where({ request_id }).update({
-      data: {
-        status: 'error',
-        error: error_str || '',
-      },
+      data: data,
     })
   } catch (e) {
     console.error('[safeWriteResult] 写 llm_io error 失败:', e.message, 'request_id=', request_id)

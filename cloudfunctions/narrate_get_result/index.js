@@ -52,7 +52,22 @@ exports.main = async (event) => {
     }
 
     if (record.status === 'trigger_fail' || record.status === 'error') {
-      return { status: 'error', error: record.error || 'AI 调用失败' }
+      // D050 修复 v2（2026-07-03 21:33 先生拍板·A 方案）：错误分支也透传 result（worker 写的 fakeResult）
+      // 真因：worker 错误路径把 fakeResult 存进了 output.result（errFakeResult 含 debug.raw_response / system_prompt）
+      //       但 get_result 错误分支不返回 result → 前端 error 分支拿不到 debug → DBG 浮窗空白
+      // 修复：把 output.result 一起返回给前端，前端能走 handleAIResponse 的 [RESPONSE_ERROR] 路径
+      const errorOutput = record.output || {}
+      return {
+        status: 'error',
+        error: record.error || 'AI 调用失败',
+        result: errorOutput.result || null,  // D050 v2: 透传 fakeResult（含 debug 完整信息）
+        llm_io: {
+          request_id: record.request_id,
+          category: record.category,
+          output: errorOutput,
+          created_at: record.created_at,
+        }
+      }
     }
 
     return { status: 'not_found' }

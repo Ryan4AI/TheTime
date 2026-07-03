@@ -567,10 +567,28 @@ function pollNarrateResult(requestId, action, userInput, attempt, pollStartMs) {
             const last = debugLog[debugLog.length - 1]
             last.resultError = `[WORKER_ERROR] ${pollResult.error || 'AI服务暂不可用'}, attempt=${attempt + 1}, ts=${Date.now()}, elapsed_ms=${Date.now() - last.ts}`
             last.poll_attempts = attempt + 1
+            // D050 修复 v2（2026-07-03 21:33 先生拍板·A 方案）：错误分支也把 result（含 debug）填进 debugLog
+            // 修复前：error 分支直接 return，DBG 浮窗拿不到 raw_response / system_prompt
+            // 修复后：handleAIResponse 走 [RESPONSE_ERROR] 路径，自动填 raw_response / system_prompt 到 debugLog
+            if (pollResult.result && pollResult.result.debug) {
+              const rdebug = pollResult.result.debug
+              if (rdebug.raw_response) last.raw_response = rdebug.raw_response
+              if (rdebug.system_prompt) last.system_prompt = rdebug.system_prompt
+              if (rdebug.user_prompt) last.user_prompt = rdebug.user_prompt
+              if (rdebug.messages) last.messages_to_ai = rdebug.messages
+              if (rdebug.parse_error) last.parse_error = rdebug.parse_error
+              if (rdebug.llm_error) last.llm_error = rdebug.llm_error
+              if (rdebug.err_status) last.err_status = rdebug.err_status
+            }
           }
-          errorMsg = `史官落笔卡壳了——${pollResult.error || 'AI服务暂不可用'}。点此重试。`
-          options = [{ label: '重试', key: '__retry__' }]
-          optionsAppearTime = Date.now() + 300
+          // D050 v2: 调 handleAIResponse 走 [RESPONSE_ERROR] 路径（统一处理错误 + DBG 填齐）
+          // 之前：error 分支直接显示"卡壳"信息，DBG 看不到 AI 到底吐了什么
+          // 现在：handleAIResponse 识别 result.error 自动填 raw_response 到 debugLog，玩家看到一致错误
+          const errorResult = {
+            error: pollResult.error || 'AI服务暂不可用',
+            debug: (pollResult.result && pollResult.result.debug) || {},
+          }
+          handleAIResponse(errorResult, action, userInput)
         } else if (pollResult.status === 'not_found') {
           // v0.1.75: request_id 还没写入（CAP 滞后）或真不存在
           // v0.2.5-C: 改 3 → 24 次（120 秒）—— 配合 v0.2.5 prompt + LLM 实际跑 30-40 秒

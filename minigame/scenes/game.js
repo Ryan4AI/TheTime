@@ -2786,6 +2786,18 @@ function dbgCopyHistory() {
   if (last && last.messages_to_ai) return `[对话流]\n${dbgTrunc(JSON.stringify(last.messages_to_ai, null, 2))}`
   return '[对话流] 无数据'
 }
+// D054（2026-07-03 23:44 先生拍板·①方案）：tab 5 复制函数，单独复制主 system prompt
+// 现在 tab 5 复制会读 dbgLastRenderedText（先生看到的），dbgCopySystem 仅作 COPY_FNS 兜底
+function dbgCopySystem() {
+  const last = dbgGetLast()
+  if (last && last.messages_to_ai) {
+    const longSystemMsgs = last.messages_to_ai.filter(m => m.role === 'system' && (m.content || '').length >= 2000)
+    if (longSystemMsgs.length > 0) {
+      return `[主 System Prompt] (${longSystemMsgs.length} 条)\n${dbgTrunc(JSON.stringify(longSystemMsgs, null, 2))}`
+    }
+  }
+  return '[System Prompt] 无主 system prompt'
+}
 function dbgCopyPollStatus() {
   const last = dbgGetLast()
   const status = last ? (last.resultError || ('round=' + (last.round||'?') + ', result=' + (last.result?'OK':'null'))) : 'no last round'
@@ -3030,15 +3042,25 @@ function drawDebugPanel(ctx) {
         allText += '[AI₂ attrPatch] 无数据(可能 AI₂ 未调用或失败)\n'
       }
     } else if (dbgActiveTab === 2) {
-      // tab 2 = 对话流（messages_to_ai 完整, 含 system prompt）
+      // tab 2 = 对话流（user/assistant/历史 system 短消息，剔除主 system prompt 8000 字）
+      // D054（2026-07-03 23:44 先生拍板·①方案）：主 system prompt 拆到 tab 5
+      // 真因：复制本 tab 会复制 8000 字主 system prompt + 短对话 200 字 → 先生排查要找真实对话得手动翻
+      // 修法：tab 2 只显示 messages.filter(m => m.role !== 'system' || m.content.length < 2000)
       if (d.messages_to_ai && d.messages_to_ai.length > 0) {
-        allText += `[发给 AI₁ 的 messages]:\n`
-        d.messages_to_ai.forEach((m, j) => {
-          allText += `  ── messages[${j}].role="${m.role}" ──\n${m.content}\n\n`
-        })
+        const shortMsgs = d.messages_to_ai.filter(m => m.role !== 'system' || (m.content || '').length < 2000)
+        if (shortMsgs.length > 0) {
+          allText += `[发给 AI₁ 的 messages 短消息]:\n`
+          shortMsgs.forEach((m, j) => {
+            allText += `  ── messages[${j}].role="${m.role}" ──\n${m.content}\n\n`
+          })
+        } else {
+          allText += '[对话流] 全部都是主 system prompt，已挪到 tab 5\n'
+        }
       } else {
         allText += '[messages_to_ai] 无数据\n'
       }
+      // 提示先生：长 system prompt 在 tab 5
+      allText += '\n💡 [长 system prompt] 在 "System Prompt" tab\n'
     } else if (dbgActiveTab === 3) {
       // tab 3 = POLL + 性能诊断
       if (d.poll_attempts !== undefined) allText += `[poll_attempts]: ${d.poll_attempts}, [poll_elapsed_ms]: ${d.poll_elapsed_ms || 0}\n`
@@ -3078,6 +3100,23 @@ function drawDebugPanel(ctx) {
       }
       allText += `[debugLog.length]: ${debugLog.length}\n`
       allText += `[currentItems.length]: ${(currentItems || []).length}\n`
+    } else if (dbgActiveTab === 5) {
+      // D054（2026-07-03 23:44 先生拍板·①方案）：tab 5 = System Prompt（主 system prompt 8000 字单独）
+      // 真因：tab 2 复制会复制 8000 字主 system prompt + 短对话 200 字 → 先生排查不方便
+      // 修法：tab 5 单独显示 messages 里 content > 2000 字的 system（主 system prompt）
+      if (d.messages_to_ai && d.messages_to_ai.length > 0) {
+        const longSystemMsgs = d.messages_to_ai.filter(m => m.role === 'system' && (m.content || '').length >= 2000)
+        if (longSystemMsgs.length > 0) {
+          allText += `[主 System Prompt] (${longSystemMsgs.length} 条):\n\n`
+          longSystemMsgs.forEach((m, j) => {
+            allText += `── System Prompt[${j}] (长度 ${m.content.length}) ──\n${m.content}\n\n`
+          })
+        } else {
+          allText += '[System Prompt] 无主 system prompt（可能 messages 为空或 system < 2000 字）\n'
+        }
+      } else {
+        allText += '[messages_to_ai] 无数据\n'
+      }
     }
     allText += '\n'
   }
@@ -3184,6 +3223,7 @@ function drawDbgSelector(ctx) {
     { label: 'POLL 状态', copy: dbgCopyPollStatus },
     { label: 'DEBUG 渲染', copy: dbgCopyRender },
     { label: '场景状态', copy: dbgCopyScene },
+    { label: 'System Prompt', copy: dbgCopySystem },
   ]
   let curY = panelY + headerH + 10
   const btnX = panelX + 12

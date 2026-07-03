@@ -26,11 +26,10 @@ exports.main = async (event) => {
     }
     const player_life = lifeRes.data[0]
 
-    // 3) 查最近 50 条 narrate_history
+    // 3) 查全部 narrate_history（D055 拍板：不截断，给前端完整上下文）
     const nhRes = await db.collection('narrate_history')
       .where({ openid, life_number: player.life_number })
       .orderBy('message_id', 'asc')
-      .limit(50)
       .get()
     const narrate_history_list = nhRes.data
 

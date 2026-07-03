@@ -408,9 +408,10 @@ function callAI(userInput) {
     historical_shelter: state.historical_shelter,
   }
 
-  // v0.6.91: 去掉 v0.6.85 "最后一条 AI 用原始 JSON" 逻辑（先生 11:26 拍板）
-  // 现在 history 直接用 narrativeHistory 原内容喂给 AI
-  var historyForAi = narrativeHistory.slice(-12)
+  // D055（2026-07-04 00:08 先生拍板）：history 不截断，给 LLM 完整上下文
+  // 真因：v0.1.84 注释 "v0.1.84: 全量 history（不截断）"——但 line 426 slice(-12) 还在——前端截断
+  // 修法：history = narrativeHistory 全量
+  var historyForAi = narrativeHistory
 
   const data = {
     state: stateData,

@@ -12,6 +12,12 @@ var anims = {}
 
 // 身份数据（由入世引擎生成）
 var IDENTITY = null
+// D055（2026-07-04 00:08 先生拍板）：删 localStorage 整套，改用模块级变量
+// 真因：D049b 阶段 2 用 localStorage 缓存 player_load 结果 → 永不更新 → 12 条 stale 数据
+// 修法：player_load 成功时存模块级变量，onTouch 读模块级变量
+var _cloudPlayer = null
+var _cloudPlayerLife = null
+var _cloudNarrateHistory = null
 
 // D049c（2026-06-29 09:31 拍板）：身份生成完调 player_save helper
 // 9 属性是新身份的关键数据，跨设备续作必须存云端
@@ -195,20 +201,18 @@ function init(items, identity) {
             console.log('[D049-修复] 存 openid 到 storage 长度=', r.openid.length)
           }
           if (r.success && r.player_life) {
-            // 找到存档：存到全局 state，云端 openid 对应存档
-            console.log('[D049b] player_load 找到存档, life_number=', r.player.life_number, ' alive=', r.player_life.alive)
-            if (typeof wx.setStorageSync === 'function') {
-              wx.setStorageSync('cloud_save_data', {
-                player: r.player,
-                player_life: r.player_life,
-                narrate_history: r.narrate_history_list || []
-              })
-            }
+            // D055（2026-07-04 00:08 先生拍板）：存模块级变量（不存 localStorage）
+            // 真因：localStorage 永不更新 → 12 条 stale 数据
+            // 修法：模块级变量，每次进 identity.js 都从云端拉最新
+            _cloudPlayer = r.player
+            _cloudPlayerLife = r.player_life
+            _cloudNarrateHistory = r.narrate_history_list || []
+            console.log('[D055] player_load 找到存档, life_number=', r.player_life.life_number, ' narrate_history=', _cloudNarrateHistory.length, '条')
           } else {
-            console.log('[D049b] player_load 无存档或失败:', r.error || 'no_player')
-            if (typeof wx.setStorageSync === 'function') {
-              wx.setStorageSync('cloud_save_data', null)
-            }
+            console.log('[D055] player_load 无存档或失败:', r.error || 'no_player')
+            _cloudPlayer = null
+            _cloudPlayerLife = null
+            _cloudNarrateHistory = null
           }
         },
         fail: (err) => {
@@ -425,17 +429,12 @@ function onTouch(x, y, type) {
   if (!state.hasTapped) {
     state.hasTapped = true
     state.fadeOutStart = Date.now()
-    // D049b 阶段 2（2026-06-29 02:02 拍板）：点击时检查云端存档
-    // 如果有存档且 alive=true，直接跳过身份生成进 game
-    var cloudSave = null
-    try {
-      if (typeof wx !== 'undefined' && wx.getStorageSync) {
-        cloudSave = wx.getStorageSync('cloud_save_data')
-      }
-    } catch (e) { /* ignore */ }
-    if (cloudSave && cloudSave.player && cloudSave.player_life && cloudSave.player_life.alive) {
+    // D055（2026-07-04 00:08 先生拍板）：读模块级变量（不读 localStorage）
+    // 真因：localStorage 永不更新 → 12 条 stale 数据
+    // 修法：onTouch 读模块级变量（player_load 异步完成后存进去的）
+    if (_cloudPlayerLife && _cloudPlayerLife.alive) {
       // 有存档 → 把 player_life 转成 identity 格式直接进 game
-      var life = cloudSave.player_life
+      var life = _cloudPlayerLife
       var restoredIdentity = {
         life_number: life.life_number,
         name: life.name,
@@ -459,10 +458,10 @@ function onTouch(x, y, type) {
         '义行': life.righteous,
         // 标记：来自云端
         fromCloud: true,
-        cloudPlayer: cloudSave.player,
-        cloudNarrateHistory: cloudSave.narrate_history || [],
+        cloudPlayer: _cloudPlayer,
+        cloudNarrateHistory: _cloudNarrateHistory || [],
       }
-      console.log('[D049b] 使用云端存档, life=', life.life_number, ' name=', life.name)
+      console.log('[D055] 使用云端存档, life=', life.life_number, ' name=', life.name, ' narrate_history=', (_cloudNarrateHistory || []).length, '条')
       IDENTITY = restoredIdentity
     } else {
       // D049c（2026-06-29 09:31 拍板）：身份生成完（9 属性赋值后）自动存档

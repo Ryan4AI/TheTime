@@ -2901,6 +2901,26 @@ function drawDebugPanel(ctx) {
   ctx.textAlign = 'center'
   ctx.fillText('×', w - arrowSize / 2 - 8, closeBarH / 2 + 1)
   layout._dbgCloseBtn = { x: w - arrowSize - 8, y: 0, w: arrowSize, h: closeBarH }
+
+  // D058 hotfix5（2026-07-05 01:36 先生拍板）：顶部加 ◀ ▶ 按钮切 tab（避开底部手势区）
+  // 真因：底部 tab 区在 iOS Home Indicator 安全区，部分 tab 按不动
+  // 修法：顶部条加两个大按钮，绝对安全区，◀ 切上一个 tab，▶ 切下一个 tab
+  const tabArrowW = 36
+  const tabArrowY = 4
+  const nextBtnX = w - arrowSize - 8 - tabArrowW - 4
+  ctx.fillStyle = 'rgba(240,200,120,0.32)'
+  ctx.fillRect(nextBtnX, tabArrowY, tabArrowW, closeBarH - 8)
+  ctx.fillStyle = '#f0c878'
+  ctx.font = 'bold 16px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText('▶', nextBtnX + tabArrowW / 2, closeBarH / 2 + 1)
+  layout._dbgNextTabBtn = { x: nextBtnX, y: 0, w: tabArrowW, h: closeBarH }
+  const prevBtnX = nextBtnX - tabArrowW - 4
+  ctx.fillStyle = 'rgba(240,200,120,0.32)'
+  ctx.fillRect(prevBtnX, tabArrowY, tabArrowW, closeBarH - 8)
+  ctx.fillStyle = '#f0c878'
+  ctx.fillText('◀', prevBtnX + tabArrowW / 2, closeBarH / 2 + 1)
+  layout._dbgPrevTabBtn = { x: prevBtnX, y: 0, w: tabArrowW, h: closeBarH }
   // 错误轮数角标（顶部右）
   ctx.textAlign = 'right'
   ctx.fillStyle = '#888'
@@ -3620,6 +3640,25 @@ function handleTouch(x, y, type) {
       if (type === 'end' && layout._dbgCloseBtn && y <= closeBarH
           && x >= layout._dbgCloseBtn.x && x <= layout._dbgCloseBtn.x + layout._dbgCloseBtn.w) {
         debugOpen = false
+        return null
+      }
+      // D058 hotfix5（2026-07-05 01:36 先生拍板）：顶部 ◀ ▶ 按钮切 tab
+      if (type === 'end' && layout._dbgPrevTabBtn && y <= closeBarH
+          && x >= layout._dbgPrevTabBtn.x && x <= layout._dbgPrevTabBtn.x + layout._dbgPrevTabBtn.w) {
+        if (dbgActiveTab > 0) {
+          dbgActiveTab--
+          debugScroll = 0
+          if (dbgActiveTab === 6 && dbgDataList.length === 0 && !dbgDataLoading) dbgLoadCloudNh(true)
+        }
+        return null
+      }
+      if (type === 'end' && layout._dbgNextTabBtn && y <= closeBarH
+          && x >= layout._dbgNextTabBtn.x && x <= layout._dbgNextTabBtn.x + layout._dbgNextTabBtn.w) {
+        if (dbgActiveTab < 6) {
+          dbgActiveTab++
+          debugScroll = 0
+          if (dbgActiveTab === 6 && dbgDataList.length === 0 && !dbgDataLoading) dbgLoadCloudNh(true)
+        }
         return null
       }
       // D058（2026-07-04 21:09 先生拍板）：「数据」tab 内操作按钮 + 删除选中

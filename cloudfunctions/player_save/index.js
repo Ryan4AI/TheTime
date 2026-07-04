@@ -1,13 +1,15 @@
 // v0.1.0 — D049a 阶段 1（2026-06-29 01:13 拍板）
 // 玩家数据存盘：先生 wx.login 拿 openid 后，每回合结束调此函数
-// 业务：upsert player + player_life + 增 narrate_history
+// 业务：upsert player + player_life
+// D057（2026-07-04 08:21 拍板）：删 narrate_history 写入路径
+// 真因：D056 重构后 narrate_history 由 worker 实时 add，前端不再写
+// 修法：player_save 只管 player + player_life，validateNarrateHistory + add narrate_history 整段删
 const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 const _ = db.command
 
 const ATTRS = ['reputation', 'wealth', 'knowledge', 'appearance', 'medical', 'military', 'literary', 'political', 'righteous']
-const VALID_ROLES = ['user', 'ai', 'system']
 
 // schema 校验：player_life 入库前必走
 function validatePlayerLife(record) {
@@ -30,22 +32,6 @@ function validatePlayerLife(record) {
   return null
 }
 
-// schema 校验：narrate_history 入库前必走
-// D056（先生 00:30 拍板·①方案）：删 message_id 校验（云数据库 _id 自带去重）
-// 修复时间：2026-07-04 00:30
-function validateNarrateHistory(record) {
-  if (!record || typeof record !== 'object') return 'record_not_object'
-  if (!record.openid || typeof record.openid !== 'string') return 'invalid_openid'
-  if (typeof record.life_number !== 'number' || record.life_number < 1) return 'invalid_life_number'
-  // D056: 删 message_id 字段校验（云数据库 _id 自带去重，不需要 message_id）
-  if (!VALID_ROLES.includes(record.role)) return 'invalid_role'
-  if (typeof record.content !== 'string') return 'invalid_content'
-  if (record.patch !== undefined && record.patch !== null && !Array.isArray(record.patch)) return 'invalid_patch'
-  if (record.options !== undefined && record.options !== null && !Array.isArray(record.options)) return 'invalid_options'
-  if (typeof record.created_at !== 'number') return 'invalid_created_at'
-  return null
-}
-
 // schema 校验：player 入库前必走
 function validatePlayer(record) {
   if (!record || typeof record !== 'object') return 'record_not_object'
@@ -57,7 +43,7 @@ function validatePlayer(record) {
 }
 
 exports.main = async (event) => {
-  const { action, player, player_life, narrate_history_list } = event
+  const { player, player_life } = event
   const wxContext = cloud.getWXContext()
   const openid = wxContext.OPENID
 
@@ -88,14 +74,9 @@ exports.main = async (event) => {
       }
     }
 
-    // 3) add narrate_history（多条）
-    if (Array.isArray(narrate_history_list)) {
-      for (const nh of narrate_history_list) {
-        const nhErr = validateNarrateHistory(nh)
-        if (nhErr) return { success: false, error: 'narrate_history:' + nhErr }
-        await db.collection('narrate_history').add({ data: { ...nh, openid } })
-      }
-    }
+    // D057（2026-07-04 08:21 拍板）：player_save 不再写 narrate_history
+    // narrate_history 由 ai_narrate_worker 实时 add（云数据库 _id 自带去重）
+    // 删了原 line 91-96 add 循环 + validateNarrateHistory + VALID_ROLES
 
     return { success: true, updated_at: Date.now() }
   } catch (e) {

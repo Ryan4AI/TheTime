@@ -931,9 +931,11 @@ function autoSaveToCloud() {
   // 构造 player_life record（用 state 字段映射到 player_life 字段）
   const player_life = stateToPlayerLife(state)
   const player = { _id: openid, life_number: state.life_number || 1, created_at: Date.now(), updated_at: Date.now() }
-  // D056（先生 00:30 拍板·①方案）：前端不再写 narrate_history，worker 实时 add
+  // D056 + D057（先生 2026-07-04 拍板）：前端不写 narrate_history
   // 真因：前端写时 message_id 同时间戳冲突 → 106 条脏数据
-  // 修法：player_save 只写 player + player_life，narrate_history 由 worker 写
+  // 修法：narrate_history 由 ai_narrate_worker 实时 add（云数据库 _id 自带去重）
+  // 注意：player_save 云函数已删 narrate_history 写入路径（D057 2026-07-04 08:21）
+  // 这里只传 player + player_life，绝不能加 narrate_history_list 字段！
 
   wx.cloud.callFunction({
     name: 'player_save',

@@ -1,0 +1,9 @@
+{
+  "name": "clean_narrate_history",
+  "version": "1.0.0",
+  "description": "D057: 清理 narrate_history 脏数据",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

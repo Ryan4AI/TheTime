@@ -229,10 +229,19 @@ module.exports = {
     if (id.fromCloud && id.cloudNarrateHistory && Array.isArray(id.cloudNarrateHistory) && id.cloudNarrateHistory.length > 0) {
       narrativeHistory = id.cloudNarrateHistory
       // 找到最近 1 条 ai 消息作为 narrative 显示
+      // D061（2026-07-05 02:26 先生拍板·改进）：同时恢复 options
+      // 真因：D052 不恢复 options → 先生重进看不到选项 + 不知道上次选了哪个
+      // 先生 02:26 指出：options 是 LLM 重新生成的（和先生上次选的内容可能完全不一样）
+      //          "上次选项"和"先生上次选择"语义不同，不需要"去掉已选项"
+      // 修法：直接恢复 options，先生点哪个都行（点新选项就走新分支，narrativeHistory 有完整记录）
       for (var hi = narrativeHistory.length - 1; hi >= 0; hi--) {
         var m = narrativeHistory[hi]
         if (m && m.role === 'ai' && m.content) {
           narrative = m.content
+          // 恢复 options（D061）
+          if (Array.isArray(m.options) && m.options.length > 0) {
+            options = m.options.map(label => ({ label: label, bounds: null }))
+          }
           break
         }
       }
@@ -243,23 +252,22 @@ module.exports = {
       // 修法：最后一条是 ai → 直接渲染，不调 LLM；最后一条是 user → 自动 continue（玩家退出时没等 ai 返回）
       const lastMsg = narrativeHistory[narrativeHistory.length - 1]
       const lastRole = lastMsg ? lastMsg.role : null
-      options = []  // 先生重进时看不到上轮选项
-      optionsAppearTime = 0
+      optionsAppearTime = Date.now()  // D061：让选项立即可点（先生重进能立刻选）
       displayedChars = narrative.length
       displayStartTime = Date.now()
-      console.log('[D060] game.init 从云端恢复, history=', narrativeHistory.length, '条, narrative 长度=', narrative.length, ' 最后一条 role=', lastRole, ' options=空')
+      console.log('[D061] game.init 从云端恢复, history=', narrativeHistory.length, '条, narrative 长度=', narrative.length, ' 最后一条 role=', lastRole, ' options 长度=', options.length)
       if (lastRole === 'ai') {
-        // 最后一条是 ai（玩家上次正常退出）→ 直接渲染，不重复生成
-        console.log('[D060] 最后一条是 ai，跳过自动 continue（避免冗余生成）')
+        // 最后一条是 ai（玩家上次正常退出）→ 直接渲染 options，先生可继续选
+        console.log('[D061] 最后一条是 ai，恢复 options 供先生选择，不调 LLM')
       } else if (lastRole === 'user') {
         // 最后一条是 user（玩家输入后退出，没等到 ai 返回）→ 自动 continue
-        console.log('[D060] 最后一条是 user，自动 continue 生成 ai')
+        console.log('[D061] 最后一条是 user，自动 continue 生成 ai')
         setTimeout(() => {
           callAI('__continue__')
         }, 100)
       } else {
         // 没有消息或只有 system → 自动 continue（兜底）
-        console.log('[D060] 最后一条不是 ai/user（system 或空），自动 continue')
+        console.log('[D061] 最后一条不是 ai/user（system 或空），自动 continue')
         setTimeout(() => {
           callAI('__continue__')
         }, 100)

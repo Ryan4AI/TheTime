@@ -3629,12 +3629,13 @@ function handleTouch(x, y, type) {
                   dbgLoadCloudNh(false, 'clean_dirty')
                 }
               } else if (ob.action === 'toggle_all') {
-                if (dbgDataList.length === 0) break
+                if (dbgDataList.length === 0) return null
                 const allSelected = dbgDataList.every(r => dbgDataSelected[r._id])
                 dbgDataSelected = {}
                 if (!allSelected) {
                   for (const r of dbgDataList) dbgDataSelected[r._id] = true
                 }
+                return null  // 处理完返回，不再继续 for 循环
               } else if (ob.action === 'all') {
                 if (wx.showModal) {
                   wx.showModal({
@@ -4009,7 +4010,7 @@ function drawDbgDataTab(ctx) {
 
   // 操作栏（在顶部条下方）
   const opBarY = closeBarH
-  const opBarH = 60
+  const opBarH = 72  // D058 hotfix2: 60→72（容纳 2 行按钮 + 1 行统计文字）
   ctx.fillStyle = '#0a0a0a'
   ctx.fillRect(0, opBarY, w, opBarH)
   ctx.strokeStyle = '#444'
@@ -4019,11 +4020,15 @@ function drawDbgDataTab(ctx) {
   ctx.lineTo(w, opBarY + opBarH + 0.5)
   ctx.stroke()
 
-  // 4 个操作按钮：刷新 / 一键清脏 / 全选反选 / 全删（兜底）
-  const btnW = Math.floor((w - 24) / 4)
-  const btnH = 24
-  const btnY = opBarY + 8
+  // 4 个操作按钮：分两行 × 2 列（避免窄屏溢出）
+  // D058 hotfix2（2026-07-04 22:07 先生拍板·修"最后一个按钮是 undefined"）
+  // 真因：先生手机屏宽可能 < 393，4 按钮 1 行会溢出屏外 → 第 4 个按钮文字看不见
+  // 修法：改成 2 行 × 2 列，每按钮占半屏宽
+  const btnCols = 2
+  const btnRows = 2
   const btnGap = 4
+  const btnW = Math.floor((w - 12 - btnGap * (btnCols - 1)) / btnCols)  // 半屏宽减间隙
+  const btnH = 24
   const opBtns = [
     { label: '刷新', action: 'refresh' },
     { label: '一键清脏', action: 'clean_dirty' },
@@ -4032,18 +4037,21 @@ function drawDbgDataTab(ctx) {
   ]
   layout._dbgDataOpBtns = []
   for (let i = 0; i < opBtns.length; i++) {
-    const bx = 6 + i * (btnW + btnGap)
+    const col = i % btnCols
+    const row = Math.floor(i / btnCols)
+    const bx = 6 + col * (btnW + btnGap)
+    const by = opBarY + 6 + row * (btnH + 4)
     ctx.fillStyle = 'rgba(240,200,120,0.25)'
-    ctx.fillRect(bx, btnY, btnW - 2, btnH)
+    ctx.fillRect(bx, by, btnW - 2, btnH)
     ctx.strokeStyle = 'rgba(240,200,120,0.5)'
     ctx.lineWidth = 1
-    ctx.strokeRect(bx, btnY, btnW - 2, btnH)
+    ctx.strokeRect(bx, by, btnW - 2, btnH)
     ctx.fillStyle = '#f0c878'
     ctx.font = 'bold 11px sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(opBtns[i].label, bx + (btnW - 2) / 2, btnY + btnH / 2 + 1)
-    layout._dbgDataOpBtns.push({ x: bx, y: btnY, w: btnW - 2, h: btnH, action: opBtns[i].action })
+    ctx.fillText(opBtns[i].label, bx + (btnW - 2) / 2, by + btnH / 2 + 1)
+    layout._dbgDataOpBtns.push({ x: bx, y: by, w: btnW - 2, h: btnH, action: opBtns[i].action })
   }
 
   // 统计文字

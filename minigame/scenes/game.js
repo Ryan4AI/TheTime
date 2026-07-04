@@ -61,6 +61,14 @@ var dbgSelectorOpen = false  // 折叠态点 DBG 图标弹出的"选组复制"�
 var dbgCopyToast = ''        // 复制成功的 toast（自动消失）
 var dbgCopyToastTs = 0       // toast 时间戳
 var dbgLastRenderedText = ''  // D051（2026-07-03 22:07 先生拍板·①方案）：DBG 浮窗最后一次渲染的完整文本，复制按钮读这个（所见即所得）
+
+// D058（2026-07-04 21:09 先生拍板）：第 6 tab「数据」状态
+var dbgDataList = []          // 云端拉到的全部 narrate_history（按 created_at 倒序）
+var dbgDataLoading = false    // 拉取/删除中
+var dbgDataDirtyIds = null    // dryRun 算出的脏 _id Set（null=未算）
+var dbgDataSelected = {}      // { _id: true } 勾选状态
+var dbgDataScroll = 0         // 列表滚动
+var dbgDataFilter = 'all'     // 'all' / 'dirty' / 'clean'
 const DEBUG_MAX_ROUNDS = 3   // 保留最近 3 轮
 // v0.1.63: 小游戏没有 move 事件，改用 ▲▼ 箭头按钮滚动
 var bgImgEl = null           // <image> 元素缓存
@@ -2806,6 +2814,8 @@ function dbgDoCopy(text) {
   }
 }
 function drawDebugPanel(ctx) {
+  // D058（2026-07-04 21:09 先生拍板）：tab 6「数据」走单独渲染路径，不需要 debugLog
+  if (dbgActiveTab === 6) { drawDbgDataTab(ctx); return }
   if (debugLog.length === 0) return
 
   // D035（先生 2026-06-27 23:55 拍板 A 方案）：折叠态点 DBG 直接进大浮窗（顶部 tab 切换）, 去掉选组弹层
@@ -2861,7 +2871,8 @@ function drawDebugPanel(ctx) {
   ctx.fillRect(0, 0, w, closeBarH)
 
   // D039（先生 2026-06-28 01:29 拍板）：tab 按钮放底部, 顶部只保留标题+关闭（避免灵动岛冲突）
-  const TAB_LABELS = ['AI₁ 叙事', 'AI₂ 评分', '对话流', 'POLL', '场景']
+  // D058（2026-07-04 21:09 先生拍板）：6 个 tab（AI₁ / AI₂ / 对话流 / POLL / 场景 / 数据）
+  const TAB_LABELS = ['AI₁', 'AI₂', '对话流', 'POLL', '场景', '数据']
   const arrowSize = 28
   // 顶部条：只显示标题 + 关闭按钮
   ctx.fillStyle = '#f0c878'
@@ -2890,11 +2901,10 @@ function drawDebugPanel(ctx) {
     ctx.fillText('❌ 出错', w - arrowSize - 24, closeBarH / 2 + 16)
   }
 
-  // 底部条（高度 44px）：5 个 tab + 复制本tab + ▲▼ 滚动箭头
-  const bottomBarH = 44
+  // 底部条（高度 64px）：6 个 tab（2 行 × 3 列）+ 复制本tab + ▲▼ 滚动箭头
+  const bottomBarH = 84  // D058（2026-07-04 21:09 先生拍板）：44→84，给 tab 3 行 + 控制行留位置
   // D048g（2026-06-28 13:23 拍板·先生骂我是蠢货）：底部条上移 34px 避 iOS Home Indicator
-  // D039 拍板"tab 放底部"时没考虑小白条占位，现在补上
-  // 34px = iPhone 14 Pro+ Home Indicator 高度（其他 iPhone 同样 34px，Android 全面屏也兼容）
+  // 34px = iPhone 14 Pro+ Home Indicator 高度
   const bottomBarY = h - bottomBarH - 34
   ctx.fillStyle = '#1a1a1a'
   ctx.fillRect(0, bottomBarY, w, bottomBarH)
@@ -2905,38 +2915,41 @@ function drawDebugPanel(ctx) {
   ctx.lineTo(w, bottomBarY + 0.5)
   ctx.stroke()
 
-  const tabBtnH2 = 20  // D048j（2026-06-28 13:46 拍板·修两行重叠）：tab 高 36→20（20×2+2=42<44 bottomBarH，不重叠）
+  const tabBtnH2 = 20  // tab 按钮高 20（每行 20，共 2 行 = 40px）
   const tabBtnGap2 = 4
   // D048h（2026-06-28 13:27 拍板）：DBG 底部条改两行布局
   //  - 上行：5 个 tab（高 20，不与右侧按钮挤）
   //  - 下行：复制本tab + ▲▼ 滚动箭头（高 20）
-  // 修前：单行 5tab(56) + 复制(64) + ▲▼ 拼 296+168px → 屏宽 393 不够 → 第一 tab 溢出
-  // D048j：上版本 tab 高 36，两行重叠 16px。现改 20。
-  const row1Y = bottomBarY + 2          // 上行（5 tab）y=[bottomBarY+2, bottomBarY+22]
-  const row2Y = bottomBarY + 22         // 下行（复制+箭头）y=[bottomBarY+22, bottomBarY+42]
+  // D058（2026-07-04 21:09 先生拍板）：6 个 tab 1 行放不下 → tab 区改 3 列 × 2 行（共 6 个 tab）
+  //                                  复制 + ▲▼ 单独占第 3 行（高 20）
+  const tabRow1Y = bottomBarY + 2       // tab 第 1 行（tab 0/1/2）y=[bottomBarY+2, bottomBarY+22]
+  const tabRow2Y = bottomBarY + 22      // tab 第 2 行（tab 3/4/5）y=[bottomBarY+22, bottomBarY+42]
+  const tabRow3Y = bottomBarY + 42      // tab 第 3 行（tab 6 System）y=[bottomBarY+42, bottomBarY+62]
+  const ctrlRowY = bottomBarY + 62      // 控制行（复制+▲▼）y=[bottomBarY+62, bottomBarY+82]
+  const tabBtnW2 = Math.floor((w - 12) / 3)  // 3 列：屏宽 393 → 127px 每 tab
 
-  // ─── 上行：5 个 tab（占满整行，56px 宽 × 5 = 280，4 gap = 16，总 296，剩 97px 给边距）───
-  // 重新算：393 / 5 = 78px 每个更宽松，但保持 56 兼容布局
-  const tabBtnW2 = Math.floor((w - 12) / 5)  // 自适应屏宽：屏宽 393 → 76px
-  let _curTabX = 6
   layout._dbgTabs = []
-  for (let _ti = 0; _ti < 5; _ti++) {
+  for (let _ti = 0; _ti < 7; _ti++) {
+    // D058（2026-07-04 21:09 先生拍板）：tab 0-5 占 2 行 × 3 列，tab 6 单独占第 3 行第 1 列
+    const col = _ti === 6 ? 0 : (_ti % 3)
+    const row = _ti === 6 ? 2 : Math.floor(_ti / 3)
+    const _curTabX = 6 + col * (tabBtnW2)
+    const _curTabY = row === 0 ? tabRow1Y : (row === 1 ? tabRow2Y : tabRow3Y)
     const isActive = _ti === dbgActiveTab
     ctx.fillStyle = isActive ? 'rgba(240,200,120,0.45)' : 'rgba(240,200,120,0.12)'
-    ctx.fillRect(_curTabX, row1Y, tabBtnW2, tabBtnH2)
+    ctx.fillRect(_curTabX, _curTabY, tabBtnW2 - 2, tabBtnH2 - 2)  // -2 留间隙
     ctx.strokeStyle = isActive ? '#f0c878' : 'rgba(240,200,120,0.3)'
     ctx.lineWidth = 1
-    ctx.strokeRect(_curTabX, row1Y, tabBtnW2, tabBtnH2)
+    ctx.strokeRect(_curTabX, _curTabY, tabBtnW2 - 2, tabBtnH2 - 2)
     ctx.fillStyle = isActive ? '#fff' : '#f0c878'
-    ctx.font = isActive ? 'bold 11px sans-serif' : '11px sans-serif'
+    ctx.font = isActive ? 'bold 10px sans-serif' : '10px sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(TAB_LABELS[_ti], _curTabX + tabBtnW2 / 2, row1Y + tabBtnH2 / 2 + 1)
-    layout._dbgTabs.push({ x: _curTabX, y: row1Y, w: tabBtnW2, h: tabBtnH2, tabIdx: _ti })
-    _curTabX += tabBtnW2
+    ctx.fillText(TAB_LABELS[_ti], _curTabX + (tabBtnW2 - 2) / 2, _curTabY + (tabBtnH2 - 2) / 2 + 1)
+    layout._dbgTabs.push({ x: _curTabX, y: _curTabY, w: tabBtnW2 - 2, h: tabBtnH2 - 2, tabIdx: _ti })
   }
 
-  // ─── 下行：右侧 ▲(28) + 复制本tab(64) + ▼(28) ───
+  // ─── 控制行（底部第 3 行）：左侧 复制本tab(64) + 右侧 ▲(28) + ▼(28) ───
   const upBtnX = w - arrowSize * 2 - 8
   const copyTabBtnW = 64
   const copyTabBtnX = upBtnX - copyTabBtnW - tabBtnGap2
@@ -3103,6 +3116,9 @@ function drawDebugPanel(ctx) {
       } else {
         allText += '[messages_to_ai] 无数据\n'
       }
+    } else if (dbgActiveTab === 6) {
+      // D058（2026-07-04 21:09 先生拍板）：tab 6 = 「数据」管理（云端 narrate_history）
+      // 此分支实际不会触发（drawDebugPanel 顶部已 early return 走 drawDbgDataTab）
     }
     allText += '\n'
   }
@@ -3539,7 +3555,7 @@ function handleTouch(x, y, type) {
 
       // D039（先生 2026-06-28 01:29 拍板）：tab 按钮在底部条, 顶部只保留关闭按钮
       // D048g（先生 2026-06-28 13:23 拍板·骂我是蠢货）：底部条上移 34px 避 iOS Home Indicator
-      const _bottomBarH = 44
+      const _bottomBarH = 64  // D058 44→64
       const _bottomBarY = _h - _bottomBarH - 34
       const _ARROW_SZ = 28
       // 5 个 tab 按钮（仅上行 row1Y 20px 区域）
@@ -3547,24 +3563,28 @@ function handleTouch(x, y, type) {
       // 修前：tab 循环只检查 x 范围，5 tab 占满整行 6~386 → "复制本tab"按钮 x [261, 325]
       //      落在 POLL tab [234, 310] 内 → onTouch 误判切 POLL，没复制
       // 修：tab 循环加 y 上限 = row1Y + 20（只匹配上行 20px 高）
-      if (type === 'end' && layout._dbgTabs && y >= _bottomBarY && y < _bottomBarY + 22) {
+      if (type === 'end' && layout._dbgTabs && y >= _bottomBarY && y < _bottomBarY + 42) {  // D058 tab 区两行
         for (let _ti = 0; _ti < layout._dbgTabs.length; _ti++) {
           const _tb = layout._dbgTabs[_ti]
-          if (x >= _tb.x && x <= _tb.x + _tb.w) {
+          if (x >= _tb.x && x <= _tb.x + _tb.w && y >= _tb.y && y <= _tb.y + _tb.h) {
             dbgActiveTab = _tb.tabIdx
             debugScroll = 0
+            // D058：切到「数据」tab 时自动拉一次云端 dryRun
+            if (_tb.tabIdx === 6 && dbgDataList.length === 0 && !dbgDataLoading) {
+              dbgLoadCloudNh(true)
+            }
             return null
           }
         }
       }
-      // "复制本 tab"按钮（在底部条）
-      if (type === 'end' && layout._dbgCopyTabBtn && y >= _bottomBarY
+      // "复制本 tab"按钮（在底部条第 3 行 y>=_bottomBarY+42）
+      if (type === 'end' && layout._dbgCopyTabBtn && y >= _bottomBarY + 42
           && x >= layout._dbgCopyTabBtn.x && x <= layout._dbgCopyTabBtn.x + layout._dbgCopyTabBtn.w) {
         if (debugLog.length === 0) {
           if (wx.showToast) wx.showToast({ title: '暂无调试数据', icon: 'none' })
           return null
         }
-        const COPY_FNS = [dbgCopyAIActual, dbgCopyScoringAI, dbgCopyHistory, dbgCopyPollStatus, dbgCopyScene]
+        const COPY_FNS = [dbgCopyAIActual, dbgCopyScoringAI, dbgCopyHistory, dbgCopyPollStatus, dbgCopyScene, dbgCopySystem, dbgCopyDataPanel]
         // D051（2026-07-03 22:07 先生拍板·①方案）：优先读 dbgLastRenderedText（drawDebugPanel 渲染时缓存）
         // 修复前：COPY_FNS[dbgActiveTab]() 调 dbgGetLast() 重新取，debugLog 新 push 会拿到错的 last
         // 修复后：所见即所得，DBG 浮窗显示什么就复制什么
@@ -3589,6 +3609,75 @@ function handleTouch(x, y, type) {
           && x >= layout._dbgCloseBtn.x && x <= layout._dbgCloseBtn.x + layout._dbgCloseBtn.w) {
         debugOpen = false
         return null
+      }
+      // D058（2026-07-04 21:09 先生拍板）：「数据」tab 内操作按钮 + 删除选中
+      if (type === 'end' && dbgActiveTab === 6) {
+        // 操作栏按钮（刷新 / 一键清脏 / 全选反选 / 全删）
+        if (layout._dbgDataOpBtns) {
+          for (const ob of layout._dbgDataOpBtns) {
+            if (hitTest(x, y, ob.x, ob.y, ob.w, ob.h)) {
+              if (ob.action === 'refresh') {
+                dbgLoadCloudNh(true, 'clean_dirty')
+              } else if (ob.action === 'clean_dirty') {
+                if (wx.showModal) {
+                  wx.showModal({
+                    title: '一键清脏',
+                    content: `将删除「初始回合」+ message_id 重复的所有记录，确认？`,
+                    success: (r) => { if (r.confirm) dbgLoadCloudNh(false, 'clean_dirty') },
+                  })
+                } else {
+                  dbgLoadCloudNh(false, 'clean_dirty')
+                }
+              } else if (ob.action === 'toggle_all') {
+                if (dbgDataList.length === 0) break
+                const allSelected = dbgDataList.every(r => dbgDataSelected[r._id])
+                dbgDataSelected = {}
+                if (!allSelected) {
+                  for (const r of dbgDataList) dbgDataSelected[r._id] = true
+                }
+              } else if (ob.action === 'all') {
+                if (wx.showModal) {
+                  wx.showModal({
+                    title: '⚠️ 全删',
+                    content: `将删除您云端全部 ${dbgDataList.length} 条对话记录（不可恢复），确认？`,
+                    success: (r) => { if (r.confirm) dbgLoadCloudNh(false, 'all') },
+                  })
+                }
+              }
+              return null
+            }
+          }
+        }
+        // 列表项点击 = 切换勾选
+        if (layout._dbgDataItems) {
+          for (const it of layout._dbgDataItems) {
+            if (hitTest(x, y, it.x, it.y, it.w, it.h)) {
+              if (dbgDataSelected[it._id]) delete dbgDataSelected[it._id]
+              else dbgDataSelected[it._id] = true
+              return null
+            }
+          }
+        }
+        // 「删除选中」按钮
+        if (layout._dbgDataDelBtn && hitTest(x, y, layout._dbgDataDelBtn.x, layout._dbgDataDelBtn.y, layout._dbgDataDelBtn.w, layout._dbgDataDelBtn.h)) {
+          const selectedIds = Object.keys(dbgDataSelected)
+          if (selectedIds.length === 0) {
+            if (wx.showToast) wx.showToast({ title: '未选中', icon: 'none' })
+            return null
+          }
+          if (wx.showModal) {
+            wx.showModal({
+              title: '删除选中',
+              content: `将删除 ${selectedIds.length} 条，确认？`,
+              success: (r) => {
+                if (r.confirm) dbgLoadCloudNh(false, 'by_ids', selectedIds)
+              },
+            })
+          } else {
+            dbgLoadCloudNh(false, 'by_ids', selectedIds)
+          }
+          return null
+        }
       }
       // ▲ 向上箭头（底部条右）
       if (type === 'end' && y >= _bottomBarY && x >= _w - _ARROW_SZ * 2 - 16 && x < _w - _ARROW_SZ - 8) {
@@ -3841,4 +3930,310 @@ function handleFreeInput() {
       }
     },
   })
+}
+
+// ─────── D058（2026-07-04 21:09 先生拍板）：DBG 「数据」tab ───────
+
+// 调云函数拉先生云端 narrate_history（dryRun=true 统计 / false 真删）
+function dbgLoadCloudNh(dryRun, mode, ids) {
+  if (dbgDataLoading) return
+  dbgDataLoading = true
+  const data = { dryRun: !!dryRun }
+  if (mode) data.mode = mode
+  if (ids) data.ids = ids
+  wx.cloud.callFunction({
+    name: 'clean_narrate_history',
+    data,
+    success: (res) => {
+      dbgDataLoading = false
+      if (!res || !res.result || !res.result.success) {
+        if (wx.showToast) wx.showToast({ title: '云函数失败', icon: 'none' })
+        return
+      }
+      const r = res.result
+      // D058：dryRun 返回 all_records + all_target_ids
+      if (dryRun && r.stats && r.stats.all_records) {
+        dbgDataList = r.stats.all_records
+        dbgDataDirtyIds = new Set(r.stats.all_target_ids || [])
+        dbgDataSelected = {}
+        const truncated = r.stats.all_records_truncated || 0
+        const toastMsg = truncated > 0
+          ? `总 ${r.stats.total} / 脏 ${dbgDataDirtyIds.size} / 截 ${truncated}`
+          : `总 ${r.stats.total} / 脏 ${dbgDataDirtyIds.size}`
+        if (wx.showToast) wx.showToast({ title: toastMsg, icon: 'none' })
+      } else if (!dryRun && r.removed !== undefined) {
+        if (wx.showToast) wx.showToast({ title: `删 ${r.removed} 条`, icon: 'success' })
+        dbgDataList = []
+        dbgDataDirtyIds = null
+        dbgDataSelected = {}
+        // 重新拉
+        setTimeout(() => dbgLoadCloudNh(true, 'clean_dirty'), 800)
+      }
+    },
+    fail: (err) => {
+      dbgDataLoading = false
+      if (wx.showToast) wx.showToast({ title: '调失败', icon: 'none' })
+    },
+  })
+}
+
+// 渲染「数据」tab
+function drawDbgDataTab(ctx) {
+  const w = layout.windowW
+  const h = layout.windowH
+  const closeBarH = 40
+  const bottomBarH = 84  // 与 drawDebugPanel 一致
+  const bottomBarY = h - bottomBarH - 34
+
+  // 背景
+  ctx.fillStyle = 'rgba(0,0,0,0.92)'
+  ctx.fillRect(0, 0, w, h)
+  // 顶部条
+  ctx.fillStyle = '#1a1a1a'
+  ctx.fillRect(0, 0, w, closeBarH)
+  ctx.fillStyle = '#f0c878'
+  ctx.font = 'bold 14px sans-serif'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('DBG · 数据管理', 12, closeBarH / 2)
+  ctx.textAlign = 'right'
+  // 关闭按钮
+  const arrowSize = 28
+  ctx.fillStyle = 'rgba(192,80,80,0.32)'
+  ctx.fillRect(w - arrowSize - 8, 2, arrowSize, closeBarH - 4)
+  ctx.fillStyle = '#f0c878'
+  ctx.font = 'bold 13px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText('×', w - arrowSize / 2 - 8, closeBarH / 2 + 1)
+  layout._dbgCloseBtn = { x: w - arrowSize - 8, y: 0, w: arrowSize, h: closeBarH }
+
+  // 操作栏（在顶部条下方）
+  const opBarY = closeBarH
+  const opBarH = 60
+  ctx.fillStyle = '#0a0a0a'
+  ctx.fillRect(0, opBarY, w, opBarH)
+  ctx.strokeStyle = '#444'
+  ctx.lineWidth = 0.5
+  ctx.beginPath()
+  ctx.moveTo(0, opBarY + opBarH + 0.5)
+  ctx.lineTo(w, opBarY + opBarH + 0.5)
+  ctx.stroke()
+
+  // 4 个操作按钮：刷新 / 一键清脏 / 全选反选 / 全删（兜底）
+  const btnW = Math.floor((w - 24) / 4)
+  const btnH = 24
+  const btnY = opBarY + 8
+  const btnGap = 4
+  const opBtns = [
+    { label: '刷新', action: 'refresh' },
+    { label: '一键清脏', action: 'clean_dirty' },
+    { label: '全选反选', action: 'toggle_all' },
+    { label: '全删(慎)', action: 'all' },
+  ]
+  layout._dbgDataOpBtns = []
+  for (let i = 0; i < opBtns.length; i++) {
+    const bx = 6 + i * (btnW + btnGap)
+    ctx.fillStyle = 'rgba(240,200,120,0.25)'
+    ctx.fillRect(bx, btnY, btnW - 2, btnH)
+    ctx.strokeStyle = 'rgba(240,200,120,0.5)'
+    ctx.lineWidth = 1
+    ctx.strokeRect(bx, btnY, btnW - 2, btnH)
+    ctx.fillStyle = '#f0c878'
+    ctx.font = 'bold 11px sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(opBtns[i].label, bx + (btnW - 2) / 2, btnY + btnH / 2 + 1)
+    layout._dbgDataOpBtns.push({ x: bx, y: btnY, w: btnW - 2, h: btnH, action: opBtns[i].action })
+  }
+
+  // 统计文字
+  ctx.font = '10px sans-serif'
+  ctx.textAlign = 'left'
+  ctx.fillStyle = '#aaa'
+  const dirtyCount = dbgDataDirtyIds ? dbgDataDirtyIds.size : 0
+  const selectedCount = Object.keys(dbgDataSelected).length
+  const statusText = dbgDataLoading ? '加载中...' :
+    `总 ${dbgDataList.length} / 脏 ${dirtyCount} / 已选 ${selectedCount}`
+  ctx.fillText(statusText, 8, opBarY + opBarH - 8)
+
+  // 列表区（在操作栏和底部条之间）
+  const listY = opBarY + opBarH + 4
+  const listH = bottomBarY - listY - 4
+
+  if (dbgDataList.length === 0 && !dbgDataLoading) {
+    ctx.fillStyle = '#666'
+    ctx.font = '12px sans-serif'
+    ctx.textAlign = 'center'
+    ctx.fillText('暂无数据，点「刷新」拉云端', w / 2, listY + listH / 2)
+  }
+
+  // 简单列表渲染（每条 36px 高：勾选框 + content + meta）
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(0, listY, w, listH)
+  ctx.clip()
+
+  const itemH = 40
+  const checkboxSize = 14
+  let _curY = listY - dbgDataScroll
+  layout._dbgDataItems = []
+  for (let i = 0; i < dbgDataList.length; i++) {
+    const r = dbgDataList[i]
+    const isDirty = dbgDataDirtyIds && dbgDataDirtyIds.has(r._id)
+    const isSelected = dbgDataSelected[r._id]
+    if (_curY + itemH < listY || _curY > listY + listH) {
+      _curY += itemH
+      continue  // 不在可见区
+    }
+    // 行背景
+    ctx.fillStyle = isSelected ? 'rgba(240,200,120,0.25)' : (isDirty ? 'rgba(255,96,96,0.12)' : 'rgba(80,80,80,0.18)')
+    ctx.fillRect(0, _curY, w, itemH - 2)
+    // 勾选框
+    const cbX = 6
+    const cbY = _curY + (itemH - 2 - checkboxSize) / 2
+    ctx.fillStyle = isSelected ? '#f0c878' : 'transparent'
+    ctx.fillRect(cbX, cbY, checkboxSize, checkboxSize)
+    ctx.strokeStyle = '#f0c878'
+    ctx.lineWidth = 1
+    ctx.strokeRect(cbX, cbY, checkboxSize, checkboxSize)
+    if (isSelected) {
+      ctx.fillStyle = '#000'
+      ctx.font = 'bold 12px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('✓', cbX + checkboxSize / 2, cbY + checkboxSize / 2 + 1)
+    }
+    // role 标签
+    ctx.fillStyle = r.role === 'user' ? '#88c0d0' : (r.role === 'ai' ? '#ebcb8b' : '#b48ead')
+    ctx.font = 'bold 10px monospace'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'top'
+    ctx.fillText('[' + (r.role || '?') + ']', cbX + checkboxSize + 6, _curY + 4)
+    // content（前 30 字）
+    const contentStr = (r.content || '').slice(0, 30) + ((r.content || '').length > 30 ? '...' : '')
+    ctx.fillStyle = isDirty ? '#ff8080' : '#c0c0c0'
+    ctx.font = '11px sans-serif'
+    ctx.fillText(contentStr, cbX + checkboxSize + 6, _curY + 18)
+    // meta: msg_id + time
+    const meta = `msg=${r.message_id || '-'}  ${new Date(r.created_at || 0).toLocaleTimeString()}`
+    ctx.fillStyle = '#666'
+    ctx.font = '9px monospace'
+    ctx.fillText(meta, cbX + checkboxSize + 6, _curY + 30)
+    // 脏标记（右上）
+    if (isDirty) {
+      ctx.fillStyle = '#ff6060'
+      ctx.font = 'bold 10px sans-serif'
+      ctx.textAlign = 'right'
+      ctx.fillText('脏', w - 8, _curY + 8)
+    }
+    layout._dbgDataItems.push({ x: 0, y: _curY, w: w, h: itemH - 2, _id: r._id })
+    _curY += itemH
+  }
+  ctx.restore()
+
+  // 底部操作条（在 bottomBarY 上方）：已选 N 条 + 删除选中
+  const footerY = bottomBarY - 30
+  ctx.fillStyle = '#0a0a0a'
+  ctx.fillRect(0, footerY, w, 30)
+  ctx.strokeStyle = '#444'
+  ctx.lineWidth = 0.5
+  ctx.beginPath()
+  ctx.moveTo(0, footerY + 0.5)
+  ctx.lineTo(w, footerY + 0.5)
+  ctx.stroke()
+  ctx.fillStyle = '#f0c878'
+  ctx.font = 'bold 12px sans-serif'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(`已选 ${selectedCount} 条`, 12, footerY + 15)
+  // 删除选中按钮
+  const delBtnW = 90
+  const delBtnX = w - delBtnW - 8
+  ctx.fillStyle = selectedCount > 0 ? 'rgba(255,80,80,0.4)' : 'rgba(128,128,128,0.25)'
+  ctx.fillRect(delBtnX, footerY + 4, delBtnW, 22)
+  ctx.strokeStyle = selectedCount > 0 ? '#ff6060' : '#666'
+  ctx.strokeRect(delBtnX, footerY + 4, delBtnW, 22)
+  ctx.fillStyle = selectedCount > 0 ? '#fff' : '#666'
+  ctx.font = 'bold 12px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText('删除选中', delBtnX + delBtnW / 2, footerY + 15)
+  layout._dbgDataDelBtn = { x: delBtnX, y: footerY + 4, w: delBtnW, h: 22 }
+
+  // tab 区 + 复制按钮 + ▲▼（与 drawDebugPanel 共享布局代码）
+  drawDbgBottomBar(ctx, w, h, bottomBarH, bottomBarY)
+}
+
+// tab 区 + 控制行（数据 tab 复用）
+function drawDbgBottomBar(ctx, w, h, bottomBarH, bottomBarY) {
+  const TAB_LABELS = ['AI₁', 'AI₂', '对话流', 'POLL', '场景', 'System', '数据']
+  ctx.fillStyle = '#1a1a1a'
+  ctx.fillRect(0, bottomBarY, w, bottomBarH)
+  ctx.strokeStyle = '#444'
+  ctx.lineWidth = 0.5
+  ctx.beginPath()
+  ctx.moveTo(0, bottomBarY + 0.5)
+  ctx.lineTo(w, bottomBarY + 0.5)
+  ctx.stroke()
+
+  const tabBtnH2 = 20
+  const tabRow1Y = bottomBarY + 2
+  const tabRow2Y = bottomBarY + 22
+  const tabRow3Y = bottomBarY + 42
+  const tabBtnW2 = Math.floor((w - 12) / 3)
+
+  layout._dbgTabs = []
+  for (let _ti = 0; _ti < 7; _ti++) {
+    const col = _ti === 6 ? 0 : (_ti % 3)
+    const row = _ti === 6 ? 2 : Math.floor(_ti / 3)
+    const _curTabX = 6 + col * (tabBtnW2)
+    const _curTabY = row === 0 ? tabRow1Y : (row === 1 ? tabRow2Y : tabRow3Y)
+    const isActive = _ti === dbgActiveTab
+    ctx.fillStyle = isActive ? 'rgba(240,200,120,0.45)' : 'rgba(240,200,120,0.12)'
+    ctx.fillRect(_curTabX, _curTabY, tabBtnW2 - 2, tabBtnH2 - 2)
+    ctx.strokeStyle = isActive ? '#f0c878' : 'rgba(240,200,120,0.3)'
+    ctx.lineWidth = 1
+    ctx.strokeRect(_curTabX, _curTabY, tabBtnW2 - 2, tabBtnH2 - 2)
+    ctx.fillStyle = isActive ? '#fff' : '#f0c878'
+    ctx.font = isActive ? 'bold 10px sans-serif' : '10px sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(TAB_LABELS[_ti], _curTabX + (tabBtnW2 - 2) / 2, _curTabY + (tabBtnH2 - 2) / 2 + 1)
+    layout._dbgTabs.push({ x: _curTabX, y: _curTabY, w: tabBtnW2 - 2, h: tabBtnH2 - 2, tabIdx: _ti })
+  }
+
+  // 控制行
+  const ctrlRowY = bottomBarY + 62
+  const arrowSize = 28
+  const upBtnX = w - arrowSize * 2 - 8
+  const copyTabBtnW = 64
+  const copyTabBtnX = upBtnX - copyTabBtnW - 4
+  const downBtnX = w - arrowSize - 4
+
+  ctx.fillStyle = 'rgba(240,200,120,0.32)'
+  ctx.fillRect(copyTabBtnX, ctrlRowY, copyTabBtnW, 18)
+  ctx.fillStyle = '#f0c878'
+  ctx.font = 'bold 10px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('复制本tab', copyTabBtnX + copyTabBtnW / 2, ctrlRowY + 9)
+  layout._dbgCopyTabBtn = { x: copyTabBtnX, y: ctrlRowY, w: copyTabBtnW, h: 18 }
+
+  ctx.fillStyle = 'rgba(240,200,120,0.2)'
+  ctx.fillRect(upBtnX, ctrlRowY, arrowSize, 18)
+  ctx.fillStyle = '#f0c878'
+  ctx.font = 'bold 14px sans-serif'
+  ctx.fillText('▲', upBtnX + arrowSize / 2, ctrlRowY + 9)
+  ctx.fillStyle = 'rgba(240,200,120,0.2)'
+  ctx.fillRect(downBtnX, ctrlRowY, arrowSize, 18)
+  ctx.fillStyle = '#f0c878'
+  ctx.fillText('▼', downBtnX + arrowSize / 2, ctrlRowY + 9)
+  layout._dbgUpBtn = { x: upBtnX, y: ctrlRowY, w: arrowSize, h: 18 }
+  layout._dbgDownBtn = { x: downBtnX, y: ctrlRowY, w: arrowSize, h: 18 }
+}
+
+// 复制数据 tab 统计
+function dbgCopyDataPanel() {
+  const dirtyCount = dbgDataDirtyIds ? dbgDataDirtyIds.size : 0
+  const total = dbgDataList.length
+  const selected = Object.keys(dbgDataSelected).length
+  return `D058 数据 tab 统计\n总: ${total}\n脏: ${dirtyCount}\n已选: ${selected}\n模式: ${dbgDataLoading ? '加载中' : '就绪'}`
 }

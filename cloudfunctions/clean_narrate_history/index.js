@@ -1,21 +1,67 @@
-// D057（2026-07-04 08:21 拍板·B 方案）：清云端脏 narrate_history
-// 场景：D056 之前 4 天累积的脏数据（content='初始回合' + message_id 重复 + 重复 ai 消息）
-// 设计：只清当前 wx context 的 openid（先生的），不污染其他用户
-// 入参：dryRun = true 时只统计不删（默认 true）
+// D058（2026-07-04 21:09 先生拍板）：云端 narrate_history 管理器
+// 入参:
+//   dryRun = true  → 只统计脏数据 _id，不删（默认 true）
+//   mode = 'clean_dirty' (默认) → 删 content='初始回合' + message_id 重复
+//         = 'by_ids'            → 只删入参 ids 数组里的 _id
+//         = 'all'               → 全删（先生兜底用，慎用）
+//   ids = []  (mode='by_ids' 必传)
+// 返回: { success, mode, stats: { total, dirty/removed, clean, sample_dirty_content[] }, removed? }
 const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 const _ = db.command
 
-exports.main = async (event) => {
-  const dryRun = event.dryRun !== false  // 默认 dryRun
-  const wxContext = cloud.getWXContext()
-  const openid = wxContext.OPENID
+// 应用"脏数据规则"返回脏 _id Set（同时返回全部 record）
+function classifyDirty(allRecords) {
+  const seenMessageIds = new Map()
+  const dirtyIds = new Set()
+  for (const r of allRecords) {
+    if (r.content === '初始回合') { dirtyIds.add(r._id); continue }
+    if (r.message_id !== undefined && r.message_id !== null) {
+      if (seenMessageIds.has(r.message_id)) dirtyIds.add(r._id)
+      else seenMessageIds.set(r.message_id, r._id)
+    }
+  }
+  return dirtyIds
+}
 
+// 精简 record 给前端展示（content 截 200 字）
+function slimRecord(r) {
+  return {
+    _id: r._id,
+    role: r.role,
+    content: (r.content || '').slice(0, 200),
+    message_id: r.message_id,
+    created_at: r.created_at,
+    life_number: r.life_number,
+  }
+}
+
+// 分批删除（云数据库 remove 单次限 50 条）
+async function removeByChunks(ids) {
+  let deletedCount = 0
+  const chunkSize = 50
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize)
+    const res = await db.collection('narrate_history').where({ _id: _.in(chunk), openid: wxCtx.OPENID }).remove()
+    deletedCount += (res.deleted || 0)
+  }
+  return deletedCount
+}
+
+let wxCtx = null
+
+exports.main = async (event) => {
+  wxCtx = cloud.getWXContext()
+  const openid = wxCtx.OPENID
   if (!openid) return { success: false, error: 'no_openid' }
 
+  const dryRun = event.dryRun !== false
+  const mode = event.mode || 'clean_dirty'
+  const ids = Array.isArray(event.ids) ? event.ids : []
+
   try {
-    // 拉全部先生的 narrate_history
+    // 拉全部
     const MAX = 1000
     let allRecords = []
     let offset = 0
@@ -30,51 +76,52 @@ exports.main = async (event) => {
       offset += MAX
     }
 
-    // 找脏数据 _id
-    const seenMessageIds = new Map()  // message_id -> first _id
-    const dirtyIds = new Set()
+    // 选 ids 集合
+    let targetIds = new Set()
+    let statsSample = []
 
-    for (const r of allRecords) {
-      // 规则 1：content === '初始回合' 一律删
-      if (r.content === '初始回合') {
-        dirtyIds.add(r._id)
-        continue
-      }
-      // 规则 2：同 message_id 重复，只留第一条
-      if (r.message_id !== undefined && r.message_id !== null) {
-        if (seenMessageIds.has(r.message_id)) {
-          dirtyIds.add(r._id)
-        } else {
-          seenMessageIds.set(r.message_id, r._id)
-        }
-      }
+    if (mode === 'by_ids') {
+      const idSet = new Set(ids)
+      targetIds = new Set(allRecords.filter(r => idSet.has(r._id)).map(r => r._id))
+      statsSample = allRecords.filter(r => targetIds.has(r._id)).slice(0, 5)
+    } else if (mode === 'all') {
+      targetIds = new Set(allRecords.map(r => r._id))
+      statsSample = allRecords.slice(0, 5)
+    } else {
+      // clean_dirty (默认)
+      targetIds = classifyDirty(allRecords)
+      statsSample = allRecords.filter(r => targetIds.has(r._id)).slice(0, 5)
     }
 
+    // D058（2026-07-04 21:09 先生拍板）：dryRun 模式下返回完整数据 + 全部脏 _id
+    // 原因：前端数据 tab 要显示完整列表，需要 all_records 和 all_target_ids
     const stats = {
       total: allRecords.length,
-      dirty: dirtyIds.size,
-      clean: allRecords.length - dirtyIds.size,
-      sample_dirty_content: allRecords
-        .filter(r => dirtyIds.has(r._id))
-        .slice(0, 5)
-        .map(r => ({ _id: r._id, content: (r.content || '').slice(0, 50), message_id: r.message_id, role: r.role })),
+      target: targetIds.size,
+      clean: allRecords.length - targetIds.size,
+      sample_target_content: statsSample.map(r => ({
+        _id: r._id, content: (r.content || '').slice(0, 50),
+        message_id: r.message_id, role: r.role,
+      })),
     }
 
     if (dryRun) {
-      return { success: true, dryRun: true, stats }
+      stats.all_target_ids = Array.from(targetIds)
+      stats.all_records = allRecords.map(slimRecord).slice(0, 500)  // 限制 500 条防超时
+      stats.all_records_truncated = allRecords.length > 500 ? allRecords.length - 500 : 0
     }
 
-    // 真删：循环 remove（云数据库 remove 单次限 50 条）
-    const dirtyArr = Array.from(dirtyIds)
-    let deletedCount = 0
-    const chunkSize = 50
-    for (let i = 0; i < dirtyArr.length; i += chunkSize) {
-      const chunk = dirtyArr.slice(i, i + chunkSize)
-      const removeRes = await db.collection('narrate_history').where({ _id: _.in(chunk), openid }).remove()
-      deletedCount += (removeRes.deleted || 0)
+    if (dryRun) {
+      return { success: true, mode, dryRun: true, stats }
     }
 
-    return { success: true, dryRun: false, stats, deleted: deletedCount }
+    const targetArr = Array.from(targetIds)
+    if (targetArr.length === 0) {
+      return { success: true, mode, dryRun: false, stats, removed: 0, message: 'nothing_to_remove' }
+    }
+
+    const deleted = await removeByChunks(targetArr, openid)
+    return { success: true, mode, dryRun: false, stats, removed: deleted }
   } catch (e) {
     console.error('[clean_narrate_history] failed:', e.message)
     return { success: false, error: e.message }

@@ -2871,8 +2871,11 @@ function drawDebugPanel(ctx) {
   ctx.fillRect(0, 0, w, closeBarH)
 
   // D039（先生 2026-06-28 01:29 拍板）：tab 按钮放底部, 顶部只保留标题+关闭（避免灵动岛冲突）
-  // D058（2026-07-04 21:09 先生拍板）：6 个 tab（AI₁ / AI₂ / 对话流 / POLL / 场景 / 数据）
-  const TAB_LABELS = ['AI₁', 'AI₂', '对话流', 'POLL', '场景', '数据']
+  // D058（2026-07-04 21:09 先生拍板）：7 个 tab（AI₁ / AI₂ / 对话流 / POLL / 场景 / System / 数据）
+// D058 hotfix3（2026-07-04 22:58）：6 → 7 项（之前漏 System，导致 TAB_LABELS[5] = undefined）
+// 真因：先生切到 System tab 后回到数据 tab，drawDebugPanel 循环 7 次但 TAB_LABELS 只有 6 项
+// → fillText(undefined, ...) → 按钮显示 "undefined"
+  const TAB_LABELS = ['AI₁', 'AI₂', '对话流', 'POLL', '场景', 'System', '数据']
   const arrowSize = 28
   // 顶部条：只显示标题 + 关闭按钮
   ctx.fillStyle = '#f0c878'

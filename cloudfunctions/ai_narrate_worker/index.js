@@ -711,6 +711,46 @@ function fixJSONContentQuotes(text) {
   return result
 }
 
+// D059（2026-07-05 01:40 先生拍板·A 方案）：正则 fallback 提取 content/options
+// 用法：JSON.parse 失败时（且 fixJSONContentQuotes 也没修好），从 raw 文本里硬抽
+// 返回 { content, options } 或 null
+function fallbackExtractBranch(rawText) {
+  if (!rawText || typeof rawText !== 'string') return null
+  // 不要把真换行转字面（regex \s 匹配真换行，不匹配字面 \n）
+  // 抽 content："content"\s*:\s*"...."  （到 "options"/"patch"/"state"/"items" 前一个 "）
+  const contentMatch = rawText.match(/"content"\s*:\s*"([\s\S]*?)"\s*,\s*"(?:options|patch|state|items)"/)
+  let content = null
+  if (contentMatch) {
+    content = contentMatch[1]
+      .replace(/\\"/g, '"')
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '\t')
+      .replace(/\\\\/g, '\\')
+  }
+  // 抽 options："options"\s*:\s*\[...\]
+  const optionsMatch = rawText.match(/"options"\s*:\s*\[([\s\S]*?)\]/)
+  let options = []
+  if (optionsMatch) {
+    const optStrs = optionsMatch[1].match(/"((?:\\.|[^"\\])*)"/g) || []
+    for (const s of optStrs) {
+      const opt = s.slice(1, -1)
+        .replace(/\\"/g, '"')
+        .replace(/\\n/g, '\n')
+        .replace(/\\t/g, '\t')
+        .replace(/\\\\/g, '\\')
+      if (opt) options.push(opt)
+    }
+  }
+  if (!content || options.length === 0) {
+    if (content) {
+      return { content, options: ['继续观察', '尝试离开', '寻找机会'], patch: {} }
+    }
+    return null
+  }
+  if (options.length > 4) options = options.slice(0, 4)
+  return { content, options, patch: {} }
+}
+
 async function callAI(state, input, history, monthEvent, isRetry) {
   const systemPrompt = buildSystemPrompt(state, monthEvent)
   const userPrompt = buildUserPrompt(input, history)
@@ -822,7 +862,17 @@ async function callAI(state, input, history, monthEvent, isRetry) {
     try {
       branches = JSON.parse(fixed)
     } catch (e2) {
-      // 修复后仍失败才走原始错误路径
+      // D059（2026-07-05 01:40 先生拍板·A 方案）：正则 fallback 提取 content/options
+      // 真因：fixJSONContentQuotes 处理英文 " 但不处理其他字符（如 < > | 等）
+      // 修法：用正则兜底提取 content 和 options，构造伪 branch 让玩家继续玩
+      const fb = fallbackExtractBranch(cleaned)
+      if (fb && fb.content) {
+        branches = fb
+        console.log('[PERF] callAI.fallback_extract=true（正则兜底提取）')
+        if (typeof globalThis.__PERF_LOGS__ !== 'undefined') {
+          globalThis.__PERF_LOGS__.push({ stage: 'callAI.fallback_extract', value: 'true' })
+        }
+      }
     }
     if (branches) {
       // 修复成功，用修复后的
@@ -1488,4 +1538,7 @@ function callLLM(messages, modelOverride) {
 
 // D048c（2026-06-28 09:42 拍板）：删 callLLMStream（改非流式 callLLM）
 // 凌晨 9 版本真因：保留流式根本做不好（partialWriter 500ms 触发一堆 bug）
+// callLLM 还在用（line 1344 callScoringAI）板）：删 callLLMStream（改非流式 callLLM）
+// 凌晨 9 版本真因：保留流式根本做不好（partialWriter 500ms 触发一堆 bug）
+// callLLM 还在用（line 1344 callScoringAI）��式根本做不好（partialWriter 500ms 触发一堆 bug）
 // callLLM 还在用（line 1344 callScoringAI）

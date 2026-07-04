@@ -236,19 +236,32 @@ module.exports = {
       }
       // D052（2026-07-03 23:09 先生拍板·A 方案）：recover 时不恢复 options，避免先生重选同一选项
       // 真因：先生 22:59 反馈——重进游戏时显示上轮 options，点同一选项 → push 重复 user + 月份推进
-      // 修法：先生重进时自动触发新一轮（不显示上轮 options，不污染 narrativeHistory）
-      // 用 __continue__ 内部信号走 D005 路径：skip push user + 从末尾 user 拿 realInput + is_retry=true
-      // 先生体验：像开新游戏，零操作，LLM 看到上轮 user 继续推
+      // D060（2026-07-05 01:53 先生拍板·改进）：根据最后一条消息决定是否自动 continue
+      // 真因：D052 总是自动 continue，导致每次重进都生成新 ai（云端 narrate_history 累积）
+      // 修法：最后一条是 ai → 直接渲染，不调 LLM；最后一条是 user → 自动 continue（玩家退出时没等 ai 返回）
+      const lastMsg = narrativeHistory[narrativeHistory.length - 1]
+      const lastRole = lastMsg ? lastMsg.role : null
       options = []  // 先生重进时看不到上轮选项
       optionsAppearTime = 0
       displayedChars = narrative.length
       displayStartTime = Date.now()
-      console.log('[D052] game.init 从云端恢复, history=', narrativeHistory.length, '条, narrative 长度=', narrative.length, ' options=空(先生重进时不显示上轮选项,自动 callAI(__continue__))')
-      // D052: 恢复后自动触发新一轮（先生零操作，AI 自然继续）
-      // 用 setTimeout(0) 让恢复代码先跑完，再触发 LLM
-      setTimeout(() => {
-        callAI('__continue__')
-      }, 100)
+      console.log('[D060] game.init 从云端恢复, history=', narrativeHistory.length, '条, narrative 长度=', narrative.length, ' 最后一条 role=', lastRole, ' options=空')
+      if (lastRole === 'ai') {
+        // 最后一条是 ai（玩家上次正常退出）→ 直接渲染，不重复生成
+        console.log('[D060] 最后一条是 ai，跳过自动 continue（避免冗余生成）')
+      } else if (lastRole === 'user') {
+        // 最后一条是 user（玩家输入后退出，没等到 ai 返回）→ 自动 continue
+        console.log('[D060] 最后一条是 user，自动 continue 生成 ai')
+        setTimeout(() => {
+          callAI('__continue__')
+        }, 100)
+      } else {
+        // 没有消息或只有 system → 自动 continue（兜底）
+        console.log('[D060] 最后一条不是 ai/user（system 或空），自动 continue')
+        setTimeout(() => {
+          callAI('__continue__')
+        }, 100)
+      }
     } else {
       // 首次调用 AI
       callAI('初始回合')

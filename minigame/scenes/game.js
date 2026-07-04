@@ -2955,30 +2955,30 @@ function drawDebugPanel(ctx) {
   const copyTabBtnX = upBtnX - copyTabBtnW - tabBtnGap2
   const downBtnX = w - arrowSize - 4
 
-  // "复制本 tab"按钮
+  // "复制本 tab"按钮（在控制行 ctrlRowY = bottomBarY + 62）
   ctx.fillStyle = 'rgba(240,200,120,0.32)'
-  ctx.fillRect(copyTabBtnX, row2Y, copyTabBtnW, tabBtnH2)
+  ctx.fillRect(copyTabBtnX, ctrlRowY, copyTabBtnW, 18)
   ctx.fillStyle = '#f0c878'
   ctx.font = 'bold 10px sans-serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText('复制本tab', copyTabBtnX + copyTabBtnW / 2, row2Y + tabBtnH2 / 2 + 1)
-  layout._dbgCopyTabBtn = { x: copyTabBtnX, y: row2Y, w: copyTabBtnW, h: tabBtnH2 }
+  ctx.fillText('复制本tab', copyTabBtnX + copyTabBtnW / 2, ctrlRowY + 9)
+  layout._dbgCopyTabBtn = { x: copyTabBtnX, y: ctrlRowY, w: copyTabBtnW, h: 18 }
 
-  // ▲▼ 滚动箭头（底部右侧）
+  // ▲▼ 滚动箭头（控制行右侧）
   ctx.fillStyle = 'rgba(240,200,120,0.2)'
-  ctx.fillRect(upBtnX, row2Y, arrowSize, tabBtnH2)
+  ctx.fillRect(upBtnX, ctrlRowY, arrowSize, 18)
   ctx.fillStyle = '#f0c878'
   ctx.font = 'bold 16px sans-serif'
   ctx.textAlign = 'center'
-  ctx.fillText('▲', upBtnX + arrowSize / 2, row2Y + tabBtnH2 / 2 + 1)
+  ctx.fillText('▲', upBtnX + arrowSize / 2, ctrlRowY + 9)
   ctx.fillStyle = 'rgba(240,200,120,0.2)'
-  ctx.fillRect(downBtnX, row2Y, arrowSize, tabBtnH2)
+  ctx.fillRect(downBtnX, ctrlRowY, arrowSize, 18)
   ctx.fillStyle = '#f0c878'
-  ctx.fillText('▼', downBtnX + arrowSize / 2, row2Y + tabBtnH2 / 2 + 1)
+  ctx.fillText('▼', downBtnX + arrowSize / 2, ctrlRowY + 9)
   // 把 upBtn / downBtn 信息存到 layout 让 onTouch 用
-  layout._dbgUpBtn = { x: upBtnX, y: row2Y, w: arrowSize, h: tabBtnH2 }
-  layout._dbgDownBtn = { x: downBtnX, y: row2Y, w: arrowSize, h: tabBtnH2 }
+  layout._dbgUpBtn = { x: upBtnX, y: ctrlRowY, w: arrowSize, h: 18 }
+  layout._dbgDownBtn = { x: downBtnX, y: ctrlRowY, w: arrowSize, h: 18 }
 
   // 内容区（D039：减去底部 tab 条高度 bottomBarH）
   ctx.save()
@@ -3563,7 +3563,7 @@ function handleTouch(x, y, type) {
       // 修前：tab 循环只检查 x 范围，5 tab 占满整行 6~386 → "复制本tab"按钮 x [261, 325]
       //      落在 POLL tab [234, 310] 内 → onTouch 误判切 POLL，没复制
       // 修：tab 循环加 y 上限 = row1Y + 20（只匹配上行 20px 高）
-      if (type === 'end' && layout._dbgTabs && y >= _bottomBarY && y < _bottomBarY + 42) {  // D058 tab 区两行
+      if (type === 'end' && layout._dbgTabs && y >= _bottomBarY && y < _bottomBarY + 62) {  // D058 tab 区 3 行（含 tab 6 第 3 行）
         for (let _ti = 0; _ti < layout._dbgTabs.length; _ti++) {
           const _tb = layout._dbgTabs[_ti]
           if (x >= _tb.x && x <= _tb.x + _tb.w && y >= _tb.y && y <= _tb.y + _tb.h) {
@@ -3578,7 +3578,7 @@ function handleTouch(x, y, type) {
         }
       }
       // "复制本 tab"按钮（在底部条第 3 行 y>=_bottomBarY+42）
-      if (type === 'end' && layout._dbgCopyTabBtn && y >= _bottomBarY + 42
+      if (type === 'end' && layout._dbgCopyTabBtn && y >= _bottomBarY + 62
           && x >= layout._dbgCopyTabBtn.x && x <= layout._dbgCopyTabBtn.x + layout._dbgCopyTabBtn.w) {
         if (debugLog.length === 0) {
           if (wx.showToast) wx.showToast({ title: '暂无调试数据', icon: 'none' })
@@ -3679,13 +3679,13 @@ function handleTouch(x, y, type) {
           return null
         }
       }
-      // ▲ 向上箭头（底部条右）
-      if (type === 'end' && y >= _bottomBarY && x >= _w - _ARROW_SZ * 2 - 16 && x < _w - _ARROW_SZ - 8) {
+      // ▲ 向上箭头（控制行右 _bottomBarY+62）
+      if (type === 'end' && y >= _bottomBarY + 62 && x >= _w - _ARROW_SZ * 2 - 16 && x < _w - _ARROW_SZ - 8) {
         debugScroll = Math.max(0, debugScroll - 80)
         return null
       }
-      // ▼ 向下箭头（底部条最右）
-      if (type === 'end' && y >= _bottomBarY && x >= _w - _ARROW_SZ - 8) {
+      // ▼ 向下箭头（控制行最右 _bottomBarY+62）
+      if (type === 'end' && y >= _bottomBarY + 62 && x >= _w - _ARROW_SZ - 8) {
         debugScroll = debugScroll + 80
         return null
       }

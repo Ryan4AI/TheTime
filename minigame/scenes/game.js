@@ -276,6 +276,14 @@ function initLayout() {
   const safeTop = (sys.safeArea && sys.safeArea.top) || 0
   const topOffset = Math.max(safeTop, 0)
 
+  // D058 hotfix4（2026-07-05 01:31）：iOS Home Indicator 安全区
+  // 真因：之前用 34px 写死，iPhone 14 Pro 实际手势识别区比 34px 大
+  // 修法：从 wx.getSystemInfoSync().safeArea 动态拿（先生手机返回的 bottom）
+  const safeArea = sys.safeArea || {}
+  const _safeBottomCalc = (safeArea.bottom !== undefined && safeArea.bottom > 0)
+    ? (windowHeight - safeArea.bottom)
+    : 34
+
   // v0.1.71 重做：画区按"是否加载完成"动态伸缩
   // 顶栏(52) → 状态栏(26) → 文字面板(自适应 narrative 行数) → 选项(3×40+gap 4+输入 32 = 160) → 物品栏(64)
   const topBarH = 52
@@ -317,6 +325,7 @@ function initLayout() {
     windowW: windowWidth,
     windowH: windowHeight,
     safeTop: topOffset,
+    safeBottom: _safeBottomCalc,
     padding: 14,
     topBarH: topBarH,
     itemBarH: itemBarH,
@@ -2908,7 +2917,7 @@ function drawDebugPanel(ctx) {
   const bottomBarH = 84  // D058（2026-07-04 21:09 先生拍板）：44→84，给 tab 3 行 + 控制行留位置
   // D048g（2026-06-28 13:23 拍板·先生骂我是蠢货）：底部条上移 34px 避 iOS Home Indicator
   // 34px = iPhone 14 Pro+ Home Indicator 高度
-  const bottomBarY = h - bottomBarH - 34
+  const bottomBarY = h - bottomBarH - (layout.safeBottom || 34)
   ctx.fillStyle = '#1a1a1a'
   ctx.fillRect(0, bottomBarY, w, bottomBarH)
   ctx.strokeStyle = '#444'
@@ -3559,7 +3568,7 @@ function handleTouch(x, y, type) {
       // D039（先生 2026-06-28 01:29 拍板）：tab 按钮在底部条, 顶部只保留关闭按钮
       // D048g（先生 2026-06-28 13:23 拍板·骂我是蠢货）：底部条上移 34px 避 iOS Home Indicator
       const _bottomBarH = 64  // D058 44→64
-      const _bottomBarY = _h - _bottomBarH - 34
+      const _bottomBarY = _h - _bottomBarH - (layout.safeBottom || 34)
       const _ARROW_SZ = 28
       // 5 个 tab 按钮（仅上行 row1Y 20px 区域）
       // D048j（2026-06-28 13:46 拍板·修"点复制本tab 按钮被误判为切 POLL"）：加 y 上限
@@ -3987,7 +3996,7 @@ function drawDbgDataTab(ctx) {
   const h = layout.windowH
   const closeBarH = 40
   const bottomBarH = 84  // 与 drawDebugPanel 一致
-  const bottomBarY = h - bottomBarH - 34
+  const bottomBarY = h - bottomBarH - (layout.safeBottom || 34)
 
   // 背景
   ctx.fillStyle = 'rgba(0,0,0,0.92)'

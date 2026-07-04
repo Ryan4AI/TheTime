@@ -3587,7 +3587,9 @@ function handleTouch(x, y, type) {
 
   // ── AI 调试浮窗触摸拦截（v0.1.61）──
   // 浮窗区域：右上角图标（折叠态）/ 全屏覆盖（展开态）
-  if (debugLog.length > 0) {
+  // D060 hotfix4（2026-07-05 02:34）：去掉 debugLog.length > 0 检查
+  // 真因：debugLog=[] 时跳过整个 DBG 触摸拦截 → 先生重进游戏点 DBG 图标无反应
+  {
     if (!debugOpen) {
       // 折叠态：右上角小图标（v0.6.50: 移入状态栏右侧，避免与系统···叠一起）
       const iconSize = 24

@@ -2848,7 +2848,11 @@ function dbgDoCopy(text) {
 function drawDebugPanel(ctx) {
   // D058（2026-07-04 21:09 先生拍板）：tab 6「数据」走单独渲染路径，不需要 debugLog
   if (dbgActiveTab === 6) { drawDbgDataTab(ctx); return }
-  if (debugLog.length === 0) return
+  // D060 hotfix3（2026-07-05 02:31）：debugLog 为空也画折叠态图标
+  // 真因：先生重进游戏时 debugLog 是空的（新一局还没调过 AI），原代码直接 return
+  //       → 不画 DBG 图标 + onTouch 不响应 → 先生什么都点不动
+  // 修法：debugLog 为空时跳过早期 return，画折叠态图标让先生能进
+  //       （展开态没内容可看，但先生可以切到数据 tab 操作）
 
   // D035（先生 2026-06-27 23:55 拍板 A 方案）：折叠态点 DBG 直接进大浮窗（顶部 tab 切换）, 去掉选组弹层
   // if (dbgSelectorOpen) { drawDbgSelector(ctx); return }  // 已废

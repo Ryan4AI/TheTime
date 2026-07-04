@@ -213,6 +213,8 @@ module.exports = {
     deathConfirmPending = false  // v0.6.95: 重置死亡确认状态
     monthChanged = false
     newEvent = null
+    debugOpen = false  // D060 hotfix（01:57）：重置 DBG 浮窗状态，确保折叠态画右上角图标
+    debugScroll = 0    // D060 hotfix：同时重置滚动位置
     itemDetail = null
 
     initLayout()

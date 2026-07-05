@@ -321,7 +321,10 @@ async function backgroundTask(request_id, payload) {
 
     // D056（先生 00:30 拍板·①方案）：worker 实时 add ai + system_messages 到 narrate_history
     // 真因：narrate_history 由前端 player_save 写 → message_id 同时间戳冲突 → 106 条脏数据
-    // 修法：worker 跑完直接 db.collection('narrate_history').add()，用云数据库 _id 自带去重
+    // 修法：worker 跑完直接 db.collection('narrate_history').add()，用云数据库 _id 唯一性去重
+    // 注：D056 当初注释写"云数据库 _id 自带去重 / 包含时间戳"是误判（D062 10:13 修正）
+    //   → CloudBase 自动 _id 是 32 hex 随机字符串，**不带时间戳** → 不能用 _id 排序
+    //   → player_load 现已改用 .orderBy('created_at', 'asc') 拿时间顺序
     // 前端不再写 narrate_history，player_save 只写 player + player_life
     try {
       const addedIds = []

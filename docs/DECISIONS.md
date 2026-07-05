@@ -226,3 +226,42 @@ v3.0.9c 描述变更段（也是 D040 精神违规）：
 - 先生 ping github `57c1e0d..a8deb43 main -> main` ✅
 
 **两次部署全过：** 两次 `node -c` 通过 + 两次 COS 上传部署成功（先生手机 DBG 浮窗可以验：`system_prompt` tab 看新 prompt 实际生效）
+
+## D062（2026-07-05 10:13 先生拍板）player_load 排序真因：_id 不带时间戳，改 created_at asc
+
+**问题：** 先生 10:02 反馈"重进游戏前端显示的不是最近一条剧情，而是第一条"。
+
+**真因排查：**
+- player_load 用 `.orderBy('_id', 'asc')` 排序 narrate_history
+- D056 当时拍板注释写"云数据库 _id 包含时间戳"——**判断错的**
+- 实际上 CloudBase 自动 `_id` 是 32 hex 随机字符串，**不带时间戳信息**（不像 MongoDB ObjectId 前 4 字节是时间戳秒数）
+- 真因验证：先生云端 3 条 ai 按 `_id asc` 拿到的是「街上议论 → 客栈门口 → 告示栏转身」（字典序），不是时间顺序
+- 真因：先生重进时 narrativeHistory = 字典序随机排序；game.init line 234-244 "从后往前找第一条 ai" → 拿到的是字典序最靠后那条 = 时间上最早那条（07-04 22:18 告示栏）
+
+**修复（一行改动）：**
+- `cloudfunctions/player_load/index.js` line 33：`.orderBy('_id', 'asc')` → `.orderBy('created_at', 'asc')`
+- 注释修正：`_id 包含时间戳，asc = 旧→新` → `created_at 是 worker 写入时的 Date.now() 毫秒时间戳，asc = 旧→新`
+- `cloudfunctions/ai_narrate_worker/index.js` line 324 注释：删"云数据库 _id 自带去重"误导说明，加"D056 当初判断错 / D062 修正"标注
+
+**红线遵守：**
+- ✅ **不动数据库设计**（先生 10:10 拍板红线）
+  - 字段名 `created_at` 不改 `event_at`
+  - 不建索引（先生 3 条数据无所谓）
+  - 不加 event_type 字段
+  - 不数据迁移
+
+**mock 测试：**
+- `minigame/mock-d062-player-load.js` 用先生真实 3 条 ai 数据（07-04 22:18 / 07-05 09:00 / 07-05 09:01）
+- 测试通过：第 0 条告示栏（最早）→ 第 1 条街上议论 → 第 2 条客栈门口（最近）
+
+**部署：**
+- `tcb fn deploy player_load --force` ✅ COS 上传成功
+- ai_narrate_worker 注释只改没新代码逻辑，**不需重新 deploy**（下次改 worker 代码时一起部署）
+
+**先生验收（10:20 拍板"可以"）：**
+- 杀进程重进游戏 → narrative 应显示「你披衣下楼，客栈门口已经围了一群人...」（第 2 条，最近）
+- DBG 浮窗 → 「对话流」tab → narrativeHistory 数组应按时间升序：告示栏转身 → 街上议论 → 客栈门口围人
+
+**未做（待先生决定）：**
+- DECISIONS.md 落后 D051-D061 60+ 决策未落档（先生没让补，先不动）
+- 远端 ahead 12 + 本次 D062 commit 仍未 push（先生自助）

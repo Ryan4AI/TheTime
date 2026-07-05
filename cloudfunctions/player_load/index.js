@@ -27,10 +27,15 @@ exports.main = async (event) => {
     const player_life = lifeRes.data[0]
 
     // 3) 查全部 narrate_history（D055 拍板：不截断，给前端完整上下文）
-    // D056: 改用 _id desc 排序（云数据库自动 _id，不需要 message_id）
+    // D062（2026-07-05 10:13 先生拍板）：按 created_at asc 排序（worker 写库时设的 Date.now() 毫秒时间戳）
+    // 真因：D056 注释误判"云数据库 _id 包含时间戳"——CloudBase 的 _id 是 32 hex 随机字符串，无时间信息
+    //   → player_load 用 .orderBy('_id', 'asc') 实际是字典序随机排序，不是时间顺序
+    //   → 先生重进游戏 narrative 显示的不是"最近一条 ai"，而是 _id 字典序随机一条
+    // 修复：按 created_at 升序（先生每条 ai 消息都有此字段），让 narrativeHistory = 真实时间顺序
+    // 不改字段名 / 不建索引 / 不动 schema（先生 2026-07-05 10:10 拍板"不动数据库设计"）
     const nhRes = await db.collection('narrate_history')
       .where({ openid, life_number: player.life_number })
-      .orderBy('_id', 'asc')  // _id 包含时间戳，asc = 旧→新
+      .orderBy('created_at', 'asc')  // 旧→新（D062）
       .get()
     const narrate_history_list = nhRes.data
 

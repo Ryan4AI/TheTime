@@ -1,24 +1,19 @@
+// 直接用云函数 SDK 测：先生端发的 payload
 const cloud = require('wx-server-sdk')
-cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
+cloud.init({ env: 'cloud1-d5gkbowyvbd1c85e1' })
+const db = cloud.database()
 
-const COLLECTIONS = ['era_meta', 'era_cities', 'era_age_dist', 'social_structure', 'event', 'player', 'player_life', 'narrate_history', 'llm_io']
-
-exports.main = async () => {
-  const db = cloud.database()
-  const results = []
-
-  for (const name of COLLECTIONS) {
-    try {
-      await db.collection(name).add({ data: { _init_: true, createdAt: Date.now() } })
-      results.push({ ok: `${name} created` })
-    } catch (e) {
-      if (e.message && e.message.includes('already exist')) {
-        results.push({ ok: `${name} already exists` })
-      } else {
-        results.push({ err: name, msg: e.message })
-      }
-    }
+// 1) 先看 player 集合是否能 add（set 含 _id 限制）
+async function test() {
+  try {
+    // add 一条
+    const r = await db.collection('player').add({ data: { life_number: 1, test: 'mock' } })
+    console.log('add 成功:', r._id)
+    // 删掉
+    await db.collection('player').doc(r._id).remove()
+    console.log('remove 成功')
+  } catch (e) {
+    console.error('add 失败:', e.message)
   }
-
-  return { success: true, results }
 }
+test()

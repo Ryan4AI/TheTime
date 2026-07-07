@@ -12,3 +12,9 @@ Thumbs.db
 5552740664078201e5c49c3f4491868b/
 backups/
 memory/
+
+# 2026-06-27 D028: 防止云函数凭证误提交
+cloudbaserc.json
+.env
+.env.*
+

@@ -22,8 +22,9 @@ var displayedChars = 0        // 打字机效果：已显示字符数
 var displayStartTime = 0     // 打字开始时间
 var options = []             // 当前选项
 var optionsAppearTime = 0    // 选项出现时间
-var freeInputActive = false  // 自由输入模式
-var freeInputText = ''       // 自由输入文本
+var freeInputActive = false  // 自由输入模式（C 方案后保留作为兼容标志，键盘弹起时 = true）
+var freeInputInstance = null // C 方案（D085 2026-07-08 00:09 先生拍板）：wx.createInput 实例，常驻 screen
+var keyboardHeight = 0       // D075：键盘高度（wx.onKeyboardHeightChange 回调更新），用于底部区上移避键盘
 var loading = false          // AI 调用中
 var loadingStart = 0
 var loadingText = '史官正在落笔…'  // v0.1.74 (D008): 轮询期间显示等待时长
@@ -161,6 +162,29 @@ module.exports = {
     const id = identity || {}
     items = items || []
 
+    // D077（2026-07-05 16:50 先生拍板）：多 API 监听键盘高度 + 兜底用 windowHeight 推算
+    // 真因：v3.0.27 用 onKeyboardHeightChange 单一 API，先生真机没触发
+    // 修法：API 监听 + hideKeyboard 后用 windowHeight 差值兜底（多方案并发）
+    const _self = this
+    if (typeof wx !== 'undefined') {
+      if (wx.onKeyboardHeightChange) {
+        wx.offKeyboardHeightChange && wx.offKeyboardHeightChange()
+        wx.onKeyboardHeightChange((res) => {
+          keyboardHeight = (res && res.height) || 0
+          console.log('[D077] onKeyboardHeightChange, height=', keyboardHeight)
+        })
+      }
+      // 兜底 1：showKeyboard complete 时延迟轮询 windowHeight
+      // （微信小游戏 canvas 不一定 resize，但某些机型会）
+      if (wx.getSystemInfoSync) {
+        try {
+          const sys = wx.getSystemInfoSync()
+          layout._origWindowH = sys.windowHeight
+          console.log('[D077] _origWindowH=', sys.windowHeight)
+        } catch (e) {}
+      }
+    }
+
     state = {
       life_number: id.life_number || 1,
       name: id.name || '无名',
@@ -204,7 +228,7 @@ module.exports = {
     options = []
     optionsAppearTime = 0
     freeInputActive = false
-    freeInputText = ''
+    // D085：freeInputText 已废弃（input 组件自有 value），不重置
     loading = false
     errorMsg = ''
     narrativeHistory = []
@@ -219,6 +243,10 @@ module.exports = {
 
     initLayout()
 
+    // D085（2026-07-08 00:09 先生拍板·C 方案）：创建 wx.createInput 常驻
+    // 必须在 initLayout 之后调（要读 layout.textY/textH/windowW/padding）
+    createFreeInput()
+
     // v0.6.43: 本地即时计算榜单接近度（同步，不等云函数）
     closestBoardInfo = computeClosestBoard(state)
     fetchClosestBoard()  // 云函数后台刷新（稍后覆盖）
@@ -226,52 +254,49 @@ module.exports = {
     // D049 修复 v3（2026-06-29 14:05 拍板）：从云端恢复时不调 callAI
     // 之前：game.init 总是调 callAI('初始回合') → 先生点"踏入长河"（有云端存档）也走重新生成
     // 修复：identity.fromCloud = true 时跳过 callAI，恢复 narrativeHistory 让玩家看到上次剧情
-    if (id.fromCloud && id.cloudNarrateHistory && Array.isArray(id.cloudNarrateHistory) && id.cloudNarrateHistory.length > 0) {
-      narrativeHistory = id.cloudNarrateHistory
-      // 找到最近 1 条 ai 消息作为 narrative 显示
-      // D061（2026-07-05 02:26 先生拍板·改进）：同时恢复 options
-      // 真因：D052 不恢复 options → 先生重进看不到选项 + 不知道上次选了哪个
-      // 先生 02:26 指出：options 是 LLM 重新生成的（和先生上次选的内容可能完全不一样）
-      //          "上次选项"和"先生上次选择"语义不同，不需要"去掉已选项"
-      // 修法：直接恢复 options，先生点哪个都行（点新选项就走新分支，narrativeHistory 有完整记录）
-      for (var hi = narrativeHistory.length - 1; hi >= 0; hi--) {
-        var m = narrativeHistory[hi]
-        if (m && m.role === 'ai' && m.content) {
-          narrative = m.content
-          // 恢复 options（D061）
-          if (Array.isArray(m.options) && m.options.length > 0) {
-            options = m.options.map(label => ({ label: label, bounds: null }))
+    // D072（2026-07-05 13:18 先生拍板·C 方案）：game.init 自己调 player_load limit(1)，不再用 id.cloudNarrateHistory
+    // 真因：之前用 identity.js 传的 cloudNarrateHistory 全量数组 → 模块级变量时序问题导致 game.init 用旧数据
+    // 修法：game.init 自己 async 调 player_load（mode 默认 = last_ai），永远拿到最新云端数据
+    if (id.fromCloud) {
+      const _self = this
+      wx.cloud.callFunction({
+        name: 'player_load',
+        data: {},  // 默认 mode='last_ai'
+        success: (r) => {
+          if (r && r.result && r.result.success) {
+            const lastAi = r.result.last_ai
+            const lastRole = r.result.last_role
+            if (lastAi && lastAi.content) {
+              narrative = lastAi.content
+              if (Array.isArray(lastAi.options) && lastAi.options.length > 0) {
+                options = lastAi.options.map(label => ({ label: label, bounds: null }))
+              }
+            }
+            // narrativeHistory 只保留 last_ai 这一条（前端不再缓存全量）
+            narrativeHistory = lastAi ? [lastAi] : []
+            optionsAppearTime = Date.now()
+            displayedChars = narrative.length
+            displayStartTime = Date.now()
+            console.log('[D072] game.init 从云端 player_load 恢复 last_ai, content=', (narrative || '').slice(0, 30), ' lastRole=', lastRole)
+            if (lastRole === 'user') {
+              // 最后一条是 user（玩家输入后退出，没等到 ai 返回）→ 自动 continue
+              console.log('[D072] 最后一条是 user，自动 continue 生成 ai')
+              setTimeout(() => {
+                _self.callAI ? _self.callAI('__continue__') : callAI('__continue__')
+              }, 100)
+            } else {
+              console.log('[D072] 最后一条是 ai/system/空，不调 LLM，让先生看 last_ai')
+            }
+          } else {
+            console.log('[D072] player_load 失败，降级 callAI 初始回合:', (r && r.result && r.result.error) || 'unknown')
+            callAI('初始回合')
           }
-          break
-        }
-      }
-      // D052（2026-07-03 23:09 先生拍板·A 方案）：recover 时不恢复 options，避免先生重选同一选项
-      // 真因：先生 22:59 反馈——重进游戏时显示上轮 options，点同一选项 → push 重复 user + 月份推进
-      // D060（2026-07-05 01:53 先生拍板·改进）：根据最后一条消息决定是否自动 continue
-      // 真因：D052 总是自动 continue，导致每次重进都生成新 ai（云端 narrate_history 累积）
-      // 修法：最后一条是 ai → 直接渲染，不调 LLM；最后一条是 user → 自动 continue（玩家退出时没等 ai 返回）
-      const lastMsg = narrativeHistory[narrativeHistory.length - 1]
-      const lastRole = lastMsg ? lastMsg.role : null
-      optionsAppearTime = Date.now()  // D061：让选项立即可点（先生重进能立刻选）
-      displayedChars = narrative.length
-      displayStartTime = Date.now()
-      console.log('[D061] game.init 从云端恢复, history=', narrativeHistory.length, '条, narrative 长度=', narrative.length, ' 最后一条 role=', lastRole, ' options 长度=', options.length)
-      if (lastRole === 'ai') {
-        // 最后一条是 ai（玩家上次正常退出）→ 直接渲染 options，先生可继续选
-        console.log('[D061] 最后一条是 ai，恢复 options 供先生选择，不调 LLM')
-      } else if (lastRole === 'user') {
-        // 最后一条是 user（玩家输入后退出，没等到 ai 返回）→ 自动 continue
-        console.log('[D061] 最后一条是 user，自动 continue 生成 ai')
-        setTimeout(() => {
-          callAI('__continue__')
-        }, 100)
-      } else {
-        // 没有消息或只有 system → 自动 continue（兜底）
-        console.log('[D061] 最后一条不是 ai/user（system 或空），自动 continue')
-        setTimeout(() => {
-          callAI('__continue__')
-        }, 100)
-      }
+        },
+        fail: (e) => {
+          console.error('[D072] player_load 调用失败:', e && (e.errMsg || e.message))
+          callAI('初始回合')
+        },
+      })
     } else {
       // 首次调用 AI
       callAI('初始回合')
@@ -367,6 +392,85 @@ function initLayout() {
   }
 }
 
+// 创建 wx.createInput（D085 C 方案）：常驻 screen，玩家点 input 自动 focus
+function createFreeInput() {
+  if (typeof wx === 'undefined' || !wx.createInput) {
+    console.log('[D085] wx.createInput 不存在，降级到 wx.showKeyboard（旧流程）')
+    return
+  }
+  if (freeInputInstance) {
+    console.log('[D085] freeInputInstance 已存在，跳过')
+    return
+  }
+
+  // 位置：D076 narrative 下方（layout.textY + textH + gap）
+  // 输入框高度 40px（D076 60px 太大，C 方案系统样式更紧凑）
+  const freeH = 40
+  const freeGap = 10
+  const optX = layout.padding
+  const optW = layout.windowW - layout.padding * 2
+  const textBottomY = layout.textY + (layout.textH || 200)
+  let freeY = textBottomY + freeGap
+  // 避开物品栏
+  const maxBottom = (layout.itemBarY || layout.windowH) - 10
+  if (freeY + freeH > maxBottom) freeY = maxBottom - freeH
+
+  freeInputInstance = wx.createInput({
+    x: optX,
+    y: freeY,
+    width: optW,
+    height: freeH,
+    maxLength: 100,
+    confirmType: 'send',
+    placeholder: '你想做什么...',
+    // 系统样式：color/backgroundColor 是文档支持的基础参数
+    color: '#f5efe0',           // D085：文字色（暖白，跟 narrative 文字一致）
+    backgroundColor: 'rgba(60, 55, 50, 0.7)',  // 半透明灰底（模拟 D076 风格）
+  })
+
+  // 监听输入事件（实时更新，不入对话流 —— D005 教训）
+  freeInputInstance.on('input', (res) => {
+    // freeInputText = res.value || ''  // D085 C 方案不需要此变量（input 组件自有 value）
+    console.log('[D085] input:', res.value)
+  })
+
+  // 监听确认事件（玩家点发送）
+  freeInputInstance.on('confirm', (res) => {
+    const text = (res.value || '').trim()
+    if (text) {
+      console.log('[D085] confirm → callAI:', text)
+      options = []
+      callAI(text)
+    }
+    // blur 后下次点 input 自动 focus（不用手动重建）
+    // freeInputInstance.blur()
+  })
+
+  // 监听失焦事件（键盘收起）
+  freeInputInstance.on('blur', () => {
+    freeInputActive = false
+    console.log('[D085] blur → 键盘收起')
+  })
+
+  // 监听聚焦事件（键盘弹起）
+  freeInputInstance.on('focus', () => {
+    freeInputActive = true
+    console.log('[D085] focus → 键盘弹起')
+  })
+
+  // D085：选项按钮位置 = 输入框下方（先生拍板方案 1：保留 D076 位置）
+  // D076 视觉弱化：选项在输入框下方（之前 D076 是 drawFreeInputButton 算 optionY）
+  // C 方案 drawFreeInputButton 已废弃，选项位置由 createFreeInput 同步写入 _optionY_override
+  const freeBottom = freeY + freeH
+  const optGapBetween = 8
+  layout._optionY_override = freeBottom + optGapBetween
+
+  // D085：保留 _freeInputBtn 字段供后续可能使用（输入框区域信息备份）
+  layout._freeInputBtn = { x: optX, y: freeY, w: optW, h: freeH }
+
+  console.log('[D085] freeInputInstance created at', freeY, 'optionY=', layout._optionY_override)
+}
+
 // ─────── 调用 ai_narrate 云函数 ───────
 // v0.1.74 (D008): 异步轮询方案
 // 之前直接调 ai_narrate → 客户端 callFunction 15s 超时 → -504003
@@ -385,18 +489,11 @@ function callAI(userInput) {
   // v0.6.50j 寿限检测：寿限已至 → 注入临终 system message
   // v3.0.14n-fix: 删掉"生成墓志铭写入 epitaph 字段"（先生 19:25 拍板·方案A）
   // epitaph 由独立的 ai_write_death 云函数生成（玩家点封笔后调用）
+  // D068（2026-07-05 12:20 先生拍板·清理）：narrativeHistory 不再本地累积
+  // 真因：worker 入库（D067 后）前端再 push 是冗余，且前端/云端不一致是 D049 bug 根因
+  // 修法：本地不再 push system / user；callAI 入口只走流程逻辑，不再更新本地数组
   if (state.alive && state.lifespan && state.age >= state.lifespan && (state.health || 100) > 0) {
-    narrativeHistory.push({
-      role: 'system',
-      content: '⚠ 寿限已至。这一轮玩家将自然离世。请在叙事中描写临终场景。',
-    })
-  }
-  // v0.6.93: 用户消息先 push（在 AI 返回前）→ narrativeHistory 顺序变为 [user, ai, user, ai]
-  // 修"顺序反"bug：之前 push user 在 handleAIResponse 里，导致 [ai, user, ai, user]，LLM 看到的 messages 顺序反了
-  // 跳过 __retry__（D005 不污染对话流）
-  // D052（2026-07-03 23:09 先生拍板·A 方案）：__continue__ 也走 D005 路径（先生重进时自动 continue）
-  if (userInput && userInput !== '__retry__' && userInput !== '__continue__') {
-    narrativeHistory.push({ role: 'user', content: userInput })
+    console.log('[D068] 寿限已至，提示 worker 处理（前端不再本地 push system）')
   }
 
   loading = true
@@ -448,16 +545,14 @@ function callAI(userInput) {
     historical_shelter: state.historical_shelter,
   }
 
-  // D055（2026-07-04 00:08 先生拍板）：history 不截断，给 LLM 完整上下文
-  // 真因：v0.1.84 注释 "v0.1.84: 全量 history（不截断）"——但 line 426 slice(-12) 还在——前端截断
-  // 修法：history = narrativeHistory 全量
-  var historyForAi = narrativeHistory
+  // D067（2026-07-05 11:49 先生拍板）：前端不再传 history，worker 自己从云端 narrate_history 拉
+  // 真因：前端拼 historyForAi 是冗余设计，worker 后端能直接查云数据库
+  // 修法：data 不带 history 字段
 
   const data = {
     state: stateData,
     input: realInput,
     is_retry: isRetry,
-    history: historyForAi,
   }
 
   // ── 调试：记录完整 input ──
@@ -584,6 +679,8 @@ function pollNarrateResult(requestId, action, userInput, attempt, pollStartMs) {
               last.system_prompt = result.debug.system_prompt
               last.user_prompt = result.debug.user_prompt
               last.messages_to_ai = result.debug.messages || null
+              // D067：兜底拿 result.history（worker 顶层带，AI 失败时也有）
+              if (!last.messages_to_ai && result.history) last.messages_to_ai = result.history
               last.raw_response = result.debug.raw_response
               last.all_branches = result.branches || null
               // D037（先生 2026-06-28 01:14 拍板 A 方案）：AI₂ 评分结果（attrPatch）从 worker 传过来, DBG tab 2 展示
@@ -615,6 +712,7 @@ function pollNarrateResult(requestId, action, userInput, attempt, pollStartMs) {
               if (rdebug.system_prompt) last.system_prompt = rdebug.system_prompt
               if (rdebug.user_prompt) last.user_prompt = rdebug.user_prompt
               if (rdebug.messages) last.messages_to_ai = rdebug.messages
+              if (!last.messages_to_ai && rdebug.history) last.messages_to_ai = rdebug.history  // D067
               if (rdebug.parse_error) last.parse_error = rdebug.parse_error
               if (rdebug.llm_error) last.llm_error = rdebug.llm_error
               if (rdebug.err_status) last.err_status = rdebug.err_status
@@ -705,6 +803,7 @@ function handleAIResponse(result, action, userInput) {
         if (result.debug.system_prompt) last.system_prompt = result.debug.system_prompt
         if (result.debug.user_prompt) last.user_prompt = result.debug.user_prompt
         if (result.debug.messages) last.messages_to_ai = result.debug.messages
+        if (!last.messages_to_ai && result.history) last.messages_to_ai = result.history  // D067
         if (result.debug.perf_logs) last.perf_logs = result.debug.perf_logs
         // D037（先生 2026-06-28 01:14 拍板 A 方案）：attrPatch 从 worker 写进 debug, 前端 DBG tab 2 AI₂ 评分展示
         if (result.debug.attr_patch) last.attr_patch = result.debug.attr_patch
@@ -712,6 +811,14 @@ function handleAIResponse(result, action, userInput) {
         // D043：AI₂ prompt + raw response 写进 debug
         if (result.debug.score_prompt) last.score_prompt = result.debug.score_prompt
         if (result.debug.score_raw_response) last.score_raw_response = result.debug.score_raw_response
+      }
+      // D070（2026-07-05 12:47 先生拍板）：AI 失败也同步 narrativeHistory
+      // 真因：之前 D068 同步只在 handleAIResponse 成功路径走 → 失败时本地 narrativeHistory 不更新
+      //       → 先生重进游戏时 narrativeHistory 还是旧的（甚至空的）→ DBG「对话流」无数据
+      // 修法：失败路径也同步 result.history
+      if (result && Array.isArray(result.history) && result.history.length > 0) {
+        narrativeHistory = result.history
+        console.log('[D070] AI 失败路径也同步 narrativeHistory, count=', narrativeHistory.length)
       }
     }
     errorMsg = `史官落笔卡壳了——${(result && result.error) || 'AI服务暂不可用'}。点此重试。`
@@ -742,6 +849,7 @@ function handleAIResponse(result, action, userInput) {
       }
       if (result.debug && result.debug.messages) {
         last.messages_to_ai = result.debug.messages
+        if (!last.messages_to_ai && result.history) last.messages_to_ai = result.history  // D067
       }
     }
     errorMsg = '史官落笔卡壳了——这一页是空白。点此重试。'
@@ -889,20 +997,17 @@ function handleAIResponse(result, action, userInput) {
   // v0.1.63 (D005): 重试是前端兜底，不是玩家真实意图
   // 不入 narrativeHistory，避免污染对话流
   // v0.1.87: 先生提议 — 顺序 system → ai → user（与时间因果对齐）
-  //   因果链：玩家上轮选择 user → worker 推 patch → emit system → AI 接续写剧情 ai
-  //   LLM 看到的 messages: user/assistant/user/assistant/... 完全符合 OpenAI 风格
   // v0.1.80 (D008): system message 进流，AI 下一回合可读
-  if (Array.isArray(system_messages)) {
-    for (const sm of system_messages) {
-      narrativeHistory.push({ role: 'system', content: sm.content })
-    }
+  // D068（2026-07-05 12:20 先生拍板·清理）：不再本地累积
+  // 真因：worker 入库（D067 后）前端再 push 是冗余
+  // 修法：本地数组 narrativeHistory 不再 push system / ai，AI 返回后从 result.history 同步最新
+  // 注：渲染 narrative 字符串仍依赖 narrative + options（line 932 后续赋值），不动
+  if (result && Array.isArray(result.history) && result.history.length > 0) {
+    narrativeHistory = result.history
+    console.log('[D068] 从 result.history 同步本地, count=', narrativeHistory.length)
+  } else {
+    console.log('[D068] result.history 缺失，保持本地 narrativeHistory 不变')
   }
-  // D049 修复 v12（2026-06-30 01:20 拍板）：narrativeHistory push ai 时存 options
-  // 真因：先生 01:18 反馈"加载了叙事文字但没加载选项"——因为 narrativeHistory.push ai 时没存 options
-  //   → 云端 narrate_history 存的 ai 消息 options=null
-  //   → game.init 恢复时 if (m2.options) 判 false → options 不恢复 → 先生看不到选项
-  // 修复：push ai 时也存 options（这样 v10 端到端真生效，叙事+选项都恢复）
-  narrativeHistory.push({ role: 'ai', content: branch.content, options: branch.options || null })  // 普通轮次只存选中分支
   lastRawAiResp = (result.debug && result.debug.raw_response) || lastRawAiResp  // v0.6.85: 存原始JSON，history送AI时替代最后一条
   // v0.6.93: 玩家选项 push 移到 callAI 入口（先生 11:40 拍板修"顺序反"bug）
   // 这里不再 push user，narrativeHistory 顺序：[user, ai, user, ai, ...]
@@ -1005,12 +1110,14 @@ function stateToPlayerLife(s) {
     name: s.name || 'Unnamed',
     gender: (s.gender === '女' || s.gender === 'female') ? 'female' : 'male',
     age: s.age || 0,
+    // D081：补 occupation/dynasty/city/social_class 默认值（避免 validate 失败）
     occupation: s.occupation || 'commoner',
     social_class: s.socialClass || s.social_class || 'commoner',
-    dynasty: s.dynasty || '',
-    era_display: s.eraDisplay || s.eraDisplay || '',
+    dynasty: s.dynasty || '未知',
+    era_display: s.eraDisplay || '',
     city: s.city || 'unknown',
-    year: s.year || 0,
+    // D081：补 month/year（之前默认值是 month=1 但不传，会被 validate 拒）
+    year: typeof s.year === 'number' ? s.year : 1,
     month: s.month || 1,
     health: s.health || 100,
     lifespan: s.lifespan || 70,
@@ -1025,7 +1132,8 @@ function stateToPlayerLife(s) {
     righteous: s['义行'] || 0,
     epitaph: s.epitaph || '',
     current_items: currentItems || [],
-    created_at: s.created_at || Date.now(),
+    // D079：created_at undefined 时输出 null，云端保留原值
+    created_at: s.created_at || null,
     updated_at: Date.now(),
   }
 }
@@ -1153,10 +1261,10 @@ function render(ctx) {
     drawOptions(ctx)
   }
 
-  // 7. 自由输入按钮（v0.6.50: 补回——之前被误删的 render 调用）
-  if (Date.now() >= optionsAppearTime && options.length > 0) {
-    drawFreeInputButton(ctx)
-  }
+  // 7. 自由输入按钮（D085 2026-07-08 00:09 先生拍板·C 方案已废弃）
+  // 真因：D076 加的 drawFreeInputButton + handleFreeInput → 双重输入框
+  // 修法：输入框由 wx.createInput 常驻渲染（init 时创建），不在 Canvas 画
+  // 此处不再调 drawFreeInputButton，input 组件自带渲染
 
   // 8. 底部物品栏（极简）  // v0.6.50p: 右侧并排格子雷达图
   drawItemBar(ctx)
@@ -1896,7 +2004,10 @@ function drawOptions(ctx) {
   const optX = layout.padding
   const optW = layout.windowW - layout.padding * 2
   const optGap = layout.optionGap || 3
-  const baseY = layout.optionY
+  // D075：键盘弹出时，选项区上移避开键盘
+  const _kbdH = (typeof keyboardHeight === 'number' && keyboardHeight > 0) ? keyboardHeight : 0
+  // D076：输入框重定位后，drawFreeInputButton 算好 optionY 放在 layout._optionY_override
+  const baseY = (layout._optionY_override !== undefined) ? layout._optionY_override - _kbdH : layout.optionY - _kbdH
 
   // 文字区域宽度（左右各留 12px padding）
   const textMaxW = optW - 24
@@ -1916,11 +2027,12 @@ function drawOptions(ctx) {
     ctx.globalAlpha = alpha * fadeIn
 
     // 1. 按钮底板（暗色 + 朱砂红单层描边）
-    ctx.fillStyle = C.dark
+    // D076：选项视觉弱化——底色更透明、描边更淡（让输入框成视觉焦点）
+    ctx.fillStyle = 'rgba(40, 35, 30, 0.45)'  // 原 C.dark 是 #1a1a1a 不透明，现降低不透明度
     roundRect(ctx, optX, curY, optW, optH, 4)
     ctx.fill()
-    ctx.strokeStyle = C.vermillion
-    ctx.lineWidth = 0.8
+    ctx.strokeStyle = 'rgba(180, 70, 70, 0.45)'  // 原朱砂红全不透明，现降低 + 灰
+    ctx.lineWidth = 0.6
     roundRect(ctx, optX, curY, optW, optH, 4)
     ctx.stroke()
 
@@ -1971,53 +2083,18 @@ function drawOptions(ctx) {
 // v0.2.5-Y（先生 2026-06-13 18:25 拍板）：✎ 从顶栏移回选项区下方
 // v0.2.5-Z：位置改为基于选项区实际底部（动态高度）
 // 虚线边框 + 暗金文字，和选项按钮同宽但更矮（32px），视觉上区分
-function drawFreeInputButton(ctx) {
-  if (!options || options.length === 0) return
-  const fadeIn = layout.optionFadeIn || 0
-  if (fadeIn <= 0) return
-
-  const optX = layout.padding
-  const optW = layout.windowW - layout.padding * 2
-  const freeH = 32
-  const freeGap = 6
-  // 位置：选项区最后一个按钮下方
-  const baseY = layout.optionY
-  let optBottom = baseY
-  if (options.length > 0) {
-    const lastOpt = options[options.length - 1]
-    if (lastOpt && lastOpt.bounds) {
-      optBottom = lastOpt.bounds.y + lastOpt.bounds.h
-    }
-  }
-  const freeY = optBottom + freeGap
-
-  ctx.save()
-  ctx.globalAlpha = fadeIn
-
-  // 底板（暗色 + 虚线边框）
-  ctx.fillStyle = C.dark
-  roundRect(ctx, optX, freeY, optW, freeH, 4)
-  ctx.fill()
-  // 虚线边框（暗金）
-  ctx.strokeStyle = C.gold
-  ctx.lineWidth = 0.8
-  ctx.setLineDash([4, 3])
-  roundRect(ctx, optX, freeY, optW, freeH, 4)
-  ctx.stroke()
-  ctx.setLineDash([])
-
-  // 文字 "✎ 键入所想"（暗金，居中）
-  ctx.fillStyle = C.gold
-  ctx.font = '13px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText('✎ 键入所想', optX + optW / 2, freeY + freeH / 2)
-
-  ctx.restore()
-
-  // 记录触摸区域
-  layout._freeInputBtn = { x: optX, y: freeY, w: optW, h: freeH }
-}
+// D074（2026-07-05 16:41 先生拍板）：自由输入从"✎ 按钮"改成"常驻输入框"
+// 真因：先生希望玩家视角聚焦在输入框（视觉权重最大），选项是辅助
+// 修法：删 ✎ 按钮 + 加常驻输入框（半透明灰底 + placeholder）位于选项下方
+// D085（2026-07-08 00:09 先生拍板·C 方案）：drawFreeInputButton 已废弃
+// 真因：旧流程 drawFreeInputButton（金色描边+⌨+占位）+ handleFreeInput 调 wx.showKeyboard
+//       → 玩家点了两次输入框（游戏一个 + 系统键盘自带一个）→ 重复
+// 修法：用 wx.createInput 替换（C 方案），由系统 input 组件渲染输入框，不再 Canvas 画
+//       - 丢 D076 金色描边（系统样式限制）
+//       - 丢 ⌨ 图标（input 自带光标）
+//       - 丢「你想做什么...」Canvas 占位（input 组件 placeholder 参数替代）
+// 位置由 createFreeInput() 在 init 时初始化，不在此画
+// 选项按钮位置由 createFreeInput 同步写入 layout._optionY_override
 
 // v0.6.50l — 格子填充式雷达图（9边形×5格，高亮格子而非连线）
 // v0.6.50t: 九边形三角雷达图（按实际属性值，直线连接相邻顶点）
@@ -2809,7 +2886,9 @@ function dbgCopyScoringAI() {
 }
 function dbgCopyHistory() {
   const last = dbgGetLast()
-  if (last && last.messages_to_ai) return `[对话流]\n${dbgTrunc(JSON.stringify(last.messages_to_ai, null, 2))}`
+  // D066（2026-07-05 11:32 先生拍板）：改读 data.history（callAI 入口 push 的快照）
+  // 真因：原来读 messages_to_ai（worker 回传）→ AI 失败时没传 → 复制一份"无数据"给先生
+  if (last && last.data && Array.isArray(last.data.history)) return `[对话流]\n${dbgTrunc(JSON.stringify(last.data.history, null, 2))}`
   return '[对话流] 无数据'
 }
 // D054（2026-07-03 23:44 先生拍板·①方案）：tab 5 复制函数，单独复制主 system prompt
@@ -2897,6 +2976,12 @@ function drawDebugPanel(ctx) {
   const w = layout.windowW
   const h = layout.windowH
   const closeBarH = 40
+  // D064（2026-07-05 10:44 先生拍板）：顶部条下移 safeTop，避开灵动岛/状态栏
+  // 真因：先生反馈 DBG 浮窗点右上角 X 关不掉——顶部条原本 y=0，被状态栏挡住手指点不到
+  // 修法：closeBarY = layout.safeTop，整条 + X + ◀▶ 全部下移，bounds.y 同步下移
+  // D064 hotfix（10:48 先生拍板）：safeTop 仍不够，状态栏右上角"···"系统菜单在 X 上方
+  // 修法：再 +30 灵动岛补偿，让 X 完全在系统状态栏下方
+  const closeBarY = (layout.safeTop || 0) + 30
 
   // 背景
   ctx.fillStyle = 'rgba(0,0,0,0.92)'
@@ -2904,7 +2989,7 @@ function drawDebugPanel(ctx) {
 
   // 顶部关闭条（v0.1.66 修高一点，避免和正文文字重叠）
   ctx.fillStyle = '#1a1a1a'
-  ctx.fillRect(0, 0, w, closeBarH)
+  ctx.fillRect(0, closeBarY, w, closeBarH)
 
   // D039（先生 2026-06-28 01:29 拍板）：tab 按钮放底部, 顶部只保留标题+关闭（避免灵动岛冲突）
   // D058（2026-07-04 21:09 先生拍板）：7 个 tab（AI₁ / AI₂ / 对话流 / POLL / 场景 / System / 数据）
@@ -2918,46 +3003,46 @@ function drawDebugPanel(ctx) {
   ctx.font = 'bold 14px sans-serif'
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
-  ctx.fillText('DBG · ' + TAB_LABELS[dbgActiveTab], 12, closeBarH / 2)
+  ctx.fillText('DBG · ' + TAB_LABELS[dbgActiveTab], 12, closeBarY + closeBarH / 2)
   ctx.textAlign = 'right'
   // 关闭按钮（顶部右）
   ctx.fillStyle = 'rgba(192,80,80,0.32)'
-  ctx.fillRect(w - arrowSize - 8, 2, arrowSize, closeBarH - 4)
+  ctx.fillRect(w - arrowSize - 8, closeBarY + 2, arrowSize, closeBarH - 4)
   ctx.fillStyle = '#f0c878'
   ctx.font = 'bold 13px sans-serif'
   ctx.textAlign = 'center'
-  ctx.fillText('×', w - arrowSize / 2 - 8, closeBarH / 2 + 1)
-  layout._dbgCloseBtn = { x: w - arrowSize - 8, y: 0, w: arrowSize, h: closeBarH }
+  ctx.fillText('×', w - arrowSize / 2 - 8, closeBarY + closeBarH / 2 + 1)
+  layout._dbgCloseBtn = { x: w - arrowSize - 8, y: closeBarY, w: arrowSize, h: closeBarH }
 
   // D058 hotfix5（2026-07-05 01:36 先生拍板）：顶部加 ◀ ▶ 按钮切 tab（避开底部手势区）
   // 真因：底部 tab 区在 iOS Home Indicator 安全区，部分 tab 按不动
   // 修法：顶部条加两个大按钮，绝对安全区，◀ 切上一个 tab，▶ 切下一个 tab
   const tabArrowW = 36
-  const tabArrowY = 4
+  const tabArrowY = closeBarY + 4
   const nextBtnX = w - arrowSize - 8 - tabArrowW - 4
   ctx.fillStyle = 'rgba(240,200,120,0.32)'
   ctx.fillRect(nextBtnX, tabArrowY, tabArrowW, closeBarH - 8)
   ctx.fillStyle = '#f0c878'
   ctx.font = 'bold 16px sans-serif'
   ctx.textAlign = 'center'
-  ctx.fillText('▶', nextBtnX + tabArrowW / 2, closeBarH / 2 + 1)
-  layout._dbgNextTabBtn = { x: nextBtnX, y: 0, w: tabArrowW, h: closeBarH }
+  ctx.fillText('▶', nextBtnX + tabArrowW / 2, closeBarY + closeBarH / 2 + 1)
+  layout._dbgNextTabBtn = { x: nextBtnX, y: closeBarY, w: tabArrowW, h: closeBarH }
   const prevBtnX = nextBtnX - tabArrowW - 4
   ctx.fillStyle = 'rgba(240,200,120,0.32)'
   ctx.fillRect(prevBtnX, tabArrowY, tabArrowW, closeBarH - 8)
   ctx.fillStyle = '#f0c878'
-  ctx.fillText('◀', prevBtnX + tabArrowW / 2, closeBarH / 2 + 1)
-  layout._dbgPrevTabBtn = { x: prevBtnX, y: 0, w: tabArrowW, h: closeBarH }
+  ctx.fillText('◀', prevBtnX + tabArrowW / 2, closeBarY + closeBarH / 2 + 1)
+  layout._dbgPrevTabBtn = { x: prevBtnX, y: closeBarY, w: tabArrowW, h: closeBarH }
   // 错误轮数角标（顶部右）
   ctx.textAlign = 'right'
   ctx.fillStyle = '#888'
   ctx.font = '11px sans-serif'
-  ctx.fillText('最近 1 轮', w - arrowSize - 24, closeBarH / 2)
+  ctx.fillText('最近 1 轮', w - arrowSize - 24, closeBarY + closeBarH / 2)
   const lastRound = debugLog[debugLog.length - 1]
   if (lastRound && lastRound.resultError) {
     ctx.fillStyle = '#ff6060'
     ctx.font = 'bold 11px monospace'
-    ctx.fillText('❌ 出错', w - arrowSize - 24, closeBarH / 2 + 16)
+    ctx.fillText('❌ 出错', w - arrowSize - 24, closeBarY + closeBarH / 2 + 16)
   }
 
   // 底部条（高度 64px）：6 个 tab（2 行 × 3 列）+ 复制本tab + ▲▼ 滚动箭头
@@ -3042,7 +3127,7 @@ function drawDebugPanel(ctx) {
   // 内容区（D039：减去底部 tab 条高度 bottomBarH）
   ctx.save()
   ctx.beginPath()
-  ctx.rect(0, closeBarH, w, h - closeBarH - bottomBarH)
+  ctx.rect(0, closeBarY + closeBarH, w, h - (closeBarY + closeBarH) - bottomBarH)
   ctx.clip()
 
   ctx.font = '10px monospace'
@@ -3062,7 +3147,10 @@ function drawDebugPanel(ctx) {
     const d = debugLog[i]
     const errMark = d.resultError ? '❌ [出错] ' : '✅ '
     allText += `${errMark}== 第 ${i + 1}/${debugLog.length} 轮 round=${d.round} ==\n`
-    const stateStr = d.data && d.data.state ? `[朝代=${d.data.state.dynasty || '?'} 身份=${d.data.state.occupation || '?'} 年=${d.data.state.year || '?'} 月=${d.data.state.month || '?'} 历史=${(d.data.history || []).length}条]` : ''
+    // D069（2026-07-05 12:38 先生拍板）：stateStr 改读 d.messages_to_ai.length
+  // 真因：原来读 d.data.history.length——D067 删了 data.history 字段（前端不再传），所以总是 0 条
+  // 修法：读 d.messages_to_ai（worker 回传的完整对话流，AI 失败时 fakeResult/errFakeResult 也带）
+  const stateStr = d.data && d.data.state ? `[朝代=${d.data.state.dynasty || '?'} 身份=${d.data.state.occupation || '?'} 年=${d.data.state.year || '?'} 月=${d.data.state.month || '?'} 对话流=${(d.messages_to_ai || []).length}条]` : ''
     allText += `${stateStr}\n`
     allText += `[INPUT 玩家选项]: ${d.input || '(空)'}\n`
     allText += `[is_retry]: ${d.data && d.data.is_retry ? 'true' : 'false'}, [action]: ${d.action || '?'}\n`
@@ -3104,18 +3192,22 @@ function drawDebugPanel(ctx) {
       // D054（2026-07-03 23:44 先生拍板·①方案）：主 system prompt 拆到 tab 5
       // 真因：复制本 tab 会复制 8000 字主 system prompt + 短对话 200 字 → 先生排查要找真实对话得手动翻
       // 修法：tab 2 只显示 messages.filter(m => m.role !== 'system' || m.content.length < 2000)
-      if (d.messages_to_ai && d.messages_to_ai.length > 0) {
-        const shortMsgs = d.messages_to_ai.filter(m => m.role !== 'system' || (m.content || '').length < 2000)
+      // D066（2026-07-05 11:32 先生拍板）：改读 d.data.history（callAI 入口 push 的快照）
+      // 真因：原来读 d.messages_to_ai（worker 回传的）→ AI 失败时没传 → 复制按钮给先生复制一份"无数据"
+      // 修法：data.history 在 callAI 入口 debugLog.push 时就存的，不依赖 AI 生成结果
+      const _history = (d.data && Array.isArray(d.data.history)) ? d.data.history : null
+      if (_history && _history.length > 0) {
+        const shortMsgs = _history.filter(m => m.role !== 'system' || (m.content || '').length < 2000)
         if (shortMsgs.length > 0) {
-          allText += `[发给 AI₁ 的 messages 短消息]:\n`
+          allText += `[发给 AI 的 history 短消息]:\n`
           shortMsgs.forEach((m, j) => {
-            allText += `  ── messages[${j}].role="${m.role}" ──\n${m.content}\n\n`
+            allText += `  ── history[${j}].role="${m.role}" ──\n${m.content}\n\n`
           })
         } else {
           allText += '[对话流] 全部都是主 system prompt，已挪到 tab 5\n'
         }
       } else {
-        allText += '[messages_to_ai] 无数据\n'
+        allText += '[对话流] 无数据\n'
       }
       // 提示先生：长 system prompt 在 tab 5
       allText += '\n💡 [长 system prompt] 在 "System Prompt" tab\n'
@@ -3209,10 +3301,10 @@ function drawDebugPanel(ctx) {
   if (debugScroll > maxScroll) debugScroll = maxScroll
   if (debugScroll < 0) debugScroll = 0
 
-  const startY = closeBarH + 8 - debugScroll
+  const startY = closeBarY + closeBarH + 8 - debugScroll
   for (let i = 0; i < lines.length; i++) {
     const y = startY + i * lineH
-    if (y < closeBarH || y > h) continue
+    if (y < closeBarY + closeBarH || y > h) continue
     // 颜色：标题/请求/响应不同
     const line = lines[i]
     if (line.startsWith('━━━')) ctx.fillStyle = '#f0c878'
@@ -3642,7 +3734,7 @@ function handleTouch(x, y, type) {
       if (type === 'end' && layout._dbgCopyTabBtn && y >= _bottomBarY + 62
           && x >= layout._dbgCopyTabBtn.x && x <= layout._dbgCopyTabBtn.x + layout._dbgCopyTabBtn.w) {
         if (debugLog.length === 0) {
-          if (wx.showToast) wx.showToast({ title: '暂无调试数据', icon: 'none' })
+          if (wx.showToast) wx.showToast({ title: '本局还没跑过 AI 调用，没数据可复制', icon: 'none' })
           return null
         }
         const COPY_FNS = [dbgCopyAIActual, dbgCopyScoringAI, dbgCopyHistory, dbgCopyPollStatus, dbgCopyScene, dbgCopySystem, dbgCopyDataPanel]
@@ -3666,13 +3758,16 @@ function handleTouch(x, y, type) {
         return null
       }
       // 顶部关闭按钮（x）
-      if (type === 'end' && layout._dbgCloseBtn && y <= closeBarH
+      // D064（2026-07-05 10:44 先生拍板）：用 bounds 替代硬编码 closeBarH，跟随 safeTop 下移
+      if (type === 'end' && layout._dbgCloseBtn
+          && y >= layout._dbgCloseBtn.y && y <= layout._dbgCloseBtn.y + layout._dbgCloseBtn.h
           && x >= layout._dbgCloseBtn.x && x <= layout._dbgCloseBtn.x + layout._dbgCloseBtn.w) {
         debugOpen = false
         return null
       }
       // D058 hotfix5（2026-07-05 01:36 先生拍板）：顶部 ◀ ▶ 按钮切 tab
-      if (type === 'end' && layout._dbgPrevTabBtn && y <= closeBarH
+      if (type === 'end' && layout._dbgPrevTabBtn
+          && y >= layout._dbgPrevTabBtn.y && y <= layout._dbgPrevTabBtn.y + layout._dbgPrevTabBtn.h
           && x >= layout._dbgPrevTabBtn.x && x <= layout._dbgPrevTabBtn.x + layout._dbgPrevTabBtn.w) {
         if (dbgActiveTab > 0) {
           dbgActiveTab--
@@ -3681,7 +3776,8 @@ function handleTouch(x, y, type) {
         }
         return null
       }
-      if (type === 'end' && layout._dbgNextTabBtn && y <= closeBarH
+      if (type === 'end' && layout._dbgNextTabBtn
+          && y >= layout._dbgNextTabBtn.y && y <= layout._dbgNextTabBtn.y + layout._dbgNextTabBtn.h
           && x >= layout._dbgNextTabBtn.x && x <= layout._dbgNextTabBtn.x + layout._dbgNextTabBtn.w) {
         if (dbgActiveTab < 6) {
           dbgActiveTab++
@@ -3690,6 +3786,29 @@ function handleTouch(x, y, type) {
         }
         return null
       }
+      // D071（2026-07-05 12:47 先生拍板）：数据 tab 列表滑动支持
+      // 真因：先生反馈条目多了没法下拉——dbgDataScroll 只在渲染时读，从没被 onTouch 更新
+      // 修法：move 类型时如果手指在列表区滑动，更新 dbgDataScroll（向上滑减，向下滑加）
+      if (type === 'move' && dbgActiveTab === 6 && dbgDataList.length > 0) {
+        const listY = (layout.safeTop || 0) + 30 + 40 + 72 + 4  // closeBarY + closeBarH + opBarH + 4
+        const bottomBarY = layout.windowH - 84 - (layout.safeBottom || 34)
+        const footerH = 30
+        if (y >= listY && y <= bottomBarY - footerH) {
+          if (typeof state.__lastTouchY === 'number') {
+            const dy = y - state.__lastTouchY
+            const itemH = 40
+            const listH = bottomBarY - footerH - listY
+            const maxScroll = Math.max(0, dbgDataList.length * itemH - listH)
+            dbgDataScroll = Math.max(0, Math.min(maxScroll, dbgDataScroll - dy))
+          }
+          state.__lastTouchY = y
+          return null
+        }
+      }
+      if (type === 'start' && dbgActiveTab === 6) {
+        state.__lastTouchY = y
+      }
+
       // D058（2026-07-04 21:09 先生拍板）：「数据」tab 内操作按钮 + 删除选中
       if (type === 'end' && dbgActiveTab === 6) {
         // 操作栏按钮（刷新 / 一键清脏 / 全选反选 / 全删）
@@ -3771,7 +3890,7 @@ function handleTouch(x, y, type) {
         return null
       }
       // 点击文本区任意位置 = 向下滚 1 屏
-      if (type === 'end' && y > closeBarH && y < _bottomBarY) {
+      if (type === 'end' && y > (layout._dbgCloseBtn.y + layout._dbgCloseBtn.h) && y < _bottomBarY) {
         debugScroll = debugScroll + 100
         return null
       }
@@ -3892,11 +4011,9 @@ function handleTouch(x, y, type) {
   //   v12 已修 push ai 存 options（永久）——以后新数据不会出 options=null
   //   先生云端旧数据 options=null → 走新玩家流程（从 player_load 端处理残缺）
 
-  // 检查自由输入（v0.6.50g: 用 _freeInputBtn 替代旧版 _topFreeIcon）
-  if (layout._freeInputBtn && hitTest(x, y, layout._freeInputBtn.x, layout._freeInputBtn.y, layout._freeInputBtn.w, layout._freeInputBtn.h)) {
-    handleFreeInput()
-    return null
-  }
+  // D085（2026-07-08 00:09 先生拍板·C 方案）：删 onTouch 检测输入框区域
+  // 真因：wx.createInput 是真组件，玩家点它自动 focus，Canvas onTouch 不需要检测
+  // 修法：删 _freeInputBtn hitTest，input 组件自带触摸处理
 
   // 检查物品（点击物品 → 弹物品详情浮窗）
   if (itemDetail) {
@@ -3952,9 +4069,19 @@ function handleOptionSelected(opt) {
 }
 
 // ─────── 处理自由输入 ───────
+// D085（2026-07-08 00:09 先生拍板·C 方案）：handleFreeInput 重写
+// 真因：旧流程 handleFreeInput 调 wx.showKeyboard → 玩家点了两次输入框（游戏一个 + 系统键盘自带一个）→ 重复
+// 修法：输入框由 wx.createInput 常驻渲染（init 时已创建），玩家点 input 组件自动 focus
+//       → handleFreeInput 只做兜底：input 组件不存在时弹 prompt/showModal 桌面调试用
 function handleFreeInput() {
-  if (typeof wx === 'undefined' || !wx.showKeyboard) {
-    // 桌面调试 fallback
+  // C 方案：input 组件存在时，啥都不做（玩家点 input 组件自动 focus）
+  if (freeInputInstance) {
+    console.log('[D085] handleFreeInput 调用，但 freeInputInstance 已存在，玩家点 input 组件自动 focus')
+    return
+  }
+
+  // 兜底 1：桌面调试 fallback（Node mock 环境）
+  if (typeof wx === 'undefined' || !wx.showModal) {
     const text = prompt('输入你想做的事：')
     if (text && text.trim()) {
       options = []
@@ -3963,51 +4090,15 @@ function handleFreeInput() {
     return
   }
 
-  // 微信小游戏：使用 showKeyboard + onKeyboardInput + onKeyboardConfirm
-  freeInputActive = true
-  freeInputText = ''
-
-  wx.showKeyboard({
-    defaultValue: '',
-    maxLength: 100,
-    confirmType: 'send',
-    success: () => {
-      // 键盘已弹出，监听用户输入
-      if (wx.onKeyboardInput) {
-        wx.offKeyboardInput && wx.offKeyboardInput()
-        wx.onKeyboardInput && wx.onKeyboardInput((res) => {
-          freeInputText = res.value || ''
-        })
-      }
-      if (wx.onKeyboardConfirm) {
-        wx.offKeyboardConfirm && wx.offKeyboardConfirm()
-        wx.onKeyboardConfirm && wx.onKeyboardConfirm((res) => {
-          const text = (res.value || freeInputText || '').trim()
-          if (text) {
-            options = []
-            callAI(text)
-          }
-          freeInputActive = false
-          if (wx.hideKeyboard) wx.hideKeyboard({})
-          if (wx.offKeyboardInput) wx.offKeyboardInput()
-          if (wx.offKeyboardConfirm) wx.offKeyboardConfirm()
-        })
-      }
-    },
-    fail: (err) => {
-      // 备用方案：使用 modal 输入
-      if (wx.showModal) {
-        wx.showModal({
-          title: '你想做什么？',
-          editable: true,
-          placeholderText: '例如：去茶摊打听消息',
-          success: (res) => {
-            if (res.confirm && res.content && res.content.trim()) {
-              options = []
-              callAI(res.content.trim())
-            }
-          },
-        })
+  // 兜底 2：input 组件不存在（极端情况）→ 用 modal 输入
+  wx.showModal({
+    title: '你想做什么？',
+    editable: true,
+    placeholderText: '例如：去茶摊打听消息',
+    success: (res) => {
+      if (res.confirm && res.content && res.content.trim()) {
+        options = []
+        callAI(res.content.trim())
       }
     },
   })
@@ -4065,31 +4156,34 @@ function drawDbgDataTab(ctx) {
   const closeBarH = 40
   const bottomBarH = 84  // 与 drawDebugPanel 一致
   const bottomBarY = h - bottomBarH - (layout.safeBottom || 34)
+  // D064（2026-07-05 10:44 先生拍板）：顶部条下移 safeTop，避开灵动岛/状态栏
+  // D064 hotfix（10:48 先生拍板）：再 +30 灵动岛补偿，避状态栏右上角"···"菜单
+  const closeBarY = (layout.safeTop || 0) + 30
 
   // 背景
   ctx.fillStyle = 'rgba(0,0,0,0.92)'
   ctx.fillRect(0, 0, w, h)
   // 顶部条
   ctx.fillStyle = '#1a1a1a'
-  ctx.fillRect(0, 0, w, closeBarH)
+  ctx.fillRect(0, closeBarY, w, closeBarH)
   ctx.fillStyle = '#f0c878'
   ctx.font = 'bold 14px sans-serif'
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
-  ctx.fillText('DBG · 数据管理', 12, closeBarH / 2)
+  ctx.fillText('DBG · 数据管理', 12, closeBarY + closeBarH / 2)
   ctx.textAlign = 'right'
   // 关闭按钮
   const arrowSize = 28
   ctx.fillStyle = 'rgba(192,80,80,0.32)'
-  ctx.fillRect(w - arrowSize - 8, 2, arrowSize, closeBarH - 4)
+  ctx.fillRect(w - arrowSize - 8, closeBarY + 2, arrowSize, closeBarH - 4)
   ctx.fillStyle = '#f0c878'
   ctx.font = 'bold 13px sans-serif'
   ctx.textAlign = 'center'
-  ctx.fillText('×', w - arrowSize / 2 - 8, closeBarH / 2 + 1)
-  layout._dbgCloseBtn = { x: w - arrowSize - 8, y: 0, w: arrowSize, h: closeBarH }
+  ctx.fillText('×', w - arrowSize / 2 - 8, closeBarY + closeBarH / 2 + 1)
+  layout._dbgCloseBtn = { x: w - arrowSize - 8, y: closeBarY, w: arrowSize, h: closeBarH }
 
   // 操作栏（在顶部条下方）
-  const opBarY = closeBarH
+  const opBarY = closeBarY + closeBarH
   const opBarH = 72  // D058 hotfix2: 60→72（容纳 2 行按钮 + 1 行统计文字）
   ctx.fillStyle = '#0a0a0a'
   ctx.fillRect(0, opBarY, w, opBarH)

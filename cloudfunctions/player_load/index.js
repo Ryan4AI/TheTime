@@ -26,20 +26,46 @@ exports.main = async (event) => {
     }
     const player_life = lifeRes.data[0]
 
-    // 3) 查全部 narrate_history（D055 拍板：不截断，给前端完整上下文）
-    // D062（2026-07-05 10:13 先生拍板）：按 created_at asc 排序（worker 写库时设的 Date.now() 毫秒时间戳）
-    // 真因：D056 注释误判"云数据库 _id 包含时间戳"——CloudBase 的 _id 是 32 hex 随机字符串，无时间信息
-    //   → player_load 用 .orderBy('_id', 'asc') 实际是字典序随机排序，不是时间顺序
-    //   → 先生重进游戏 narrative 显示的不是"最近一条 ai"，而是 _id 字典序随机一条
-    // 修复：按 created_at 升序（先生每条 ai 消息都有此字段），让 narrativeHistory = 真实时间顺序
-    // 不改字段名 / 不建索引 / 不动 schema（先生 2026-07-05 10:10 拍板"不动数据库设计"）
-    const nhRes = await db.collection('narrate_history')
-      .where({ openid, life_number: player.life_number })
-      .orderBy('created_at', 'asc')  // 旧→新（D062）
-      .get()
-    const narrate_history_list = nhRes.data
+    // 3) 查 narrate_history（D072 2026-07-05 13:18 先生拍板·C 方案）
+    // 之前：永远返回全量 asc（D062 拍板），前端 narrativeHistory 累积用
+    // 现在：默认返回轻量"最近 1 条 ai + 最近 1 条消息 role"，前端 game.init 只渲染最后一条
+    //       全量 history 由 worker（D067）自己拉，前端不再缓存全量
+    // mode='full' 时仍返回全量 asc（兜底兼容旧调用方）
+    const mode = (event && event.mode) || 'last_ai'
 
-    return { success: true, player, player_life, narrate_history_list, openid }
+    if (mode === 'full') {
+      // 兜底：返回全量（D055 拍板：不截断，给前端完整上下文）
+      const nhRes = await db.collection('narrate_history')
+        .where({ openid, life_number: player.life_number })
+        .orderBy('created_at', 'asc')
+        .get()
+      return { success: true, player, player_life, narrate_history_list: nhRes.data, openid }
+    }
+
+    // 默认 mode='last_ai'：只查最后 1 条 ai + 最后 1 条消息 role
+    // 查最后 1 条消息（任何 role），用于 D060/D065 判定
+    const lastMsgRes = await db.collection('narrate_history')
+      .where({ openid, life_number: player.life_number })
+      .orderBy('created_at', 'desc')
+      .limit(1)
+      .get()
+    const lastMsg = (lastMsgRes.data && lastMsgRes.data[0]) || null
+    const last_role = lastMsg ? lastMsg.role : null
+
+    // 查最后 1 条 ai（如果最后一条消息本身是 ai，就用同一条；否则再查）
+    let lastAi = null
+    if (lastMsg && lastMsg.role === 'ai') {
+      lastAi = lastMsg
+    } else {
+      const lastAiRes = await db.collection('narrate_history')
+        .where({ openid, life_number: player.life_number, role: 'ai' })
+        .orderBy('created_at', 'desc')
+        .limit(1)
+        .get()
+      lastAi = (lastAiRes.data && lastAiRes.data[0]) || null
+    }
+
+    return { success: true, player, player_life, last_ai: lastAi, last_role, openid }
   } catch (e) {
     console.error('[player_load] failed:', e.message)
     return { success: false, error: e.message }

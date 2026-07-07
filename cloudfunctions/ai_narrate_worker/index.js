@@ -125,7 +125,8 @@ exports.main = async (event) => {
   // 微信云函数支持：async main 返回后，后台 Promise 仍会继续执行直到云函数实例销毁
   backgroundTask(request_id, payload).catch(e => {
     console.error('[ai_narrate_worker] backgroundTask 异常:', e.message)
-    safeWriteResult(request_id, '', '[backgroundTask_crash] ' + e.message)
+    console.error('[ai_narrate_worker] stack:', e.stack)
+    safeWriteResult(request_id, '', '[backgroundTask_crash] ' + e.message + ' | stack_first_300=' + (e.stack || '').substring(0, 300))
   })
 
   // 立即返回（不阻塞 submit）
@@ -138,10 +139,55 @@ async function backgroundTask(request_id, payload) {
   // D056: 拿 openid 写 narrate_history（从前端传，fallback 云函数 ctx）
   const openid = (payload && payload.openid) || (cloud.getWXContext && cloud.getWXContext().OPENID) || ''
 
+  // D073（2026-07-05 16:12 先生拍板）：history 提到 try 块外声明
+  // 真因：LLM 抛错时（401/400/2013 等）catch 块（line 449）要引用 history 写 fakeResult
+  //       但 history 之前在 try 块内 `const` 声明（line 176），catch 块不在那个作用域
+  //       → catch 块访问 history 抛 "history is not defined" → DBG 浮窗看不到对话流
+  // 修法：history 提到 try 块外用 let 声明（先用 null 占位），try 块里赋值后 catch 可访问
+  let history = null
+
   try {
-    const { state, input, history, is_retry } = payload
+    const { state, input, is_retry } = payload
 
     const realInput = is_retry ? '' : (input || '')
+
+    // D070（2026-07-05 12:43 先生拍板）：user 先入库，再拉 history，再调 AI
+    // 真因：之前 user 入库在 AI 跑完后（line 360）→ AI 失败时 user 不入库
+    //       → 前端 narrativeHistory 同步不完整，先生重进看不到失败轮的 user
+    // 修法：worker 收到 input 后立刻 add user，再拉 history（先生投的 user 已在云端）→ 调 AI
+    // 好处：AI 失败/重试/玩家退出都无所谓，user 一定入库
+    if (realInput) {
+      const _userRecord = {
+        openid: openid,
+        life_number: state.life_number || 1,
+        role: 'user',
+        content: realInput,
+        created_at: Date.now(),
+      }
+      // D082：narrate_history 入库前 schema 校验
+      const _userErr = validateNarrateMessage(_userRecord)
+      if (_userErr) {
+        console.error('[D082] user 入库校验失败:', _userErr, JSON.stringify(_userRecord))
+      } else {
+        await db.collection('narrate_history').add({ data: _userRecord })
+        console.log('[D070] user 先入库, content=', realInput.slice(0, 30))
+      }
+    }
+
+    // D067（2026-07-05 11:49 先生拍板）：worker 自己从云端 narrate_history 拉 history
+    // 真因：前端拼 historyForAi 塞进 payload.history 是冗余设计
+    //   - 前端 narrativeHistory 是 session 累积，和云端 narrate_history 重复
+    //   - worker 本来就能直接查云数据库，前端没必要当传话筒
+    //   - 前端/云端不一致会引发 D049 系列 bug
+    // 修法：worker 调 player_load 同款查询（按 created_at asc）拉 history，自己拼给 LLM
+    // 注：先生 10:10 红线"不动数据库设计"——不建索引/不改字段，复用 player_load 的 orderBy
+    const nhRes = await db.collection('narrate_history')
+      .where({ openid, life_number: state.life_number || 1 })
+      .orderBy('created_at', 'asc')
+      .limit(200)  // 上限防超长（先生云端 life=1 现在 6 条，不会触发；防未来暴涨）
+      .get()
+    history = nhRes.data || []
+    console.log('[D067] worker 自己拉 history, count=', history.length)
     // v0.1.80 — round 计数仍然 +1（这是"回合"概念，不是"月"概念），但不再自动推进月
     const preUpdate = { ...state }
     if (!preUpdate.month) preUpdate.month = 1
@@ -269,6 +315,10 @@ async function backgroundTask(request_id, payload) {
       month_changed: monthChanged,
       new_month: monthChanged ? updated.month : null,
       new_year: monthChanged ? updated.year : null,
+      // D067（2026-07-05 11:49 先生拍板）：result 顶层带 history，前端 DBG「对话流」tab 不依赖 AI 返回
+      // 真因：之前 messages_to_ai 只在 AI 调用成功才有 → 失败时前端复制按钮给先生复制一份"无数据"
+      // 修法：worker 自己拉的 history 放 result 顶层（不是 debug.messages）→ 失败也带
+      history: history,
       // D056（先生 00:30 拍板·①方案）：worker 实时 add ai + system_messages 到 narrate_history
       // 真因：现在 narrate_history 由前端 player_save 写，message_id 同时间戳冲突
       // 修法：worker 跑完直接 add 一次 + system_messages 各 add 一次，用云数据库 _id 自动去重
@@ -326,34 +376,43 @@ async function backgroundTask(request_id, payload) {
     //   → CloudBase 自动 _id 是 32 hex 随机字符串，**不带时间戳** → 不能用 _id 排序
     //   → player_load 现已改用 .orderBy('created_at', 'asc') 拿时间顺序
     // 前端不再写 narrate_history，player_save 只写 player + player_life
+    // D070（2026-07-05 12:43 先生拍板·重构）：user 入库移到 worker 入口（line 142 附近）
+    // 此处只入 ai + system_messages，不再入 user
     try {
       const addedIds = []
-      // 1) add ai 消息
-      const aiRes = await db.collection('narrate_history').add({
-        data: {
-          openid: openid,
-          life_number: state.life_number || 1,
-          role: 'ai',
-          content: picked.content || '',
-          options: picked.options || null,
-          // 删 message_id 字段（D056：云数据库 _id 自带去重，不需要 message_id）
-          created_at: Date.now(),
-        }
-      })
-      addedIds.push(aiRes._id)
+      // 1) add ai 消息（D082 加 schema 校验）
+      const _aiRecord = {
+        openid: openid,
+        life_number: state.life_number || 1,
+        role: 'ai',
+        content: picked.content || '',
+        options: picked.options || null,
+        created_at: Date.now(),
+      }
+      const _aiErr = validateNarrateMessage(_aiRecord)
+      if (_aiErr) {
+        console.error('[D082] ai 入库校验失败:', _aiErr, JSON.stringify(_aiRecord))
+      } else {
+        const aiRes = await db.collection('narrate_history').add({ data: _aiRecord })
+        addedIds.push(aiRes._id)
+      }
       // 2) add system_messages（状态变化，每条 add 一次）
       if (Array.isArray(systemMessages)) {
         for (const sm of systemMessages) {
-          const sysRes = await db.collection('narrate_history').add({
-            data: {
-              openid: openid,
-              life_number: state.life_number || 1,
-              role: 'system',
-              content: (sm && sm.content) || '',
-              created_at: Date.now(),
-            }
-          })
-          addedIds.push(sysRes._id)
+          const _sysRecord = {
+            openid: openid,
+            life_number: state.life_number || 1,
+            role: 'system',
+            content: (sm && sm.content) || '',
+            created_at: Date.now(),
+          }
+          const _sysErr = validateNarrateMessage(_sysRecord)
+          if (_sysErr) {
+            console.error('[D082] system 入库校验失败:', _sysErr, JSON.stringify(_sysRecord))
+          } else {
+            const sysRes = await db.collection('narrate_history').add({ data: _sysRecord })
+            addedIds.push(sysRes._id)
+          }
         }
       }
       console.log('[D056] narrate_history add 完成, ids=', addedIds.length)
@@ -376,6 +435,7 @@ async function backgroundTask(request_id, payload) {
         branch: null,
         branches: null,
         state: null,
+        history: history,  // D067：失败也带 history，前端 DBG「对话流」tab 不依赖 AI 返回
         debug: {
           raw_response: e.debugInfo.raw_response,
           system_prompt: e.debugInfo.system_prompt,
@@ -407,6 +467,7 @@ async function backgroundTask(request_id, payload) {
       branch: null,
       branches: null,
       state: null,
+      history: history,  // D067：失败也带 history
       debug: {
         raw_response: '',  // LLM 抛错时没有 raw（要么是 400/2013 等 API 层错）
         system_prompt: (typeof systemPrompt !== 'undefined') ? systemPrompt : null,
@@ -593,6 +654,22 @@ function applyPatch(oldState, preUpdate, patch) {
  *
  * 返回 system message 列表，角色 system，前端识别后特殊样式
  */
+
+// D082（2026-07-05 17:27 先生拍板）：narrate_history 入库前 schema 校验
+// 真因：之前 3 处 add（user/ai/system）都没 validate → worker 内部 bug 入库脏数据没拦截
+// 修法：抽出 validateNarrateMessage，所有 add 前必走
+const VALID_ROLES = ['user', 'ai', 'system']
+function validateNarrateMessage(record) {
+  if (!record || typeof record !== 'object') return 'record_not_object'
+  if (!record.openid || typeof record.openid !== 'string') return 'invalid_openid'
+  if (typeof record.life_number !== 'number' || record.life_number < 1) return 'invalid_life_number'
+  if (!VALID_ROLES.includes(record.role)) return 'invalid_role'
+  if (typeof record.content !== 'string' || record.content.length === 0) return 'invalid_content'
+  if (typeof record.created_at !== 'number') return 'invalid_created_at'
+  // role='ai' 时 options 是 array 或 null；其他 role 不需要
+  if (record.role === 'ai' && record.options !== null && !Array.isArray(record.options)) return 'invalid_options'
+  return null
+}
 function emitSystemMessages(oldState, newState) {
   const lines = []
   const seasonNames = ['正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '冬月', '腊月']

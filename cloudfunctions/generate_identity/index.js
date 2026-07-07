@@ -57,28 +57,29 @@ function toCN(n) {
   return String(n)
 }
 
-// ─────── DeepSeek API ───────
-const DS_API_KEY = process.env.DS_API_KEY
-const DS_MODEL = 'deepseek-v4-flash'
+// ─────── MiniMax API ───────
+const MM_API_KEY = process.env.MM_API_KEY
+const MM_MODEL = 'MiniMax-M2.7-highspeed'
 
 function callDeepSeek(systemPrompt, userPrompt) {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify({
-      model: DS_MODEL,
+      model: MM_MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
       ],
       max_tokens: 200,
       temperature: 0.8,
+      think: false,  // v0.6.9x: 关闭思考模式
     })
     const req = https.request({
-      hostname: 'api.deepseek.com',
+      hostname: 'api.minimaxi.com',
       path: '/v1/chat/completions',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + DS_API_KEY,
+        'Authorization': 'Bearer ' + MM_API_KEY,
       },
       timeout: 30000,
     }, res => {
@@ -517,17 +518,18 @@ async function _generateIdentity(event, context) {
 function callDeepSeekStory(messages) {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify({
-      model: 'deepseek-v4-flash',
+      model: 'MiniMax-M2.7-highspeed',
       messages,
       max_tokens: 1024,
+      think: false,  // v0.6.9x: 关闭思考模式
     })
     const req = https.request({
-      hostname: 'api.deepseek.com',
+      hostname: 'api.minimaxi.com',
       path: '/v1/chat/completions',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + process.env.DS_API_KEY,
+        'Authorization': 'Bearer ' + process.env.MM_API_KEY,
       },
       timeout: 30000,
     }, res => {

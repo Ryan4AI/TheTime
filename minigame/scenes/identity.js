@@ -446,6 +446,15 @@ function onTouch(x, y, type) {
         eraDisplay: life.era_display,
         city: life.city,
         year: life.year,
+        // D080（2026-07-05 17:07 先生拍板）：补 month + 其他完整字段
+        // 真因：之前 id 只塞了 year + 9 属性，没塞 month/lifespan/health/coin/created_at
+        //       → game.init 用默认值 month=1 → state.month 永远 1
+        //       → system 消息说"→三月"但 state.month=1 → 不对齐
+        month: life.month,
+        lifespan: life.lifespan,
+        health: life.health,
+        coin: life.wealth,  // player_life.wealth → state.coin（D049 字段映射）
+        created_at: life.created_at,
         // 9 属性
         '声望': life.reputation,
         '财富': life.wealth,

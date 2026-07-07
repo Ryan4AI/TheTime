@@ -22,6 +22,14 @@ function validatePlayerLife(record) {
   if (typeof record.age !== 'number' || record.age < 0 || record.age > 150) return 'invalid_age'
   if (typeof record.health !== 'number' || record.health < 0 || record.health > 100) return 'invalid_health'
   if (typeof record.lifespan !== 'number' || record.lifespan < 55 || record.lifespan > 150) return 'invalid_lifespan'
+  // D081（2026-07-05 17:17 先生拍板）：补 month/year/occupation/dynasty/city/social_class 必填
+  // 真因：之前没必填这些字段 → identity.js 漏塞时 state 月份/年份/朝代/职业变成默认值 → system 消息对不上
+  if (typeof record.month !== 'number' || record.month < 1 || record.month > 12) return 'invalid_month'
+  if (typeof record.year !== 'number' || record.year < 1 || record.year > 9999) return 'invalid_year'
+  if (typeof record.occupation !== 'string' || record.occupation.length < 1) return 'invalid_occupation'
+  if (typeof record.dynasty !== 'string' || record.dynasty.length < 1) return 'invalid_dynasty'
+  if (typeof record.city !== 'string' || record.city.length < 1) return 'invalid_city'
+  if (typeof record.social_class !== 'string' || record.social_class.length < 1) return 'invalid_social_class'
   for (const attr of ATTRS) {
     const v = record[attr]
     if (typeof v !== 'number' || v < 0 || v > 10000) return `invalid_${attr}`
@@ -65,9 +73,14 @@ exports.main = async (event) => {
     if (player_life) {
       const lifeErr = validatePlayerLife(player_life)
       if (lifeErr) return { success: false, error: 'player_life:' + lifeErr }
-      // _id 由云数据库自动生成（前端不传）
-      await db.collection('player_life').where({ openid, life_number: player_life.life_number }).update({ data: player_life })
-      // 如果没记录就 add
+      // D079（2026-07-05 17:03 先生拍板）：update 时剥掉 created_at
+      // 真因：前端 stateToPlayerLife 输出 created_at（即使 state 没这字段也会用 Date.now() 兜底）
+      //       → player_save update 把云端原 created_at 覆盖成调用时间
+      //       → 玩家看起来被"重生"（created_at = updated_at = 调用时间）
+      // 修法：剥掉 created_at（云端保留原值），updated_at 强制覆盖
+      const { created_at: _ignored, ...lifeData } = player_life
+      await db.collection('player_life').where({ openid, life_number: player_life.life_number }).update({ data: lifeData })
+      // 如果没记录就 add（add 时 created_at 用 player_life 原值）
       const exists = await db.collection('player_life').where({ openid, life_number: player_life.life_number }).count()
       if (exists.total === 0) {
         await db.collection('player_life').add({ data: { ...player_life, openid } })

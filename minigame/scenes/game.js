@@ -428,6 +428,14 @@ function createFreeInput() {
     backgroundColor: 'rgba(60, 55, 50, 0.7)',  // 半透明灰底（模拟 D076 风格）
   })
 
+  // D085 排查日志：确认 wx.createInput 是否返回有效对象
+  console.log('[D085] wx.createInput 返回:', freeInputInstance ? '有效对象' : 'null/undefined')
+  console.log('[D085] freeInputInstance 类型:', typeof freeInputInstance)
+  console.log('[D085] freeInputInstance._inputId:', freeInputInstance && freeInputInstance._inputId)
+  console.log('[D085] freeInputInstance 位置:', { x: optX, y: freeY, w: optW, h: freeH })
+  console.log('[D085] layout.windowW:', layout.windowW, 'layout.windowH:', layout.windowH)
+  console.log('[D085] wx API 检查: createInput=' + (typeof wx.createInput), 'offKeyboardInput=' + (typeof wx.offKeyboardInput))
+
   // 监听输入事件（实时更新，不入对话流 —— D005 教训）
   freeInputInstance.on('input', (res) => {
     // freeInputText = res.value || ''  // D085 C 方案不需要此变量（input 组件自有 value）

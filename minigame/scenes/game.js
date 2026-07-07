@@ -415,7 +415,10 @@ function createFreeInput() {
   const maxBottom = (layout.itemBarY || layout.windowH) - 10
   if (freeY + freeH > maxBottom) freeY = maxBottom - freeH
 
-  freeInputInstance = wx.createInput({
+  console.log('[D085] 准备调 wx.createInput, 位置参数:', { x: optX, y: freeY, width: optW, height: freeH })
+
+  try {
+    freeInputInstance = wx.createInput({
     x: optX,
     y: freeY,
     width: optW,
@@ -427,6 +430,12 @@ function createFreeInput() {
     color: '#f5efe0',           // D085：文字色（暖白，跟 narrative 文字一致）
     backgroundColor: 'rgba(60, 55, 50, 0.7)',  // 半透明灰底（模拟 D076 风格）
   })
+  console.log('[D085] wx.createInput 没抛错')
+  } catch (e) {
+    console.error('[D085] ❌ wx.createInput 抛错:', e && e.message)
+    freeInputInstance = null
+    return
+  }
 
   // D085 排查日志：确认 wx.createInput 是否返回有效对象
   console.log('[D085] wx.createInput 返回:', freeInputInstance ? '有效对象' : 'null/undefined')
@@ -465,6 +474,24 @@ function createFreeInput() {
     freeInputActive = true
     console.log('[D085] focus → 键盘弹起')
   })
+
+  // D085b 额外排查：检查 input 组件是否真的渲染到 canvas 上
+  setTimeout(() => {
+    console.log('[D085b] 1秒后检查 input 状态')
+    console.log('[D085b] freeInputInstance 仍存在:', !!freeInputInstance)
+    if (freeInputInstance) {
+      console.log('[D085b] 位置:', freeInputInstance.x, freeInputInstance.y, freeInputInstance.width, freeInputInstance.height)
+      console.log('[D085b] value:', freeInputInstance.value)
+      console.log('[D085b] 所有 keys:', Object.keys(freeInputInstance))
+    }
+    console.log('[D085b] layout.windowH:', layout.windowH, 'freeY 计算值: 应该在 narrative 下方')
+    console.log('[D085b] ⚠️ 如果 layout.windowH > 1000 → 屏幕比预期大，y 坐标可能错')
+    console.log('[D085b] ⚠️ 如果 layout.windowH < 600 → 屏幕太小，y 坐标可能超出')
+  }, 1000)
+
+  // D085b 额外排查：先生手动点屏幕中央，看 input 是否被点中
+  console.log('[D085b] ⚠️ 请先生测试：在 narrative 下方点击 → 看 console 是否打印 focus')
+  console.log('[D085b] ⚠️ 如果点了没反应 → input 组件位置/层级有问题')
 
   // D085：选项按钮位置 = 输入框下方（先生拍板方案 1：保留 D076 位置）
   // D076 视觉弱化：选项在输入框下方（之前 D076 是 drawFreeInputButton 算 optionY）

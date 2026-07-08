@@ -1921,21 +1921,23 @@ function drawOptions(ctx) {
     ctx.save()
     ctx.globalAlpha = alpha * fadeIn
 
-    // 1. 无边框列表项（弱化：不画底板/描边，只用左侧 ▸ 标记 + 文字，跟输入框的"字段"感区分）
-    // D088 先生反馈：选项和输入框风格太像 → 选项改成"可点文字列表"，输入框保留"有边框字段"
+    // 1. 无边框选项（弱化：无底板/描边）
+    // D088 先生反馈：① 选项和输入框太像 → 无边框区分 ② ▸ 箭头像下拉菜单 → 改古风序号「一/二/三」明示"第N个选择"
     const textCenterY = curY + optH / 2
+    const cnNums = ['一', '二', '三', '四', '五', '六']
+    const seq = cnNums[i] || String(i + 1)
 
-    // 左侧暗金 ▸ 标记（明示"可点击选项"）
-    ctx.fillStyle = 'rgba(200,168,124,0.5)'
+    // 左侧暗金序号（古风编号，非展开箭头）
+    ctx.fillStyle = 'rgba(212,175,120,0.75)'
     ctx.font = '14px ' + fontBase
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
-    ctx.fillText('▸', optX + 8, textCenterY)
+    ctx.fillText(seq, optX + 8, textCenterY)
 
-    // 2. 文字渲染（左对齐，紧跟 ▸ 标记，暖米黄实色）
-    ctx.fillStyle = 'rgba(232,221,208,0.9)'
+    // 2. 文字渲染（左对齐，紧跟序号，暖米黄实色）
+    ctx.fillStyle = 'rgba(232,221,208,0.92)'
     const textX = optX + 28
-    const textMaxW2 = optW - 36  // 左对齐：左边 ▸ 占 28，右边留 8
+    const textMaxW2 = optW - 36  // 左对齐：左边序号占 28，右边留 8
 
     if (lines === 1) {
       // 单行：缩字号适配
@@ -1964,16 +1966,6 @@ function drawOptions(ctx) {
       ctx.textBaseline = 'middle'
       ctx.fillText(line1, textX, textCenterY - lineGap)
       ctx.fillText(line2, textX, textCenterY + fontSize + lineGap)
-    }
-
-    // 3. 极淡分隔线（强化"列表"感，与输入框的"字段"区分）
-    if (i < options.length - 1) {
-      ctx.strokeStyle = 'rgba(200,168,124,0.08)'
-      ctx.lineWidth = 0.5
-      ctx.beginPath()
-      ctx.moveTo(optX + 28, curY + optH + optGap / 2)
-      ctx.lineTo(optX + optW - 4, curY + optH + optGap / 2)
-      ctx.stroke()
     }
 
     ctx.restore()

@@ -1967,22 +1967,17 @@ function drawOptions(ctx) {
     const cnNums = ['一', '二', '三', '四', '五', '六']
     const seq = cnNums[i] || String(i + 1)
 
-    // 左侧暗金序号（古风编号，非展开箭头）
-    ctx.fillStyle = 'rgba(212,175,120,0.75)'
-    ctx.font = '14px ' + fontBase
-    ctx.textAlign = 'left'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(seq, optX + 8, textCenterY)
+    // 2. 序号 + 文字整体块居中（D088 修正11：序号与文字在一起，整块居中；非序号左列/文字另居中）
+    const seqGap = 8  // 序号与文字间距
+    const seqFont = '14px ' + fontBase
+    ctx.font = seqFont
+    const seqW = ctx.measureText(seq).width
 
-    // 2. 文字渲染（序号固定左列对齐，文字在序号右侧区域内居中）
-    ctx.fillStyle = 'rgba(232,221,208,0.92)'
-    const textX = optX + 28
-    const textMaxW2 = optW - 36  // 文字区域：左边序号占 28，右边留 8
-    const textCenterX = textX + textMaxW2 / 2  // 文字区域中心（居中锚点）
-
+    const textMaxW2 = optW - 36  // 文字最大宽（防超界）
+    let fontSize = 15
+    let textShowW
     if (lines === 1) {
       // 单行：缩字号适配
-      let fontSize = 15
       ctx.font = fontSize + 'px ' + fontBase
       let labelW = ctx.measureText(opt.label).width
       while (labelW > textMaxW2 && fontSize > 12) {
@@ -1990,23 +1985,43 @@ function drawOptions(ctx) {
         ctx.font = fontSize + 'px ' + fontBase
         labelW = ctx.measureText(opt.label).width
       }
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(opt.label, textCenterX, textCenterY)
+      textShowW = Math.min(labelW, textMaxW2)
     } else {
-      // 双行：换行显示
-      const fontSize = 12
-      ctx.font = fontSize + 'px ' + fontBase
-      const charW = fontSize  // 中文字符宽度约等于字号
+      // 双行：文字满宽
+      fontSize = 12
+      textShowW = textMaxW2
+    }
+
+    // 整块居中：块宽 = 序号宽 + 间距 + 文字宽
+    const blockW = seqW + seqGap + textShowW
+    const blockStartX = optX + (optW - blockW) / 2
+    const seqX = blockStartX
+    const textX = blockStartX + seqW + seqGap
+
+    // 序号（暗金，左对齐在块首）
+    ctx.fillStyle = 'rgba(212,175,120,0.75)'
+    ctx.font = seqFont
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(seq, seqX, textCenterY)
+
+    // 文字（米黄，左对齐紧跟序号）
+    ctx.fillStyle = 'rgba(232,221,208,0.92)'
+    ctx.font = fontSize + 'px ' + fontBase
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    if (lines === 1) {
+      ctx.fillText(opt.label, textX, textCenterY)
+    } else {
+      // 双行折行
+      const charW = fontSize
       const maxCharsPerLine = Math.floor(textMaxW2 / charW)
       const label = opt.label || ''
       const line1 = label.slice(0, maxCharsPerLine)
       const line2 = label.slice(maxCharsPerLine)
-      const lineGap = 4  // 行间距
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(line1, textCenterX, textCenterY - lineGap)
-      ctx.fillText(line2, textCenterX, textCenterY + fontSize + lineGap)
+      const lineGap = 4
+      ctx.fillText(line1, textX, textCenterY - lineGap)
+      ctx.fillText(line2, textX, textCenterY + fontSize + lineGap)
     }
 
     ctx.restore()

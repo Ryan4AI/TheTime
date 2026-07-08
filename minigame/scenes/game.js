@@ -1509,7 +1509,7 @@ function drawSealTopBar(ctx) {
   // 顶栏/榜单原只画印+文字无背景填充 → 内容上移从空隙透出 → 先生看到"盖不住"
   ctx.save()
   ctx.fillStyle = '#0f0c08'
-  ctx.fillRect(0, 0, layout.windowW, safeTop + topBarH + (layout.boardTargetH || 0) + 4)
+  ctx.fillRect(0, 0, layout.windowW, safeTop + topH + (layout.boardTargetH || 0) + 4)
   ctx.restore()
 
   // 1. 左侧朱砂印（保持原版，size=20 单字朝代印）

@@ -1285,20 +1285,26 @@ function adjustFluidLayout() {
   layout.optionH = 36
   layout.optionGap = optGap
 
-  // D088 修正5（键盘弹起）：输入框贴键盘顶，与键盘"融为一体"
-  // D088 修正6（00:21 先生指：打字时不会点选项）：选项不随键盘上移，直接隐藏
-  // D088 修正8（00:28 先生要微信式整体平移）：键盘弹起时 画像+叙事+输入框 整体上台
-  //   不累积：每帧基于 initLayout 存的 _textY0/_sceneY0 算 kbdShift
+  // D088 修正9：每帧先恢复原始位置（修复键盘收起后不回来 / 防累积偏移）
+  layout.textY = layout._textY0 != null ? layout._textY0 : layout.textY
+  layout.sceneY = layout._sceneY0 != null ? layout._sceneY0 : layout.sceneY
+
+  // D088 修正5/6/8（键盘弹起微信式整体平移）：画像+叙事+输入框 整体上台
+  // D088 修正9：① 不盖榜单栏（kbdShift 封顶）② 收起移回（上面每帧已恢复）
   if (keyboardHeight > 0 && layout.optionFadeIn > 0) {
     const freeH2 = layout.inputZoneH || 56
     const kbdTop = layout.windowH - keyboardHeight - (layout.safeBottom || 0)
     const textY0 = layout._textY0 != null ? layout._textY0 : layout.textY
     const inputY_normal = textY0 + layout.textH + 6
-    const inputY_kbd = kbdTop - freeH2  // 直接贴键盘顶（整体上台由 kbdShift 保证叙事/画像不重叠）
-    const kbdShift = inputY_normal - inputY_kbd
+    const inputY_kbd = kbdTop - freeH2
+    let kbdShift = inputY_normal - inputY_kbd
+    // 不盖榜单栏：sceneY' 不低于榜单栏底部
+    const boardBottom = (layout.safeTop || 0) + layout.topBarH + (layout.statusBarH || 0) + layout.boardTargetH + 4
+    const maxShift = Math.max(0, layout._sceneY0 - boardBottom)
+    if (kbdShift > maxShift) kbdShift = maxShift
     layout.textY = textY0 - kbdShift
-    layout.sceneY = (layout._sceneY0 != null ? layout._sceneY0 : layout.sceneY) - kbdShift
-    layout.inputY = inputY_kbd
+    layout.sceneY = layout._sceneY0 - kbdShift
+    layout.inputY = inputY_normal - kbdShift
   }
 
   // D048n（2026-06-28 16:36 拍板·修"选项不渲染"bug）：每帧写 debug 字段让 DBG 看到 typingDone 状态
@@ -2019,6 +2025,9 @@ function drawFreeInputButton(ctx) {
   const fadeIn = layout.optionFadeIn || 0  // C 方案：跟选项同步，叙事打字完成后才出现
 
   if (fadeIn <= 0) return  // 打字未完成不画（与选项一起淡入）
+
+  // D088 修正9：键盘弹起时隐藏 Canvas 输入框（系统键盘自带输入条，两个框重叠显一样文字）
+  if (keyboardHeight > 0) return
 
   ctx.save()
   ctx.globalAlpha = fadeIn

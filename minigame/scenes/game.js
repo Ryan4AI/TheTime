@@ -1974,10 +1974,11 @@ function drawOptions(ctx) {
     ctx.textBaseline = 'middle'
     ctx.fillText(seq, optX + 8, textCenterY)
 
-    // 2. 文字渲染（左对齐，紧跟序号，暖米黄实色）
+    // 2. 文字渲染（序号固定左列对齐，文字在序号右侧区域内居中）
     ctx.fillStyle = 'rgba(232,221,208,0.92)'
     const textX = optX + 28
-    const textMaxW2 = optW - 36  // 左对齐：左边序号占 28，右边留 8
+    const textMaxW2 = optW - 36  // 文字区域：左边序号占 28，右边留 8
+    const textCenterX = textX + textMaxW2 / 2  // 文字区域中心（居中锚点）
 
     if (lines === 1) {
       // 单行：缩字号适配
@@ -1989,9 +1990,9 @@ function drawOptions(ctx) {
         ctx.font = fontSize + 'px ' + fontBase
         labelW = ctx.measureText(opt.label).width
       }
-      ctx.textAlign = 'left'
+      ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.fillText(opt.label, textX, textCenterY)
+      ctx.fillText(opt.label, textCenterX, textCenterY)
     } else {
       // 双行：换行显示
       const fontSize = 12
@@ -2002,10 +2003,10 @@ function drawOptions(ctx) {
       const line1 = label.slice(0, maxCharsPerLine)
       const line2 = label.slice(maxCharsPerLine)
       const lineGap = 4  // 行间距
-      ctx.textAlign = 'left'
+      ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.fillText(line1, textX, textCenterY - lineGap)
-      ctx.fillText(line2, textX, textCenterY + fontSize + lineGap)
+      ctx.fillText(line1, textCenterX, textCenterY - lineGap)
+      ctx.fillText(line2, textCenterX, textCenterY + fontSize + lineGap)
     }
 
     ctx.restore()

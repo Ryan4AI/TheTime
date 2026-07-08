@@ -1150,15 +1150,6 @@ function render(ctx) {
   // 1.5 生图背景（v0.1.63 拼贴·题跋版：画占 55% 上半屏，1.0 透明度 + 卷轴边框）
   drawBgImage(ctx)
 
-  // 2. 顶部朱砂印（古卷风顶栏）
-  drawSealTopBar(ctx)
-
-  // 2.5 v0.1.82 状态条
-  drawStatusBar(ctx)
-
-  // v0.6.35: 榜单目标指示器
-  drawBoardTarget(ctx)
-
   // 3. 月份变化提示（如有）— v0.6.45 移除"时光流转"交互
   // 原 drawMonthNotice(ctx) 已删除
 
@@ -1168,6 +1159,14 @@ function render(ctx) {
 
   // 4. 叙事文字（题跋·下半屏，v0.1.63 改版）
   drawNarrative(ctx)
+
+  // 2. 顶部朱砂印（古卷风顶栏）— D088 修正9b：移到内容之后画，覆盖上移的内容
+  //    （键盘弹起整体上移时，内容推到榜单栏后方被遮，榜单文字始终可见 = 不盖榜单栏，微信式）
+  drawSealTopBar(ctx)
+  // 2.5 v0.1.82 状态条
+  drawStatusBar(ctx)
+  // v0.6.35: 榜单目标指示器
+  drawBoardTarget(ctx)
 
   // 5. 叙事滚动指示器
   if (narrative && Date.now() >= displayStartTime + 500) {
@@ -1298,9 +1297,9 @@ function adjustFluidLayout() {
     const inputY_normal = textY0 + layout.textH + 6
     const inputY_kbd = kbdTop - freeH2
     let kbdShift = inputY_normal - inputY_kbd
-    // 不盖榜单栏：sceneY' 不低于榜单栏底部
-    const boardBottom = (layout.safeTop || 0) + layout.topBarH + (layout.statusBarH || 0) + layout.boardTargetH + 4
-    const maxShift = Math.max(0, layout._sceneY0 - boardBottom)
+    // 不盖榜单栏：render 顺序已调整（顶栏/榜单在内容之后画，覆盖内容）
+    // 此处只限制 sceneY' 不低于屏幕顶（被顶栏遮），允许整体真实上移（微信式）
+    const maxShift = Math.max(0, layout._sceneY0 - (layout.safeTop || 0))
     if (kbdShift > maxShift) kbdShift = maxShift
     layout.textY = textY0 - kbdShift
     layout.sceneY = layout._sceneY0 - kbdShift

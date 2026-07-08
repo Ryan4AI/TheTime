@@ -375,6 +375,8 @@ function initLayout() {
     sceneH: sceneH,
     sceneVisible: true,
     textY: topOffset + topBarH + statusBarH + 4 + sceneH + 8 + boardTargetH,
+    _textY0: topOffset + topBarH + statusBarH + 4 + sceneH + 8 + boardTargetH,  // D088 修正8：键盘平移原始锚点
+    _sceneY0: topOffset + topBarH + statusBarH + 2 + boardTargetH + 4,
     statusBarH: statusBarH,
     textH: finalTextH,
     // C 方案：输入框常驻区紧贴叙事区下方
@@ -1284,13 +1286,19 @@ function adjustFluidLayout() {
   layout.optionGap = optGap
 
   // D088 修正5（键盘弹起）：输入框贴键盘顶，与键盘"融为一体"
-  // 之前只有 drawOptions 减 _kbdH，输入框本身没动 → 输入框被键盘挡住、触摸区错位
-  // 现集中到布局层：键盘弹起时 inputY 绝对贴键盘顶
   // D088 修正6（00:21 先生指：打字时不会点选项）：选项不随键盘上移，直接隐藏
+  // D088 修正8（00:28 先生要微信式整体平移）：键盘弹起时 画像+叙事+输入框 整体上台
+  //   不累积：每帧基于 initLayout 存的 _textY0/_sceneY0 算 kbdShift
   if (keyboardHeight > 0 && layout.optionFadeIn > 0) {
     const freeH2 = layout.inputZoneH || 56
     const kbdTop = layout.windowH - keyboardHeight - (layout.safeBottom || 0)
-    layout.inputY = Math.max(layout.textY + layout.textH + 2, kbdTop - freeH2)
+    const textY0 = layout._textY0 != null ? layout._textY0 : layout.textY
+    const inputY_normal = textY0 + layout.textH + 6
+    const inputY_kbd = kbdTop - freeH2  // 直接贴键盘顶（整体上台由 kbdShift 保证叙事/画像不重叠）
+    const kbdShift = inputY_normal - inputY_kbd
+    layout.textY = textY0 - kbdShift
+    layout.sceneY = (layout._sceneY0 != null ? layout._sceneY0 : layout.sceneY) - kbdShift
+    layout.inputY = inputY_kbd
   }
 
   // D048n（2026-06-28 16:36 拍板·修"选项不渲染"bug）：每帧写 debug 字段让 DBG 看到 typingDone 状态

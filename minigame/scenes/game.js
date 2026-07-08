@@ -2130,9 +2130,9 @@ function drawItemBar(ctx) {
   const barH = layout.itemBarH
 
   // 左侧命格区
-  const radarR = 24
-  const radarLabelOff = 8               // v0.6.83: 匹配 identity.js，labelDist=R+8
-  const fateW = (radarR + radarLabelOff) * 2 + 26  // 86px
+  const radarR = 15                      // C 方案（D088）：物品栏 80→56，雷达图缩小适配
+  const radarLabelOff = 4               // v0.6.83: 匹配 identity.js，labelDist=R+8
+  const fateW = (radarR + radarLabelOff) * 2 + 20  // 78px（C 方案：略缩腾物品区）
   const dividerX = layout.padding + fateW
   const fateCX = dividerX - fateW / 2
 
@@ -2183,9 +2183,9 @@ function drawItemBar(ctx) {
     const nameColX = layout.padding + 6
     const valColX = layout.padding + fateW - 6
     for (let i = 0; i < 9; i++) {
-      const rowY = barY + 3 + i * 8
+      const rowY = barY + 4 + i * 5        // C 方案（D088）：行距 8→5 适配 56px
       ctx.fillStyle = 'rgba(170,210,180,0.65)'
-      ctx.font = '7px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+      ctx.font = '5px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
       ctx.textAlign = 'left'
       ctx.textBaseline = 'top'
       ctx.fillText(rKeys[i], nameColX, rowY)
@@ -2204,7 +2204,7 @@ function drawItemBar(ctx) {
       const lx = rcx + labelDist * Math.cos(a)
       const ly = rcy + labelDist * Math.sin(a)
       ctx.fillStyle = 'rgba(170,210,180,0.65)'
-      ctx.font = '8px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+      ctx.font = '6px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       var sinA = Math.sin(a), cosA = Math.cos(a)
@@ -2232,8 +2232,8 @@ function drawItemBar(ctx) {
 
   // 5. 物品区（木匣格子·双行抽屉）
   const slotW = 44
-  const slotH = 24
-  const slotGap = 4
+  const slotH = 17                      // C 方案（D088）：物品栏 80→56，格子缩小
+  const slotGap = 2
   const itemEndX = layout.windowW - layout.padding
   const chestW = itemEndX - dividerX - 10
   const cols = Math.min(Math.floor(chestW / (slotW + slotGap)), 5)
@@ -2246,11 +2246,11 @@ function drawItemBar(ctx) {
   ctx.save()
   ctx.strokeStyle = 'rgba(160,120,70,0.2)'
   ctx.lineWidth = 1
-  roundRect(ctx, dividerX + 4, barY + 3, chestW, barH - 6, 4)
+  roundRect(ctx, dividerX + 4, barY + 4, chestW, barH - 10, 4)
   ctx.stroke()
   ctx.strokeStyle = 'rgba(160,120,70,0.1)'
   ctx.lineWidth = 0.5
-  roundRect(ctx, dividerX + 6, barY + 5, chestW - 4, barH - 10, 3)
+  roundRect(ctx, dividerX + 6, barY + 6, chestW - 4, barH - 14, 3)
   ctx.stroke()
   ctx.restore()
 
@@ -2283,7 +2283,7 @@ function drawItemBar(ctx) {
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const bx = gridStartX + c * (slotW + slotGap)
-      const by = (r === 0 ? barY + 14 : barY + 14 + slotH + slotGap)  // v0.6.57: 垂直居中
+      const by = (r === 0 ? barY + 8 : barY + 8 + slotH + slotGap)  // v0.6.57: 垂直居中
       ctx.save()
       ctx.fillStyle = 'rgba(25,18,12,0.5)'
       roundRect(ctx, bx, by, slotW, slotH, 2)
@@ -2303,7 +2303,7 @@ function drawItemBar(ctx) {
       const c = i % cols
       if (r >= rows) return
       const bx = gridStartX + c * (slotW + slotGap)
-      const by = (r === 0 ? barY + 14 : barY + 14 + slotH + slotGap)  // v0.6.57: 垂直居中
+      const by = (r === 0 ? barY + 8 : barY + 8 + slotH + slotGap)  // v0.6.57: 垂直居中
       // 物品底板（拉开抽屉效果）
       ctx.save()
       ctx.fillStyle = 'rgba(50,35,20,0.75)'

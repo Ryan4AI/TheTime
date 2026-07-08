@@ -1285,12 +1285,12 @@ function adjustFluidLayout() {
 
   // D088 修正5（键盘弹起）：输入框贴键盘顶，与键盘"融为一体"
   // 之前只有 drawOptions 减 _kbdH，输入框本身没动 → 输入框被键盘挡住、触摸区错位
-  // 现集中到布局层：键盘弹起时 inputY 绝对贴键盘顶，optionY 在输入框上方
+  // 现集中到布局层：键盘弹起时 inputY 绝对贴键盘顶
+  // D088 修正6（00:21 先生指：打字时不会点选项）：选项不随键盘上移，直接隐藏
   if (keyboardHeight > 0 && layout.optionFadeIn > 0) {
     const freeH2 = layout.inputZoneH || 56
     const kbdTop = layout.windowH - keyboardHeight - (layout.safeBottom || 0)
     layout.inputY = Math.max(layout.textY + layout.textH + 2, kbdTop - freeH2)
-    layout.optionY = layout.inputY - optBlockH - 10
   }
 
   // D048n（2026-06-28 16:36 拍板·修"选项不渲染"bug）：每帧写 debug 字段让 DBG 看到 typingDone 状态
@@ -1919,6 +1919,9 @@ function drawOptions(ctx) {
       last.drawOptions_debug = `options.length=${options.length}, fadeIn=${fadeIn}, optionY=${layout.optionY}, displayedChars=${displayedChars}, narrative.length=${narrative.length}, streamedText.length=${(streamedText||'').length}`
     }
   }
+
+  // D088 修正6（2026-07-09 00:21 先生指：打字时不会点选项）：键盘弹起时隐藏选项
+  if (keyboardHeight > 0) return
 
   const optX = layout.padding
   const optW = layout.windowW - layout.padding * 2

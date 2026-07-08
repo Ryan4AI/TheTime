@@ -1790,6 +1790,19 @@ function drawNarrative(ctx) {
   const ty = layout.textY
   const tw = layout.windowW - layout.padding * 2
   const th = layout.textH
+
+  // 叙事区背景面板（D088 修正4：先生反馈叙事与选项视觉撞，加暗面板作"阅读区"边界）
+  // 暗木色半透（沉稳，已发生内容）↔ 输入框亮米色填充（要输入）↔ 选项无框（选择）
+  ctx.save()
+  ctx.fillStyle = 'rgba(28,22,16,0.32)'
+  roundRect(ctx, tx, ty - 4, tw, th + 8, 6)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(200,168,124,0.12)'  // 极淡暗金边（边界但不抢）
+  ctx.lineWidth = 0.5
+  roundRect(ctx, tx, ty - 4, tw, th + 8, 6)
+  ctx.stroke()
+  ctx.restore()
+
   const lineHeight = 26
   const fontSize = 16
   const maxW = tw - 40  // 左右各留 20px

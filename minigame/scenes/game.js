@@ -22,9 +22,9 @@ var displayedChars = 0        // 打字机效果：已显示字符数
 var displayStartTime = 0     // 打字开始时间
 var options = []             // 当前选项
 var optionsAppearTime = 0    // 选项出现时间
-var freeInputActive = false  // 自由输入模式（C 方案后保留作为兼容标志，键盘弹起时 = true）
-var freeInputInstance = null // C 方案（D085 2026-07-08 00:09 先生拍板）：wx.createInput 实例，常驻 screen
-var keyboardHeight = 0       // D075：键盘高度（wx.onKeyboardHeightChange 回调更新），用于底部区上移避键盘
+var freeInputActive = false  // 自由输入模式（键盘弹起时 = true）
+var freeInputText = ''       // 自由输入文本（showKeyboard onKeyboardInput 累计）
+var keyboardHeight = 0       // D077：键盘高度（wx.onKeyboardHeightChange 回调更新），用于底部区上移避键盘
 var loading = false          // AI 调用中
 var loadingStart = 0
 var loadingText = '史官正在落笔…'  // v0.1.74 (D008): 轮询期间显示等待时长
@@ -228,7 +228,7 @@ module.exports = {
     options = []
     optionsAppearTime = 0
     freeInputActive = false
-    // D085：freeInputText 已废弃（input 组件自有 value），不重置
+    freeInputText = ''
     loading = false
     errorMsg = ''
     narrativeHistory = []
@@ -242,10 +242,6 @@ module.exports = {
     itemDetail = null
 
     initLayout()
-
-    // D085（2026-07-08 00:09 先生拍板·C 方案）：创建 wx.createInput 常驻
-    // 必须在 initLayout 之后调（要读 layout.textY/textH/windowW/padding）
-    createFreeInput()
 
     // v0.6.43: 本地即时计算榜单接近度（同步，不等云函数）
     closestBoardInfo = computeClosestBoard(state)
@@ -390,120 +386,6 @@ function initLayout() {
     itemBarY: windowHeight - itemBarH - 10,  // v0.6.50r: 底部留白10px
     fateArea: { x: 14, y: windowHeight - itemBarH - 10, w: (24 + 6) * 2 + 26, h: itemBarH },  // v0.6.57: padding=14
   }
-}
-
-// 创建 wx.createInput（D085 C 方案）：常驻 screen，玩家点 input 自动 focus
-function createFreeInput() {
-  if (typeof wx === 'undefined' || !wx.createInput) {
-    console.log('[D085] wx.createInput 不存在，降级到 wx.showKeyboard（旧流程）')
-    return
-  }
-  if (freeInputInstance) {
-    console.log('[D085] freeInputInstance 已存在，跳过')
-    return
-  }
-
-  // 位置：D076 narrative 下方（layout.textY + textH + gap）
-  // 输入框高度 40px（D076 60px 太大，C 方案系统样式更紧凑）
-  const freeH = 40
-  const freeGap = 10
-  const optX = layout.padding
-  const optW = layout.windowW - layout.padding * 2
-  const textBottomY = layout.textY + (layout.textH || 200)
-  let freeY = textBottomY + freeGap
-  // 避开物品栏
-  const maxBottom = (layout.itemBarY || layout.windowH) - 10
-  if (freeY + freeH > maxBottom) freeY = maxBottom - freeH
-
-  console.log('[D085] 准备调 wx.createInput, 位置参数:', { x: optX, y: freeY, width: optW, height: freeH })
-
-  try {
-    freeInputInstance = wx.createInput({
-    x: optX,
-    y: freeY,
-    width: optW,
-    height: freeH,
-    maxLength: 100,
-    confirmType: 'send',
-    placeholder: '你想做什么...',
-    // 系统样式：color/backgroundColor 是文档支持的基础参数
-    color: '#f5efe0',           // D085：文字色（暖白，跟 narrative 文字一致）
-    backgroundColor: 'rgba(60, 55, 50, 0.7)',  // 半透明灰底（模拟 D076 风格）
-  })
-  console.log('[D085] wx.createInput 没抛错')
-  } catch (e) {
-    console.error('[D085] ❌ wx.createInput 抛错:', e && e.message)
-    freeInputInstance = null
-    return
-  }
-
-  // D085 排查日志：确认 wx.createInput 是否返回有效对象
-  console.log('[D085] wx.createInput 返回:', freeInputInstance ? '有效对象' : 'null/undefined')
-  console.log('[D085] freeInputInstance 类型:', typeof freeInputInstance)
-  console.log('[D085] freeInputInstance._inputId:', freeInputInstance && freeInputInstance._inputId)
-  console.log('[D085] freeInputInstance 位置:', { x: optX, y: freeY, w: optW, h: freeH })
-  console.log('[D085] layout.windowW:', layout.windowW, 'layout.windowH:', layout.windowH)
-  console.log('[D085] wx API 检查: createInput=' + (typeof wx.createInput), 'offKeyboardInput=' + (typeof wx.offKeyboardInput))
-
-  // 监听输入事件（实时更新，不入对话流 —— D005 教训）
-  freeInputInstance.on('input', (res) => {
-    // freeInputText = res.value || ''  // D085 C 方案不需要此变量（input 组件自有 value）
-    console.log('[D085] input:', res.value)
-  })
-
-  // 监听确认事件（玩家点发送）
-  freeInputInstance.on('confirm', (res) => {
-    const text = (res.value || '').trim()
-    if (text) {
-      console.log('[D085] confirm → callAI:', text)
-      options = []
-      callAI(text)
-    }
-    // blur 后下次点 input 自动 focus（不用手动重建）
-    // freeInputInstance.blur()
-  })
-
-  // 监听失焦事件（键盘收起）
-  freeInputInstance.on('blur', () => {
-    freeInputActive = false
-    console.log('[D085] blur → 键盘收起')
-  })
-
-  // 监听聚焦事件（键盘弹起）
-  freeInputInstance.on('focus', () => {
-    freeInputActive = true
-    console.log('[D085] focus → 键盘弹起')
-  })
-
-  // D085b 额外排查：检查 input 组件是否真的渲染到 canvas 上
-  setTimeout(() => {
-    console.log('[D085b] 1秒后检查 input 状态')
-    console.log('[D085b] freeInputInstance 仍存在:', !!freeInputInstance)
-    if (freeInputInstance) {
-      console.log('[D085b] 位置:', freeInputInstance.x, freeInputInstance.y, freeInputInstance.width, freeInputInstance.height)
-      console.log('[D085b] value:', freeInputInstance.value)
-      console.log('[D085b] 所有 keys:', Object.keys(freeInputInstance))
-    }
-    console.log('[D085b] layout.windowH:', layout.windowH, 'freeY 计算值: 应该在 narrative 下方')
-    console.log('[D085b] ⚠️ 如果 layout.windowH > 1000 → 屏幕比预期大，y 坐标可能错')
-    console.log('[D085b] ⚠️ 如果 layout.windowH < 600 → 屏幕太小，y 坐标可能超出')
-  }, 1000)
-
-  // D085b 额外排查：先生手动点屏幕中央，看 input 是否被点中
-  console.log('[D085b] ⚠️ 请先生测试：在 narrative 下方点击 → 看 console 是否打印 focus')
-  console.log('[D085b] ⚠️ 如果点了没反应 → input 组件位置/层级有问题')
-
-  // D085：选项按钮位置 = 输入框下方（先生拍板方案 1：保留 D076 位置）
-  // D076 视觉弱化：选项在输入框下方（之前 D076 是 drawFreeInputButton 算 optionY）
-  // C 方案 drawFreeInputButton 已废弃，选项位置由 createFreeInput 同步写入 _optionY_override
-  const freeBottom = freeY + freeH
-  const optGapBetween = 8
-  layout._optionY_override = freeBottom + optGapBetween
-
-  // D085：保留 _freeInputBtn 字段供后续可能使用（输入框区域信息备份）
-  layout._freeInputBtn = { x: optX, y: freeY, w: optW, h: freeH }
-
-  console.log('[D085] freeInputInstance created at', freeY, 'optionY=', layout._optionY_override)
 }
 
 // ─────── 调用 ai_narrate 云函数 ───────
@@ -2118,18 +2000,58 @@ function drawOptions(ctx) {
 // v0.2.5-Y（先生 2026-06-13 18:25 拍板）：✎ 从顶栏移回选项区下方
 // v0.2.5-Z：位置改为基于选项区实际底部（动态高度）
 // 虚线边框 + 暗金文字，和选项按钮同宽但更矮（32px），视觉上区分
-// D074（2026-07-05 16:41 先生拍板）：自由输入从"✎ 按钮"改成"常驻输入框"
-// 真因：先生希望玩家视角聚焦在输入框（视觉权重最大），选项是辅助
-// 修法：删 ✎ 按钮 + 加常驻输入框（半透明灰底 + placeholder）位于选项下方
-// D085（2026-07-08 00:09 先生拍板·C 方案）：drawFreeInputButton 已废弃
-// 真因：旧流程 drawFreeInputButton（金色描边+⌨+占位）+ handleFreeInput 调 wx.showKeyboard
-//       → 玩家点了两次输入框（游戏一个 + 系统键盘自带一个）→ 重复
-// 修法：用 wx.createInput 替换（C 方案），由系统 input 组件渲染输入框，不再 Canvas 画
-//       - 丢 D076 金色描边（系统样式限制）
-//       - 丢 ⌨ 图标（input 自带光标）
-//       - 丢「你想做什么...」Canvas 占位（input 组件 placeholder 参数替代）
-// 位置由 createFreeInput() 在 init 时初始化，不在此画
-// 选项按钮位置由 createFreeInput 同步写入 layout._optionY_override
+// D085 系列（C 方案）2026-07-08 09:25 09:30 回滚：A 方案恢复 v0.2.5-Y/Z 流程
+// 真因：wx.createInput 在小游戏 runtime 是 undefined（D085a 前提错），删 drawFreeInputButton → 玩家没输入入口
+// 修法：恢复 drawFreeInputButton（虚线框 + ✎ 键入所想 + layout._freeInputBtn 触摸区）
+//       恢复 handleFreeInput（v0.2.5-Y 调 wx.showKeyboard + onKeyboardInput/Confirm）
+//       恢复 onTouch 里 _freeInputBtn hitTest
+function drawFreeInputButton(ctx) {
+  if (!options || options.length === 0) return
+  const fadeIn = layout.optionFadeIn || 0
+  if (fadeIn <= 0) return
+
+  const optX = layout.padding
+  const optW = layout.windowW - layout.padding * 2
+  const freeH = 32
+  const freeGap = 6
+  // 位置：选项区最后一个按钮下方
+  const baseY = layout.optionY
+  let optBottom = baseY
+  if (options.length > 0) {
+    const lastOpt = options[options.length - 1]
+    if (lastOpt && lastOpt.bounds) {
+      optBottom = lastOpt.bounds.y + lastOpt.bounds.h
+    }
+  }
+  const freeY = optBottom + freeGap
+
+  ctx.save()
+  ctx.globalAlpha = fadeIn
+
+  // 底板（暗色 + 虚线边框）
+  ctx.fillStyle = C.dark
+  roundRect(ctx, optX, freeY, optW, freeH, 4)
+  ctx.fill()
+  // 虚线边框（暗金）
+  ctx.strokeStyle = C.gold
+  ctx.lineWidth = 0.8
+  ctx.setLineDash([4, 3])
+  roundRect(ctx, optX, freeY, optW, freeH, 4)
+  ctx.stroke()
+  ctx.setLineDash([])
+
+  // 文字 "✎ 键入所想"（暗金，居中）
+  ctx.fillStyle = C.gold
+  ctx.font = '13px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('✎ 键入所想', optX + optW / 2, freeY + freeH / 2)
+
+  ctx.restore()
+
+  // 记录触摸区域
+  layout._freeInputBtn = { x: optX, y: freeY, w: optW, h: freeH }
+}
 
 // v0.6.50l — 格子填充式雷达图（9边形×5格，高亮格子而非连线）
 // v0.6.50t: 九边形三角雷达图（按实际属性值，直线连接相邻顶点）
@@ -4046,9 +3968,13 @@ function handleTouch(x, y, type) {
   //   v12 已修 push ai 存 options（永久）——以后新数据不会出 options=null
   //   先生云端旧数据 options=null → 走新玩家流程（从 player_load 端处理残缺）
 
-  // D085（2026-07-08 00:09 先生拍板·C 方案）：删 onTouch 检测输入框区域
-  // 真因：wx.createInput 是真组件，玩家点它自动 focus，Canvas onTouch 不需要检测
-  // 修法：删 _freeInputBtn hitTest，input 组件自带触摸处理
+  // D085 系列 2026-07-08 09:30 A 方案回滚：恢复 _freeInputBtn hitTest
+  // 真因：D085a 删 hitTest 假设 wx.createInput 自带触摸处理 → 但 C 方案失败后玩家无法触发自由输入
+  // 修法：drawFreeInputButton 已在 _freeInputBtn 写触摸区 → onTouch 命中 → handleFreeInput
+  if (layout._freeInputBtn && hitTest(x, y, layout._freeInputBtn.x, layout._freeInputBtn.y, layout._freeInputBtn.w, layout._freeInputBtn.h)) {
+    handleFreeInput()
+    return null
+  }
 
   // 检查物品（点击物品 → 弹物品详情浮窗）
   if (itemDetail) {
@@ -4104,19 +4030,11 @@ function handleOptionSelected(opt) {
 }
 
 // ─────── 处理自由输入 ───────
-// D085（2026-07-08 00:09 先生拍板·C 方案）：handleFreeInput 重写
-// 真因：旧流程 handleFreeInput 调 wx.showKeyboard → 玩家点了两次输入框（游戏一个 + 系统键盘自带一个）→ 重复
-// 修法：输入框由 wx.createInput 常驻渲染（init 时已创建），玩家点 input 组件自动 focus
-//       → handleFreeInput 只做兜底：input 组件不存在时弹 prompt/showModal 桌面调试用
+// v0.2.5-Y 流程：调 wx.showKeyboard 弹系统键盘 + 监听 onKeyboardInput/Confirm
+// D085 系列 2026-07-08 09:30 A 方案回滚恢复
 function handleFreeInput() {
-  // C 方案：input 组件存在时，啥都不做（玩家点 input 组件自动 focus）
-  if (freeInputInstance) {
-    console.log('[D085] handleFreeInput 调用，但 freeInputInstance 已存在，玩家点 input 组件自动 focus')
-    return
-  }
-
-  // 兜底 1：桌面调试 fallback（Node mock 环境）
-  if (typeof wx === 'undefined' || !wx.showModal) {
+  if (typeof wx === 'undefined' || !wx.showKeyboard) {
+    // 桌面调试 fallback
     const text = prompt('输入你想做的事：')
     if (text && text.trim()) {
       options = []
@@ -4125,15 +4043,51 @@ function handleFreeInput() {
     return
   }
 
-  // 兜底 2：input 组件不存在（极端情况）→ 用 modal 输入
-  wx.showModal({
-    title: '你想做什么？',
-    editable: true,
-    placeholderText: '例如：去茶摊打听消息',
-    success: (res) => {
-      if (res.confirm && res.content && res.content.trim()) {
-        options = []
-        callAI(res.content.trim())
+  // 微信小游戏：使用 showKeyboard + onKeyboardInput + onKeyboardConfirm
+  freeInputActive = true
+  freeInputText = ''
+
+  wx.showKeyboard({
+    defaultValue: '',
+    maxLength: 100,
+    confirmType: 'send',
+    success: () => {
+      // 键盘已弹出，监听用户输入
+      if (wx.onKeyboardInput) {
+        wx.offKeyboardInput && wx.offKeyboardInput()
+        wx.onKeyboardInput && wx.onKeyboardInput((res) => {
+          freeInputText = res.value || ''
+        })
+      }
+      if (wx.onKeyboardConfirm) {
+        wx.offKeyboardConfirm && wx.offKeyboardConfirm()
+        wx.onKeyboardConfirm && wx.onKeyboardConfirm((res) => {
+          const text = (res.value || freeInputText || '').trim()
+          if (text) {
+            options = []
+            callAI(text)
+          }
+          freeInputActive = false
+          if (wx.hideKeyboard) wx.hideKeyboard({})
+          if (wx.offKeyboardInput) wx.offKeyboardInput()
+          if (wx.offKeyboardConfirm) wx.offKeyboardConfirm()
+        })
+      }
+    },
+    fail: (err) => {
+      // 备用方案：使用 modal 输入
+      if (wx.showModal) {
+        wx.showModal({
+          title: '你想做什么？',
+          editable: true,
+          placeholderText: '例如：去茶摊打听消息',
+          success: (res) => {
+            if (res.confirm && res.content && res.content.trim()) {
+              options = []
+              callAI(res.content.trim())
+            }
+          },
+        })
       }
     },
   })

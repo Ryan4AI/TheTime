@@ -328,42 +328,37 @@ function initLayout() {
     ? (windowHeight - safeArea.bottom)
     : 34
 
-  // v0.1.71 重做：画区按"是否加载完成"动态伸缩
-  // 顶栏(52) → 状态栏(26) → 文字面板(自适应 narrative 行数) → 选项(3×40+gap 4+输入 32 = 160) → 物品栏(64)
+  // C 方案（D088 2026-07-08 23:47 先生拍板）：剧情页下半屏完整重排
+  // 核心：输入框常驻为视觉主角（古画卷轴风），叙事/选项/物品栏让位
+  // 通用设计：全部用 safeArea 动态计算，不写死任何机型尺寸
+  // 布局自上而下：
+  //   顶栏(52) + 榜单条(22) = 74px 固定顶部
+  //   画像区(120) 固定
+  //   叙事区（流式：剩余空间扣掉 输入框常驻区 + 选项区 + 物品栏 后分配）
+  //   输入框常驻区(56px 古风) ← 视觉焦点
+  //   选项区(3×36+gap) 贴输入框下方
+  //   物品栏(56px) 钉底
   const topBarH = 52
-  // v0.2.5-J（先生 2026-06-13 11:03 拍板）：状态栏常显，statusBarH 永远生效
-  const statusBarH = 0  // v0.6.55: 第三行已删，整行去掉
-  // v0.2.5-Q（先生 2026-06-13 15:33 拍板）：自由输入从选项区移到画区右上角图标
-  // 选项区只剩 3 个选项，optBlockH 不再算 freeInputH
-  const itemBarH = 80  // v0.6.54: 80px（给雷达图24+标签30留8px边距）
-  const optH = 40
+  const statusBarH = 0  // v0.6.55: 第三行已删
+  const boardTargetH = 22  // 榜单目标条
+  const sceneH = 120  // C 方案：略缩（130→120）腾空间给输入框
+  // C 方案：物品栏从 80 砍到 56（雷达图缩小）
+  const itemBarH = 56
+
+  // C 方案：输入框常驻区（古风输入框 56px 高）
+  const inputZoneH = 56
+  const inputGap = 8  // 输入框与选项区间隔
+  const optH = 36
   const optGap = 4
-  const freeInputH = 30  // 图标尺寸（圆形）
-  const optBlockH = 3 * optH + 2 * optGap + 8  // 3 选项 + 间隔（无自由输入）
+  const optBlockH = 3 * optH + 2 * optGap  // 3 选项（不含输入框，输入框独立常驻）
 
-  // 画区：只在图片加载完成时占 130 高（按宽 3:2）；否则让位给文字
-  const sceneW = windowWidth - 14 * 2
-  const sceneH = Math.min(130, Math.max(80, Math.floor(sceneW * 2 / 3)))
-
-  // 文字区：根据 narrative 实际行数计算（不再封顶）
-  const availableH = windowHeight - topOffset - topBarH - statusBarH - itemBarH
-  const lineHeight = 22
-  const fontSize = 15
-  const maxW = windowWidth - 14 * 2 - 24  // 文字面板内边距
-  const narrativeLines = narrative ? Math.ceil(narrative.length * fontSize / maxW) : 4  // 估算行数
-  const lines = narrative ? narrative.split('\n') : []
-  const realLines = lines.length || narrativeLines
-  // 文字面板 = 实际行数 × 行高 + 内边距
-  let textH = realLines * lineHeight + 24
-  // v0.1.71: 画区是否占位 = 当前是否加载完成且有图
-  const sceneVisible = !!bgImgEl && bgImgEl.complete && !loading
-  if (sceneVisible) {
-    textH = availableH - sceneH - optBlockH - 12
-  } else {
-    // 文字占满剩余空间
-    textH = availableH - optBlockH - 12
-  }
-  const finalTextH = Math.max(100, textH)
+  // 上半屏固定开销
+  const topFixed = topOffset + topBarH + statusBarH + boardTargetH + sceneH
+  // 下半屏固定开销（输入框常驻 + 选项 + 物品栏 + 安全底）
+  const bottomFixed = inputZoneH + inputGap + optBlockH + 8 + itemBarH + _safeBottomCalc + 10
+  // 叙事区 = 总高 - 上 - 下
+  let textH = windowHeight - topFixed - bottomFixed
+  const finalTextH = Math.max(90, textH)  // 最小 90px 防极端小屏
 
   layout = {
     windowW: windowWidth,
@@ -373,18 +368,22 @@ function initLayout() {
     padding: 14,
     topBarH: topBarH,
     itemBarH: itemBarH,
-    sceneY: topOffset + topBarH + statusBarH + 2 + 22 + 4,
-    sceneH: 130,  // v0.6.50g: 始终预留
+    boardTargetH: boardTargetH,
+    inputZoneH: inputZoneH,
+    inputGap: inputGap,
+    sceneY: topOffset + topBarH + statusBarH + 2 + boardTargetH + 4,
+    sceneH: sceneH,
     sceneVisible: true,
-    textY: topOffset + topBarH + statusBarH + 4 + 130 + 8,
-    statusBarH: statusBarH,  // v0.1.82 (D008 显示)
+    textY: topOffset + topBarH + statusBarH + 4 + sceneH + 8 + boardTargetH,
+    statusBarH: statusBarH,
     textH: finalTextH,
-    optionY: topOffset + topBarH + statusBarH + 4 + 130 + 8 + finalTextH + 2, // v0.6.50g: 紧贴文字
+    // C 方案：输入框常驻区紧贴叙事区下方
+    inputY: 0,  // adjustFluidLayout 算
+    optionY: 0,  // adjustFluidLayout 算（输入框下方）
     optionH: optH,
     optionGap: optGap,
-    freeInputH: freeInputH,
-    itemBarY: windowHeight - itemBarH - 10,  // v0.6.50r: 底部留白10px
-    fateArea: { x: 14, y: windowHeight - itemBarH - 10, w: (24 + 6) * 2 + 26, h: itemBarH },  // v0.6.57: padding=14
+    itemBarY: windowHeight - itemBarH - _safeBottomCalc - 4,
+    fateArea: { x: 14, y: windowHeight - itemBarH - _safeBottomCalc - 4, w: (24 + 6) * 2 + 26, h: itemBarH },
   }
 }
 
@@ -1219,23 +1218,24 @@ function adjustFluidLayout() {
   if (!layout) return
 
   const topBarH = layout.topBarH
-  const itemBarH = layout.itemBarH       // 钉死底部 64px
+  const itemBarH = layout.itemBarH       // 钉死底部
   const safeTop = layout.safeTop || 0
-  const availableH = layout.windowH - safeTop - topBarH - (layout.statusBarH || 0) - itemBarH
-  // v0.2.5-Z（先生 2026-06-13 19:47 拍板·方案C：缩字号+换行）：
-  // 优先缩字号(15→12)，放不下就换行，按钮高度动态：单行36px/双行52px
+  const safeBottom = layout.safeBottom || 0
+  // C 方案（D088）：下半屏垂直空间分配
+  //   textY..textY+textH  叙事区（流式高度，已 InitLayout 算好）
+  //   inputY..inputY+inputZoneH  常驻输入框（古风，视觉焦点）
+  //   optionY..            选项区（输入框下方）
+  //   itemBarY..          物品栏（钉底）
   const optH_single = 36
   const optH_double = 52
-  const optGap = 3
-  const freeH = 32
-  const freeGap = 6
+  const optGap = 4
+  const freeH = layout.inputZoneH || 56
+  const freeGap = layout.inputGap || 8
 
-  // 估算每个选项行数
-  // 按钮文字区域宽度 = 按钮宽度 - 24px（左右各留12px）
-  // 单行字号15px下，中文字符宽度约15px
+  // 估算每个选项行数（同 v0.2.5-Z 逻辑）
   const optW = layout.windowW - layout.padding * 2
   const textMaxW = optW - 24
-  const charWidthSingle = 14  // 15px字号下中文宽度估算（略小于字号）
+  const charWidthSingle = 14
   const maxCharsSingleLine = Math.floor(textMaxW / charWidthSingle)
 
   let optBlockH = 0
@@ -1243,76 +1243,50 @@ function adjustFluidLayout() {
     options.forEach((opt, i) => {
       const len = (opt.label || '').length
       const lines = len > maxCharsSingleLine ? 2 : 1
-      opt._lines = lines  // 存到 option 上，drawOptions 用
+      opt._lines = lines
       opt._h = lines === 1 ? optH_single : optH_double
       optBlockH += opt._h
       if (i > 0) optBlockH += optGap
     })
   } else {
-    // 没选项时按 3 个单行预留
     optBlockH = 3 * optH_single + 2 * optGap
   }
-  // 加自由输入按钮高度 + 底缓冲
-  optBlockH += freeGap + freeH + 8
 
-  const typingDone = narrative && displayedChars >= narrative.length  // D048c: 改回非流式（仅按 narrative 算）
-  const optReserveH = typingDone ? optBlockH : 0
-  const optionGap = 3
-  const lineHeight = 22
-  const fontSize = 15
-  const innerW = layout.windowW - layout.padding * 2 - 24
-  const charPerLine = Math.max(8, Math.floor(innerW / fontSize))
+  const typingDone = narrative && displayedChars >= narrative.length
 
-  // 文字行数按 narrative 完整字符数算
-  // D048c（2026-06-28 09:42 拍板）：改回非流式（仅按 narrative 算）
-  let lineCount = 2
-  const sourceText = narrative  // D048c: 删流式分支
-  if (sourceText) {
-    const paras = sourceText.split('\n')
-    let total = 0
-    for (const p of paras) total += Math.max(1, Math.ceil(p.length / charPerLine))
-    lineCount = Math.max(total, Math.ceil(displayedChars / charPerLine), 2)
+  // C 方案：输入框常驻区紧贴叙事区下方（不依赖 typingDone，永远在）
+  const inputY = layout.textY + layout.textH + 6
+  // 选项区贴在输入框下方 + freeGap
+  const optionY = inputY + freeH + freeGap
+
+  // 防止选项区溢出物品栏（极端小屏兜底）
+  const itemTop = layout.itemBarY
+  const maxOptionBottom = itemTop - 6
+  // 若选项区底部超了，压缩叙事区（再兜底）
+  const optionBottomEst = optionY + optBlockH
+  if (optionBottomEst > maxOptionBottom) {
+    const overflow = optionBottomEst - maxOptionBottom
+    layout.textH = Math.max(60, layout.textH - overflow)
+    // 重算
+    const inputY2 = layout.textY + layout.textH + 6
+    layout.inputY = inputY2
+    layout.optionY = inputY2 + freeH + freeGap
+  } else {
+    layout.inputY = inputY
+    layout.optionY = optionY
   }
-  const textPadding = 16
-  const neededTextH = lineCount * lineHeight + textPadding
 
-  // v0.1.67 修复：画区总是显示（不依赖 typingDone）
-  // v0.6.50g: 画像区始终预留 130px 空间，避免文字跳位
-  const sceneH = 130
-  layout.sceneH = sceneH
+  layout.sceneH = layout.sceneH
   layout.sceneVisible = true
-
-  // v0.6.50y: 用textY到itemBarY的实际空间
-  const computedTextY = safeTop + topBarH + (layout.statusBarH || 0) + 4 + sceneH + 8 + 24
-  const textToItemBar = (layout.windowH - itemBarH - 10) - computedTextY
-  let finalTextH = textToItemBar - optReserveH - 16  // 16 = 2文字-选项gap + 6freeGap + 8缓冲
-  finalTextH = Math.max(100, finalTextH)
-
-  layout.sceneH = sceneH
-  layout.sceneVisible = true
-  // v0.6.50: sceneY 同步更新（在状态栏+榜单提示条下方）
-  layout.sceneY = safeTop + topBarH + (layout.statusBarH || 0) + 2 + 22 + 4
-  // v0.2.5-M（先生 2026-06-13 11:15 拍板·修"叠在一起"）：textY 加上 statusBarH
-  // 之前漏算 statusBarH 导致文字起点在顶栏下方，但状态栏（26 高）也画在那里 → 文字和状态栏重叠
-  // v0.6.41: 再加上榜单目标条高度（24px），避免 drawBoardTarget 与叙事区重叠
-  const boardTargetOffset = 24  // 榜单目标条高度（22px + 2px margin）
-  layout.textY = safeTop + topBarH + (layout.statusBarH || 0) + 4 + sceneH + 8 + boardTargetOffset
-  layout.textH = finalTextH
-  // v0.6.50g: 选项紧贴叙事文字底部（2px 微距代替原来 6px）
-  // v0.6.50y: optionY = textY + finalTextH + 2（textH已正确扣减）
-  layout.optionY = layout.textY + finalTextH + 2
+  layout.textH = layout.textH
   layout.optionFadeIn = typingDone ? 1 : 0
-  layout.optionH = 36                       // v0.1.67: 38 → 36 缩 2px
-  layout.optionGap = optionGap
-  layout.itemBarY = layout.windowH - itemBarH - 10
+  layout.optionH = 36
+  layout.optionGap = optGap
   // D048n（2026-06-28 16:36 拍板·修"选项不渲染"bug）：每帧写 debug 字段让 DBG 看到 typingDone 状态
-  // 先生反馈 16:34 narrative 完整显示但选项不出现——之前 drawOptions_debug 依赖 drawOptions 被调
-  // 实际可能 fadeIn<=0 早 return 导致 drawOptions 永不被调，drawOptions_debug 字段写不出来
-  // 现在独立写每帧状态到 debugLog，DBG 场景 tab 必能看到
   if (debugLog.length > 0) {
     const last = debugLog[debugLog.length - 1]
     if (last) {
-      last.typewriter_debug = `typingDone=${typingDone}, narrative.length=${narrative.length}, displayedChars=${displayedChars}, optionsAppearTime-offset=${optionsAppearTime - Date.now()}, options.length=${options.length}`
+      last.typewriter_debug = `typingDone=${typingDone}, narrative.length=${narrative.length}, displayedChars=${displayedChars}, inputY=${layout.inputY}, optionY=${layout.optionY}, options.length=${options.length}`
     }
   }
 }
@@ -1927,8 +1901,8 @@ function drawOptions(ctx) {
   const optGap = layout.optionGap || 3
   // D075：键盘弹出时，选项区上移避开键盘
   const _kbdH = (typeof keyboardHeight === 'number' && keyboardHeight > 0) ? keyboardHeight : 0
-  // D076：输入框重定位后，drawFreeInputButton 算好 optionY 放在 layout._optionY_override
-  const baseY = (layout._optionY_override !== undefined) ? layout._optionY_override - _kbdH : layout.optionY - _kbdH
+  // C 方案（D088）：选项区紧贴 layout.optionY（输入框下方），键盘弹起时上移
+  const baseY = layout.optionY - _kbdH
 
   // 文字区域宽度（左右各留 12px padding）
   const textMaxW = optW - 24
@@ -2000,60 +1974,58 @@ function drawOptions(ctx) {
   })
 }
 
-// ─────── 自由输入按钮 ───────
-// v0.2.5-Y（先生 2026-06-13 18:25 拍板）：✎ 从顶栏移回选项区下方
-// v0.2.5-Z：位置改为基于选项区实际底部（动态高度）
-// 虚线边框 + 暗金文字，和选项按钮同宽但更矮（32px），视觉上区分
-// D085 系列（C 方案）2026-07-08 09:25 09:30 回滚：A 方案恢复 v0.2.5-Y/Z 流程
-// 真因：wx.createInput 在小游戏 runtime 是 undefined（D085a 前提错），删 drawFreeInputButton → 玩家没输入入口
-// 修法：恢复 drawFreeInputButton（虚线框 + ✎ 键入所想 + layout._freeInputBtn 触摸区）
-//       恢复 handleFreeInput（v0.2.5-Y 调 wx.showKeyboard + onKeyboardInput/Confirm）
-//       恢复 onTouch 里 _freeInputBtn hitTest
+// ─────── 自由输入框（C 方案·常驻古风）────────
+// D088（2026-07-08 23:47 先生拍板·C 方案）：输入框做视觉主角
+// 风格 A：古画卷轴风——半透明米色宣纸底 + 朱砂红细边 + 占位"你想做什么…" + ✎ 图标
+// 常驻在叙事区下方、选项区上方（layout.inputY），不再依赖 options 是否存在
+// 点输入框 → onTouch 命中 _freeInputBtn → handleFreeInput → wx.showKeyboard
 function drawFreeInputButton(ctx) {
-  if (!options || options.length === 0) return
-  const fadeIn = layout.optionFadeIn || 0
-  if (fadeIn <= 0) return
-
   const optX = layout.padding
   const optW = layout.windowW - layout.padding * 2
-  const freeH = 32
-  const freeGap = 6
-  // 位置：选项区最后一个按钮下方
-  const baseY = layout.optionY
-  let optBottom = baseY
-  if (options.length > 0) {
-    const lastOpt = options[options.length - 1]
-    if (lastOpt && lastOpt.bounds) {
-      optBottom = lastOpt.bounds.y + lastOpt.bounds.h
-    }
-  }
-  const freeY = optBottom + freeGap
+  const freeH = layout.inputZoneH || 56
+  const freeY = layout.inputY || (layout.textY + layout.textH + 6)
+  const fadeIn = layout.optionFadeIn || 1  // C 方案：即使没选项也常显（fadeIn 默认 1）
 
   ctx.save()
-  ctx.globalAlpha = fadeIn
+  ctx.globalAlpha = Math.max(0.6, fadeIn)
 
-  // 底板（暗色 + 虚线边框）
-  ctx.fillStyle = C.dark
-  roundRect(ctx, optX, freeY, optW, freeH, 4)
+  // 1. 底板：半透明米色宣纸（比选项深暗底更亮，拉开视觉权重）
+  const grad = ctx.createLinearGradient(optX, freeY, optX, freeY + freeH)
+  grad.addColorStop(0, 'rgba(232,221,208,0.18)')
+  grad.addColorStop(1, 'rgba(200,168,124,0.10)')
+  ctx.fillStyle = grad
+  roundRect(ctx, optX, freeY, optW, freeH, 6)
   ctx.fill()
-  // 虚线边框（暗金）
-  ctx.strokeStyle = C.gold
-  ctx.lineWidth = 0.8
-  ctx.setLineDash([4, 3])
-  roundRect(ctx, optX, freeY, optW, freeH, 4)
-  ctx.stroke()
-  ctx.setLineDash([])
 
-  // 文字 "✎ 键入所想"（暗金，居中）
-  ctx.fillStyle = C.gold
-  ctx.font = '13px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+  // 2. 朱砂红细边（视觉焦点强调，比选项描边更亮更红）
+  ctx.strokeStyle = 'rgba(192,48,46,0.65)'
+  ctx.lineWidth = 1
+  roundRect(ctx, optX, freeY, optW, freeH, 6)
+  ctx.stroke()
+
+  // 3. 左侧 ✎ 图标（朱砂红，醒目）
+  const iconSize = 18
+  const iconX = optX + 16
+  const iconY = freeY + freeH / 2
+  ctx.fillStyle = 'rgba(200,80,78,0.9)'
+  ctx.font = iconSize + 'px ' + ui.fontFamily
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText('✎ 键入所想', optX + optW / 2, freeY + freeH / 2)
+  ctx.fillText('✎', iconX, iconY)
+
+  // 4. 占位文字（暖米黄，左侧对齐，紧跟图标）
+  ctx.fillStyle = 'rgba(232,221,208,0.55)'
+  ctx.font = '15px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  const placeholder = freeInputText ? freeInputText : '你想做什么…'
+  const placeholderColor = freeInputText ? 'rgba(245,239,224,0.92)' : 'rgba(232,221,208,0.55)'
+  ctx.fillStyle = placeholderColor
+  ctx.fillText(placeholder, iconX + iconSize, iconY)
 
   ctx.restore()
 
-  // 记录触摸区域
+  // 记录触摸区域（供 onTouch 命中）
   layout._freeInputBtn = { x: optX, y: freeY, w: optW, h: freeH }
 }
 
@@ -2730,10 +2702,10 @@ function fetchLeaderboardData() {
 
 // ─────── 加载中 ───────
 // v0.2.2 — 加载提示（暖色小条 + 楷体）
-// v0.2.5-D：Y 位置改为选项上方 30px（之前在 narrative 区域内重叠）
+// C 方案（D088）：Y 位置改为输入框上方（之前在 optionY 上方，但 C 方案选项区在输入框下方）
 function drawLoading(ctx) {
   const barH = 40
-  const barY = layout.optionY - barH - 8  // 选项上方 8px 间隔
+  const barY = (layout.inputY || layout.optionY) - barH - 8  // 输入框上方 8px 间隔
   const elapsed = Date.now() - loadingStart
 
   // 1. 半透暖色底（v0.2.2 改：去掉黑底）

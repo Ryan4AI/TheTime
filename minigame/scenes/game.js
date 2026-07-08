@@ -437,16 +437,18 @@ function createFreeInput() {
     return
   }
 
-  // D085c：只保留关键日志（先生只需要知道组件在不在）
-  console.log('[D085c] wx.createInput 返回:', freeInputInstance ? '有效对象' : 'null')
-  if (!freeInputInstance) {
-    console.warn('[D085c] input 组件不存在，handleFreeInput 会降级到 wx.showKeyboard')
-    return
-  }
+  // D085 排查日志：确认 wx.createInput 是否返回有效对象
+  console.log('[D085] wx.createInput 返回:', freeInputInstance ? '有效对象' : 'null/undefined')
+  console.log('[D085] freeInputInstance 类型:', typeof freeInputInstance)
+  console.log('[D085] freeInputInstance._inputId:', freeInputInstance && freeInputInstance._inputId)
+  console.log('[D085] freeInputInstance 位置:', { x: optX, y: freeY, w: optW, h: freeH })
+  console.log('[D085] layout.windowW:', layout.windowW, 'layout.windowH:', layout.windowH)
+  console.log('[D085] wx API 检查: createInput=' + (typeof wx.createInput), 'offKeyboardInput=' + (typeof wx.offKeyboardInput))
 
   // 监听输入事件（实时更新，不入对话流 —— D005 教训）
   freeInputInstance.on('input', (res) => {
-    console.log('[D085c] input:', res.value)
+    // freeInputText = res.value || ''  // D085 C 方案不需要此变量（input 组件自有 value）
+    console.log('[D085] input:', res.value)
   })
 
   // 监听确认事件（玩家点发送）
@@ -470,10 +472,28 @@ function createFreeInput() {
   // 监听聚焦事件（键盘弹起）
   freeInputInstance.on('focus', () => {
     freeInputActive = true
-    console.log('[D085c] focus → 键盘弹起')
+    console.log('[D085] focus → 键盘弹起')
   })
 
-  // D085c：选项按钮位置 = 输入框下方（先生拍板方案 1：保留 D076 位置）
+  // D085b 额外排查：检查 input 组件是否真的渲染到 canvas 上
+  setTimeout(() => {
+    console.log('[D085b] 1秒后检查 input 状态')
+    console.log('[D085b] freeInputInstance 仍存在:', !!freeInputInstance)
+    if (freeInputInstance) {
+      console.log('[D085b] 位置:', freeInputInstance.x, freeInputInstance.y, freeInputInstance.width, freeInputInstance.height)
+      console.log('[D085b] value:', freeInputInstance.value)
+      console.log('[D085b] 所有 keys:', Object.keys(freeInputInstance))
+    }
+    console.log('[D085b] layout.windowH:', layout.windowH, 'freeY 计算值: 应该在 narrative 下方')
+    console.log('[D085b] ⚠️ 如果 layout.windowH > 1000 → 屏幕比预期大，y 坐标可能错')
+    console.log('[D085b] ⚠️ 如果 layout.windowH < 600 → 屏幕太小，y 坐标可能超出')
+  }, 1000)
+
+  // D085b 额外排查：先生手动点屏幕中央，看 input 是否被点中
+  console.log('[D085b] ⚠️ 请先生测试：在 narrative 下方点击 → 看 console 是否打印 focus')
+  console.log('[D085b] ⚠️ 如果点了没反应 → input 组件位置/层级有问题')
+
+  // D085：选项按钮位置 = 输入框下方（先生拍板方案 1：保留 D076 位置）
   // D076 视觉弱化：选项在输入框下方（之前 D076 是 drawFreeInputButton 算 optionY）
   // C 方案 drawFreeInputButton 已废弃，选项位置由 createFreeInput 同步写入 _optionY_override
   const freeBottom = freeY + freeH
@@ -483,7 +503,7 @@ function createFreeInput() {
   // D085：保留 _freeInputBtn 字段供后续可能使用（输入框区域信息备份）
   layout._freeInputBtn = { x: optX, y: freeY, w: optW, h: freeH }
 
-  console.log('[D085c] freeInputInstance created at', freeY, 'optionY=', layout._optionY_override)
+  console.log('[D085] freeInputInstance created at', freeY, 'optionY=', layout._optionY_override)
 }
 
 // ─────── 调用 ai_narrate 云函数 ───────
@@ -4084,81 +4104,39 @@ function handleOptionSelected(opt) {
 }
 
 // ─────── 处理自由输入 ───────
-// D085c（2026-07-08 01:05 先生拍板·修复）：C 方案 wx.createInput 在 Canvas 全屏模式不渲染
-// 真因：v3.0.27a C 方案删了 wx.showKeyboard + 调 wx.createInput → input 组件不渲染 → 两个输入框都没了
-// 修法：恢复 wx.showKeyboard（保留 D076 流程），createFreeInput 仍调但失败不致命
-//       - wx.createInput 成功 → input 组件常驻（玩家点 → 自动 focus）
-//       - wx.createInput 失败 → 玩家点屏幕中央 → handleFreeInput → wx.showKeyboard 兜底
+// D085（2026-07-08 00:09 先生拍板·C 方案）：handleFreeInput 重写
+// 真因：旧流程 handleFreeInput 调 wx.showKeyboard → 玩家点了两次输入框（游戏一个 + 系统键盘自带一个）→ 重复
+// 修法：输入框由 wx.createInput 常驻渲染（init 时已创建），玩家点 input 组件自动 focus
+//       → handleFreeInput 只做兜底：input 组件不存在时弹 prompt/showModal 桌面调试用
 function handleFreeInput() {
-  // input 组件存在且能 focus（理想路径）→ 让玩家点它
-  if (freeInputInstance && typeof freeInputInstance.focus === 'function') {
-    console.log('[D085c] input 组件存在，调 focus()')
-    try {
-      freeInputInstance.focus()
-      return
-    } catch (e) {
-      console.error('[D085c] input.focus 失败，降级:', e && e.message)
-    }
-  }
-
-  // input 组件不存在或 focus 失败 → 调 wx.showKeyboard 兜底（D076 旧流程）
-  if (typeof wx !== 'undefined' && wx.showKeyboard) {
-    console.log('[D085c] 降级 wx.showKeyboard')
-    freeInputActive = true
-    wx.showKeyboard({
-      defaultValue: '',
-      maxLength: 100,
-      confirmType: 'send',
-      success: () => {
-        if (wx.onKeyboardInput) {
-          wx.offKeyboardInput && wx.offKeyboardInput()
-          wx.onKeyboardInput && wx.onKeyboardInput((res) => {
-            console.log('[D085c] onKeyboardInput:', res.value)
-          })
-        }
-        if (wx.onKeyboardConfirm) {
-          wx.offKeyboardConfirm && wx.offKeyboardConfirm()
-          wx.onKeyboardConfirm && wx.onKeyboardConfirm((res) => {
-            const text = (res.value || '').trim()
-            if (text) {
-              options = []
-              callAI(text)
-            }
-            freeInputActive = false
-            if (wx.hideKeyboard) wx.hideKeyboard({})
-            if (wx.offKeyboardInput) wx.offKeyboardInput()
-            if (wx.offKeyboardConfirm) wx.offKeyboardConfirm()
-          })
-        }
-      },
-      fail: (err) => {
-        console.error('[D085c] wx.showKeyboard 也失败，再降级:', err)
-        if (wx.showModal) {
-          wx.showModal({
-            title: '你想做什么？',
-            editable: true,
-            placeholderText: '例如：去茶摊打听消息',
-            success: (res) => {
-              if (res.confirm && res.content && res.content.trim()) {
-                options = []
-                callAI(res.content.trim())
-              }
-            },
-          })
-        }
-      },
-    })
+  // C 方案：input 组件存在时，啥都不做（玩家点 input 组件自动 focus）
+  if (freeInputInstance) {
+    console.log('[D085] handleFreeInput 调用，但 freeInputInstance 已存在，玩家点 input 组件自动 focus')
     return
   }
 
-  // 兜底：桌面调试 fallback
-  if (typeof wx === 'undefined') {
+  // 兜底 1：桌面调试 fallback（Node mock 环境）
+  if (typeof wx === 'undefined' || !wx.showModal) {
     const text = prompt('输入你想做的事：')
     if (text && text.trim()) {
       options = []
       callAI(text.trim())
     }
+    return
   }
+
+  // 兜底 2：input 组件不存在（极端情况）→ 用 modal 输入
+  wx.showModal({
+    title: '你想做什么？',
+    editable: true,
+    placeholderText: '例如：去茶摊打听消息',
+    success: (res) => {
+      if (res.confirm && res.content && res.content.trim()) {
+        options = []
+        callAI(res.content.trim())
+      }
+    },
+  })
 }
 
 // ─────── D058（2026-07-04 21:09 先生拍板）：DBG 「数据」tab ───────

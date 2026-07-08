@@ -1282,6 +1282,17 @@ function adjustFluidLayout() {
   layout.optionFadeIn = typingDone ? 1 : 0
   layout.optionH = 36
   layout.optionGap = optGap
+
+  // D088 修正5（键盘弹起）：输入框贴键盘顶，与键盘"融为一体"
+  // 之前只有 drawOptions 减 _kbdH，输入框本身没动 → 输入框被键盘挡住、触摸区错位
+  // 现集中到布局层：键盘弹起时 inputY 绝对贴键盘顶，optionY 在输入框上方
+  if (keyboardHeight > 0 && layout.optionFadeIn > 0) {
+    const freeH2 = layout.inputZoneH || 56
+    const kbdTop = layout.windowH - keyboardHeight - (layout.safeBottom || 0)
+    layout.inputY = Math.max(layout.textY + layout.textH + 2, kbdTop - freeH2)
+    layout.optionY = layout.inputY - optBlockH - 10
+  }
+
   // D048n（2026-06-28 16:36 拍板·修"选项不渲染"bug）：每帧写 debug 字段让 DBG 看到 typingDone 状态
   if (debugLog.length > 0) {
     const last = debugLog[debugLog.length - 1]
@@ -1912,10 +1923,9 @@ function drawOptions(ctx) {
   const optX = layout.padding
   const optW = layout.windowW - layout.padding * 2
   const optGap = layout.optionGap || 3
-  // D075：键盘弹出时，选项区上移避开键盘
-  const _kbdH = (typeof keyboardHeight === 'number' && keyboardHeight > 0) ? keyboardHeight : 0
-  // C 方案（D088）：选项区紧贴 layout.optionY（输入框下方），键盘弹起时上移
-  const baseY = layout.optionY - _kbdH
+  // D088 修正5：键盘弹起上移逻辑已集中到 adjustFluidLayout（layout.optionY 已含键盘偏移）
+  // 选项区紧贴 layout.optionY（输入框下方 / 键盘弹起时在输入框上方）
+  const baseY = layout.optionY
 
   // 文字区域宽度（左右各留 12px padding）
   const textMaxW = optW - 24
@@ -4045,6 +4055,20 @@ function handleFreeInput() {
     maxLength: 100,
     confirmType: 'send',
     success: () => {
+      // D088 修正5：兜底拿键盘高度（onKeyboardHeightChange 真机可能不触发）
+      // 键盘弹起后部分机型 canvas 被压缩 → windowHeight 变小 → 差值即键盘高度
+      if (wx.getSystemInfoSync && layout._origWindowH) {
+        setTimeout(() => {
+          try {
+            const h = wx.getSystemInfoSync().windowHeight
+            const delta = layout._origWindowH - h
+            if (delta > 50) {
+              keyboardHeight = delta
+              console.log('[D088] 键盘高度(差值兜底)=', keyboardHeight)
+            }
+          } catch (e) {}
+        }, 200)
+      }
       // 键盘已弹出，监听用户输入
       if (wx.onKeyboardInput) {
         wx.offKeyboardInput && wx.offKeyboardInput()
@@ -4062,6 +4086,7 @@ function handleFreeInput() {
           }
           freeInputActive = false
           if (wx.hideKeyboard) wx.hideKeyboard({})
+          keyboardHeight = 0  // D088 修正5：强制重置（兜底模式收起时 onKeyboardHeightChange 可能不触发）
           if (wx.offKeyboardInput) wx.offKeyboardInput()
           if (wx.offKeyboardConfirm) wx.offKeyboardConfirm()
         })

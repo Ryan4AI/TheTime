@@ -1847,18 +1847,14 @@ function drawNarrative(ctx) {
   const maxScroll = Math.max(0, contentH - (th - 16))
   scrollMax = maxScroll  // v0.6.85: 暴露给触摸处理器
 
-  // v0.2.5-U：打字过程中自动滚屏，让光标保持在 th 底部可见
+  // v0.2.5-U：打字过程中自动滚屏，让最新文字保持在可见底部
   // v0.6.85：用户手动上滑后不再强制拉回（userScrolledAway）
-  var cursorLineIndex = 0
-  if (!userScrolledAway && displayedChars < totalChars && contentH > th - 16) {
-    var lines = text.split('\n')
-    cursorLineIndex = lines.length - 1
-    // 光标绝对 Y 位置（不含 scrollOffset）
-    var cursorAbsY = ty + 8 + cursorLineIndex * lineHeight
-    var visibleBottomY = ty + th - 16
-    if (cursorAbsY > visibleBottomY) {
-      scrollOffset = -(cursorAbsY - visibleBottomY)
-    }
+  // D088 修正7：用真实渲染高度 contentH（drawTextInRect 返回）算滚动位置
+  //   旧逻辑用 text.split('\n').length 算 cursorLineIndex，漏掉自动折行
+  //   → 长段无 \n 文本打字中始终 1 行 → 不滚，打完 contentH 才正确 → 先生看到"打完才滚"
+  if (!userScrolledAway && displayedChars < totalChars && contentH > th - 24) {
+    const target = (th - 24) - contentH
+    if (target < scrollOffset) scrollOffset = target
   }
   if (scrollOffset > 0) scrollOffset = 0
   if (scrollOffset < -maxScroll) scrollOffset = -maxScroll

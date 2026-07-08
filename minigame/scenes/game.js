@@ -1296,11 +1296,9 @@ function adjustFluidLayout() {
     const textY0 = layout._textY0 != null ? layout._textY0 : layout.textY
     const inputY_normal = textY0 + layout.textH + 6
     const inputY_kbd = kbdTop - freeH2
-    let kbdShift = inputY_normal - inputY_kbd
-    // 不盖榜单栏：render 顺序已调整（顶栏/榜单在内容之后画，覆盖内容）
-    // 此处只限制 sceneY' 不低于屏幕顶（被顶栏遮），允许整体真实上移（微信式）
-    const maxShift = Math.max(0, layout._sceneY0 - (layout.safeTop || 0))
-    if (kbdShift > maxShift) kbdShift = maxShift
+    // 不盖榜单栏靠 render 绘制顺序（顶栏/榜单在内容之后画 + 不透明背景覆盖），此处不限制 kbdShift
+    // 允许真实贴键盘顶 → 叙事底(inputY_kbd-6)在键盘顶上方，不被键盘盖
+    const kbdShift = inputY_normal - inputY_kbd
     layout.textY = textY0 - kbdShift
     layout.sceneY = layout._sceneY0 - kbdShift
     layout.inputY = inputY_normal - kbdShift
@@ -1506,6 +1504,13 @@ function drawSealTopBar(ctx) {
   const padding = layout.padding
   const topH = layout.topBarH
   const safeTop = layout.safeTop || 0
+
+  // D088 修正9c：不透明顶栏背景（键盘弹起时覆盖上移的内容，避免透出）
+  // 顶栏/榜单原只画印+文字无背景填充 → 内容上移从空隙透出 → 先生看到"盖不住"
+  ctx.save()
+  ctx.fillStyle = '#0f0c08'
+  ctx.fillRect(0, 0, layout.windowW, safeTop + topBarH + (layout.boardTargetH || 0) + 4)
+  ctx.restore()
 
   // 1. 左侧朱砂印（保持原版，size=20 单字朝代印）
   const sealChar = state.dynasty ? state.dynasty.charAt(0) : '時'

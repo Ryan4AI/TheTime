@@ -1178,10 +1178,14 @@ function render(ctx) {
     drawOptions(ctx)
   }
 
-  // 7. 自由输入按钮（D085 2026-07-08 00:09 先生拍板·C 方案已废弃）
-  // 真因：D076 加的 drawFreeInputButton + handleFreeInput → 双重输入框
-  // 修法：输入框由 wx.createInput 常驻渲染（init 时创建），不在 Canvas 画
-  // 此处不再调 drawFreeInputButton，input 组件自带渲染
+  // 7. 自由输入按钮（D086 2026-07-08 09:30 先生拍板·A 方案回滚恢复）
+  // 真因：D085a 删了 drawFreeInputButton 调用（C 方案用 wx.createInput 替代）
+  //      D085c 修复只补回 handleFreeInput 没补回 drawFreeInputButton → 玩家无视觉输入入口
+  // 修法：drawOptions 画完选项后画虚线框 + ✎ 键入所想（v0.2.5-Y 风格）
+  //       写 layout._freeInputBtn 触摸区供 onTouch 命中
+  if (Date.now() >= optionsAppearTime && options.length > 0) {
+    drawFreeInputButton(ctx)
+  }
 
   // 8. 底部物品栏（极简）  // v0.6.50p: 右侧并排格子雷达图
   drawItemBar(ctx)

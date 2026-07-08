@@ -1921,49 +1921,59 @@ function drawOptions(ctx) {
     ctx.save()
     ctx.globalAlpha = alpha * fadeIn
 
-    // 1. 按钮底板（暗色 + 朱砂红单层描边）
-    // D076：选项视觉弱化——底色更透明、描边更淡（让输入框成视觉焦点）
-    ctx.fillStyle = 'rgba(40, 35, 30, 0.45)'  // 原 C.dark 是 #1a1a1a 不透明，现降低不透明度
-    roundRect(ctx, optX, curY, optW, optH, 4)
-    ctx.fill()
-    ctx.strokeStyle = 'rgba(180, 70, 70, 0.45)'  // 原朱砂红全不透明，现降低 + 灰
-    ctx.lineWidth = 0.6
-    roundRect(ctx, optX, curY, optW, optH, 4)
-    ctx.stroke()
-
-    // 2. 文字渲染
-    ctx.fillStyle = C.paper
+    // 1. 无边框列表项（弱化：不画底板/描边，只用左侧 ▸ 标记 + 文字，跟输入框的"字段"感区分）
+    // D088 先生反馈：选项和输入框风格太像 → 选项改成"可点文字列表"，输入框保留"有边框字段"
     const textCenterY = curY + optH / 2
+
+    // 左侧暗金 ▸ 标记（明示"可点击选项"）
+    ctx.fillStyle = 'rgba(200,168,124,0.5)'
+    ctx.font = '14px ' + fontBase
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('▸', optX + 8, textCenterY)
+
+    // 2. 文字渲染（左对齐，紧跟 ▸ 标记，暖米黄实色）
+    ctx.fillStyle = 'rgba(232,221,208,0.9)'
+    const textX = optX + 28
+    const textMaxW2 = optW - 36  // 左对齐：左边 ▸ 占 28，右边留 8
 
     if (lines === 1) {
       // 单行：缩字号适配
       let fontSize = 15
       ctx.font = fontSize + 'px ' + fontBase
       let labelW = ctx.measureText(opt.label).width
-      while (labelW > textMaxW && fontSize > 12) {
+      while (labelW > textMaxW2 && fontSize > 12) {
         fontSize--
         ctx.font = fontSize + 'px ' + fontBase
         labelW = ctx.measureText(opt.label).width
       }
-      ctx.textAlign = 'center'
+      ctx.textAlign = 'left'
       ctx.textBaseline = 'middle'
-      ctx.fillText(opt.label, optX + optW / 2, textCenterY)
+      ctx.fillText(opt.label, textX, textCenterY)
     } else {
       // 双行：换行显示
-      // 先缩字号到 12px
       const fontSize = 12
       ctx.font = fontSize + 'px ' + fontBase
       const charW = fontSize  // 中文字符宽度约等于字号
-      const maxCharsPerLine = Math.floor(textMaxW / charW)
-      // 按最大字符数分行
+      const maxCharsPerLine = Math.floor(textMaxW2 / charW)
       const label = opt.label || ''
       const line1 = label.slice(0, maxCharsPerLine)
       const line2 = label.slice(maxCharsPerLine)
       const lineGap = 4  // 行间距
-      ctx.textAlign = 'center'
+      ctx.textAlign = 'left'
       ctx.textBaseline = 'middle'
-      ctx.fillText(line1, optX + optW / 2, textCenterY - lineGap)
-      ctx.fillText(line2, optX + optW / 2, textCenterY + fontSize + lineGap)
+      ctx.fillText(line1, textX, textCenterY - lineGap)
+      ctx.fillText(line2, textX, textCenterY + fontSize + lineGap)
+    }
+
+    // 3. 极淡分隔线（强化"列表"感，与输入框的"字段"区分）
+    if (i < options.length - 1) {
+      ctx.strokeStyle = 'rgba(200,168,124,0.08)'
+      ctx.lineWidth = 0.5
+      ctx.beginPath()
+      ctx.moveTo(optX + 28, curY + optH + optGap / 2)
+      ctx.lineTo(optX + optW - 4, curY + optH + optGap / 2)
+      ctx.stroke()
     }
 
     ctx.restore()
@@ -1984,10 +1994,12 @@ function drawFreeInputButton(ctx) {
   const optW = layout.windowW - layout.padding * 2
   const freeH = layout.inputZoneH || 56
   const freeY = layout.inputY || (layout.textY + layout.textH + 6)
-  const fadeIn = layout.optionFadeIn || 1  // C 方案：即使没选项也常显（fadeIn 默认 1）
+  const fadeIn = layout.optionFadeIn || 0  // C 方案：跟选项同步，叙事打字完成后才出现
+
+  if (fadeIn <= 0) return  // 打字未完成不画（与选项一起淡入）
 
   ctx.save()
-  ctx.globalAlpha = Math.max(0.6, fadeIn)
+  ctx.globalAlpha = fadeIn
 
   // 1. 底板：半透明米色宣纸（比选项深暗底更亮，拉开视觉权重）
   const grad = ctx.createLinearGradient(optX, freeY, optX, freeY + freeH)

@@ -218,6 +218,10 @@ module.exports = {
       lifespan: 55 + Math.floor(Math.random() * 26),  // 55~80 岁隐藏寿限
       historical_shelter: id.historical_shelter || 0,
       epitaph: id.epitaph || '',
+      // 死神追杀机制：首回合初始值（worker 每回合重算并 merge 回来）
+      deathThreat: id.deathThreat || 'safe',
+      historyShelter: typeof id.historyShelter === 'number' ? id.historyShelter : 0,
+      noGrowthStreak: typeof id.noGrowthStreak === 'number' ? id.noGrowthStreak : 0,
     }
 
     currentItems = items
@@ -815,6 +819,11 @@ function handleAIResponse(result, action, userInput) {
     if (newState.year) state.year = newState.year
     if (newState.round !== undefined) state.round = newState.round
     if (newState.epitaph) state.epitaph = newState.epitaph  // v0.6.89: 云函数生成的墓志铭
+    // 死神追杀机制：worker 算出的危险度/庇护/无增长streak 必须 merge 回 state
+    // 否则下回合发给 worker 时 noGrowthStreak 又是 undefined → 锁定(需连续3回合)永远触发不了
+    if (newState.deathThreat !== undefined) state.deathThreat = newState.deathThreat
+    if (newState.historyShelter !== undefined) state.historyShelter = newState.historyShelter
+    if (newState.noGrowthStreak !== undefined) state.noGrowthStreak = newState.noGrowthStreak
     // v0.6.35: AI₂ 评分后的属性从 newState 读（patch 不再含属性）
     const V2_ATTRS = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
     for (const attr of V2_ATTRS) {

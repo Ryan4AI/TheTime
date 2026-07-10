@@ -1049,6 +1049,10 @@ function stateToPlayerLife(s) {
     political: s['政绩'] || 0,
     righteous: s['义行'] || 0,
     epitaph: s.epitaph || '',
+    // 死神追杀机制：危险度等级 + 历史庇护层数 + 无增长 streak（validatePlayerLife 兼容额外字段）
+    deathThreat: s.deathThreat || 'safe',
+    historyShelter: typeof s.historyShelter === 'number' ? s.historyShelter : 0,
+    noGrowthStreak: typeof s.noGrowthStreak === 'number' ? s.noGrowthStreak : 0,
     current_items: currentItems || [],
     // D079：created_at undefined 时输出 null，云端保留原值
     created_at: s.created_at || null,

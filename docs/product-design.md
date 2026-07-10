@@ -518,7 +518,7 @@
 | 榜单系统（前端榜单浮窗+目标条+云端数据） | ✅ 基础功能 |
 | 历史人物综合分线性重算（游戏量级） | ✅ |
 | 数据库（era/cities/age/social/event/leaderboards） | ✅ 已部署 |
-| 死神追杀机制 | ❌ |
+| 死神追杀机制 | 🚧 MVP已修复(危险度5档+庇护+锁定+prompt注入,待真机测调平衡) |
 | 跨世痕迹系统 | ❌ |
 | 榜单排名动态计算（云函数） | ❌ |
 | Prompt v12（属性+榜单+死神） | ❌ |
@@ -547,7 +547,7 @@
 | `docs/DECISIONS.md` | 已定案决策（D001-D008完整版） |
 | `docs/prompt.md` | prompt 设计说明 |
 | `docs/prompt-v11-current.md` | 当前使用的 v11 prompt |
-| `docs/tech-manual.md` | 技术手册（schema/云函数/坑点） |
+| `docs/tech-manual.md`（未创建） | 技术手册（schema/云函数/坑点） |
 | `docs/D008-async-polling.md` | 异步轮询技术方案 |
 | `data/leaderboards.json` | 10个榜单×790人完整数据 |
 | `data/data-roadmap.md` | 各朝代数据源路线图 |

@@ -291,6 +291,11 @@ async function backgroundTask(request_id, payload) {
       }
       console.log('[ai_narrate_worker] 寿限已至补 epitaph:', updated.epitaph);
     }
+    // 死神追杀机制：计算危险度 / 历史庇护 / 无增长 streak
+    const dth = computeDeathThreat(updated, preUpdate)
+    updated.deathThreat = dth.deathThreat
+    updated.historyShelter = dth.historyShelter
+    updated.noGrowthStreak = dth.noGrowthStreak
     const systemMessages = emitSystemMessages(preUpdate, updated)
 
     const monthChanged = updated.month !== state.month || updated.year !== state.year
@@ -540,8 +545,59 @@ async function safeWriteResult(request_id, error_str, result) {
  * AI 漏 month_delta → 默认 0（不推进月份，尊重 AI 决定）
  * AI 输出超过 60 → clamp 到 60
  */
+
+// 死神追杀机制：综合属性 = 9 大属性之和（product-design §5.2）
+// 财富量级可上千，声望/学识等长期积累可破千，传奇一生综合可破 5000
+function calcCompositeScore(state) {
+  if (!state) return 0
+  let sum = 0
+  for (const a of ATTR_NAMES) sum += (Number(state[a]) || 0)
+  return sum
+}
+
+// 死神追杀机制：计算危险度 / 无增长 streak（product-design §5.2 / §5.3）
+// 返回 { deathThreat, historyShelter, noGrowthStreak }
+// 说明：
+//   - 危险度 key：safe / lurking / approaching / urgent / locked（英文存库，注入 prompt 时转中文）
+//   - 综合属性档：>5000 安全 / 3000-5000 潜伏 / 1000-3000 逼近 / <1000 紧迫
+//   - 历史庇护每层降一档（0~5，满 5 永久安全）—— 上榜才 +1，本函数只沿用不自增（榜单系统未上线）
+//   - 锁定：连续 3 回合综合属性无增长（庇护未满时强制锁定）
+const THREAT_KEYS = ['safe', 'lurking', 'approaching', 'urgent', 'locked']
+const THREAT_CN = { safe: '安全', lurking: '潜伏', approaching: '逼近', urgent: '紧迫', locked: '锁定' }
+function computeDeathThreat(updated, preUpdate) {
+  const shelter = Math.max(0, Math.min(5, Number(updated && updated.historyShelter) || 0))
+  const composite = calcCompositeScore(updated)
+  const prevComposite = calcCompositeScore(preUpdate)
+
+  // 无增长 streak：综合属性没涨就 +1，涨了归零
+  let streak = Math.max(0, Number(preUpdate && preUpdate.noGrowthStreak) || 0)
+  if (composite > prevComposite) streak = 0
+  else streak = streak + 1
+
+  // 基础危险档：0=安全 1=潜伏 2=逼近 3=紧迫
+  let base
+  if (composite > 5000) base = 0
+  else if (composite >= 3000) base = 1
+  else if (composite >= 1000) base = 2
+  else base = 3
+
+  // 历史庇护每层降一档
+  let level = Math.max(0, base - shelter)
+  if (shelter >= 5) level = 0  // 满 5 层永久安全
+
+  // 锁定：连续 3 回合无增长（庇护未满 5 时）
+  let key
+  if (streak >= 3 && shelter < 5) key = 'locked'
+  else key = THREAT_KEYS[level] || 'safe'
+
+  return { deathThreat: key, historyShelter: shelter, noGrowthStreak: streak }
+}
+
 function applyPatch(oldState, preUpdate, patch) {
   let s = { ...oldState }
+  if (s.deathThreat === undefined) s.deathThreat = 'safe'
+  if (s.historyShelter === undefined) s.historyShelter = 0
+  if (s.noGrowthStreak === undefined) s.noGrowthStreak = 0
   if (!s.month) s.month = 1
   if (!s.health) s.health = 100
   if (!s.coin) s.coin = 1000
@@ -1060,6 +1116,26 @@ function buildSystemPrompt(state, monthEvent) {
     `- 8个属性全部归零才是终点，单独降一个属性只是"活得很惨"——你需要在多个维度上同时施压`,
     `- 但不要刻意追求属性归零——按剧情走，什么样态就对应什么属性变化。让属性变化自然伴随叙事发生`,
     ``,
+    `# 死神追杀机制（系统信号 — 你必须据此调节危险强度）`,
+    ``,
+    `下方"当前状态"会告诉你两件事:`,
+    `- **死神危险度**：安全 / 潜伏 / 逼近 / 紧迫 / 锁定（5 档，从安全到锁定，你越逼越紧）`,
+    `- **历史庇护层数**：0~5（玩家留名青史、积累属性获得庇护，层数越高越逢凶化吉）`,
+    ``,
+    `**危险度→危险强度映射**：`,
+    `- 安全：本回合可生活化、轻度危险或无危险`,
+    `- 潜伏：应出现 1 处小信号或轻度危机（一次摔跤 / 小病 / 小失窃），玩家有退路`,
+    `- 逼近：危险事件必须发生（意外/疾病/冲突任一），预警缩短，3 个选项至少 1 个高代价`,
+    `- 紧迫：危险已成现实且持续升级，选项里至少 1 个可能直接致命`,
+    `- 锁定：死神必下杀手，本回合应制造无可躲避的致命危机，3 个选项都可能有致命代价`,
+    ``,
+    `**历史庇护的"气运"效果**：`,
+    `- 庇护 0~2：死神凶狠，正常危险`,
+    `- 庇护 3~4：玩家气运加身，危险事件里至少 1 个"意外生路"（NPC 伸手 / 物品恰好有用 / 贵人出现）`,
+    `- 庇护 5（满层）：玩家近乎传奇化，危险事件多次化解为"虚惊"或"逢凶化吉"，本回合死亡概率应极低（你应让玩家感受到"这人命不该绝"）`,
+    ``,
+    `**硬约束**：死亡仍由系统判定（健康归零 / 锁定致命 / 社会性死亡），你只写危险的"出现"与"损耗"，不决定生死。但你要让玩家**感受到死神在逼近**——这是这个游戏的核心爽点。`,
+    ``,
     `# 跨世机制`,
     ``,
     `玩家会经历多次穿越——不是只有一世。每一世是不同的朝代、不同的身份。`,
@@ -1222,6 +1298,7 @@ function buildSystemPrompt(state, monthEvent) {
     `- 金钱：${state.coin || 0}文`,
     `- 携带物品：${itemsList || '无'}`,
     `- 声望：${state['声望'] || 0} / 财富：${state['财富'] || 0} / 学识：${state['学识'] || 0} / 颜值：${state['颜值'] || 0} / 医术：${state['医术'] || 0} / 战功：${state['战功'] || 0} / 文采：${state['文采'] || 0} / 政绩：${state['政绩'] || 0} / 义行：${state['义行'] || 0}`,
+    `- 死神危险度：${THREAT_CN[state.deathThreat] || '安全'}（历史庇护 ${state.historyShelter || 0}/5 层）—— 据此调节本回合危险强度`,
     ``,
     `# 前世痕迹`,
     legacyContext || `这是你第一次穿越，没有前世痕迹。`,

@@ -217,216 +217,86 @@ async function backgroundTask(request_id, payload) {
     perfLogs.push({ stage: 'callAI_ms', ms: t2 - t1 })
     const picked = pickBranch(branches)
     const t3 = Date.now()
-    console.log('[PERF] pickBranch_ms=', t3 - t2)
-    perfLogs.push({ stage: 'pickBranch_ms', ms: t3 - t2 })
-    // D036（先生 2026-06-28 01:07 拍板）：patch 字段从叙事 AI 拆出, 由 AI₂ 属性评分函数统一生成
-    // 先调 AI₂ 拿到 attrPatch（含 9 属性 + month_delta + items）, 再 applyPatch 合并 month_delta/items
-    const t4 = Date.now()
-    // D043：解构拿 attrPatch + scorePrompt + scoreRawResponse(前端 DBG 用)
-    const { attrPatch, scorePrompt, scoreRawResponse } = await callScoringAI(picked.content, preUpdate, history)
-    const t5 = Date.now()
-    console.log('[PERF] callScoringAI_ms=', t5 - t4)
-    perfLogs.push({ stage: 'callScoringAI_ms', ms: t5 - t4 })
-    console.log('[PERF] total_so_far_ms=', t5 - t0)
-    perfLogs.push({ stage: 'total_so_far_ms', ms: t5 - t0 })
-    // D036（先生 2026-06-28 01:07 拍板）：applyPatch 输入从叙事 AI 的 picked.patch 改为 AI₂ 输出的 attrPatch
-    const synthPatch = {
-      month_delta: typeof attrPatch.month_delta === 'number' ? attrPatch.month_delta : 0,
-      items: attrPatch.items || {},
-    }
-    // D048f（先生 2026-06-28 12:09 拍板·偶现 bug 排查）：applyPatch 前打印 attrPatch 全文 + state 关键字段
-    console.log('[D048f-debug] applyPatch input: attrPatch=', JSON.stringify(attrPatch), ' state.age=', state.age, ' state.year=', state.year, ' state.month=', state.month, ' preUpdate.age=', preUpdate.age)
-    // D048o（先生 2026-06-28 16:38 拍板·"我看不到后端"）：埋点也推给前端 DBG（先生手机直接看到）
-    //   d048f_log 字段在 result.debug 里返回，前端 DBG 场景 tab 显示
-    globalThis.__D048F_LOG__ = (globalThis.__D048F_LOG__ || []).concat([`applyPatch input: attrPatch=${JSON.stringify(attrPatch)} state.age=${state.age} state.year=${state.year} state.month=${state.month} preUpdate.age=${preUpdate.age}`])
-    const baseUpdated = applyPatch(state, preUpdate, synthPatch)
-    // 合并属性变化到 state
-    const updated = { ...baseUpdated }
-    for (const attr of ATTR_NAMES) {
-      if (typeof attrPatch[attr] === 'number' && Number.isFinite(attrPatch[attr])) {
-        updated[attr] = Math.max(0, Math.min(10000, (baseUpdated[attr] || 0) + attrPatch[attr]))
-      }
-    }
-    // v0.6.61: 全部社会属性归零→社会性死亡（颜值归零只是丑，不会死）
-    // v0.6.85: 未成年人（<15岁）不触发社会性死亡——幼儿/少年自然没有社会属性，不应开局即死
-    const DEATH_ATTRS = ['声望', '财富', '学识', '医术', '战功', '文采', '政绩', '义行'];
-    var allZero = true;
-    if ((updated.age || 0) < 15) {
-      allZero = false;  // 未成年人豁免
-    } else {
-      for (var a = 0; a < DEATH_ATTRS.length; a++) {
-        if ((updated[DEATH_ATTRS[a]] || 0) > 0) { allZero = false; break; }
-      }
-    }
-    if (allZero) {
-      updated.alive = false;
-      updated.health = 0;
-      updated.deathReason = '全部社会属性';
-      // D009: 按身份/年龄兜底生成墓志铭
-      var age = updated.age || 20;
-      var isNobility = ['世家', '皇族', '官宦', '士族', '贵族'].indexOf(updated.socialClass) >= 0;
-      if (age < 15) {
-        updated.epitaph = '未及弱冠，便已消散于人海。';
-      } else if (age < 30) {
-        updated.epitaph = isNobility ? '锦衣玉食，终化南柯一梦。' : '青春未展，已无踪迹可寻。';
-      } else if (age < 50) {
-        updated.epitaph = isNobility ? '风云一世，史书半行。' : '碌碌半生，终归尘土。';
-      } else {
-        updated.epitaph = isNobility ? '功过自有后人评。' : '一生如梦，来去无痕。';
-      }
-      console.log('[ai_narrate_worker] 全部社会属性归零触发死亡');
-    }
-    // D009: 寿限兜底——如果寿限到 + AI 没写 epitaph → 按身份/年龄补
-    if (updated.lifespan && updated.age >= updated.lifespan && !updated.epitaph) {
-      var lifespanAge = updated.age || 20;
-      var lifespanNobility = ['世家', '皇族', '官宦', '士族', '贵族'].indexOf(updated.socialClass) >= 0;
-      if (lifespanAge < 15) {
-        updated.epitaph = '未及弱冠，便已消散于人海。';
-      } else if (lifespanAge < 30) {
-        updated.epitaph = lifespanNobility ? '锦衣玉食，终化南柯一梦。' : '青春未展，已无踪迹可寻。';
-      } else if (lifespanAge < 50) {
-        updated.epitaph = lifespanNobility ? '风云一世，史书半行。' : '碌碌半生，终归尘土。';
-      } else {
-        updated.epitaph = lifespanNobility ? '功过自有后人评。' : '一生如梦，来去无痕。';
-      }
-      console.log('[ai_narrate_worker] 寿限已至补 epitaph:', updated.epitaph);
-    }
-    // 死神追杀机制：计算危险度 / 历史庇护 / 无增长 streak
-    const dth = computeDeathThreat(updated, preUpdate)
-    updated.deathThreat = dth.deathThreat
-    updated.historyShelter = dth.historyShelter
-    updated.noGrowthStreak = dth.noGrowthStreak
-    const systemMessages = emitSystemMessages(preUpdate, updated)
+    console.log("[PERF] pickBranch_ms=", t3 - t2)
+    perfLogs.push({ stage: "pickBranch_ms", ms: t3 - t2 })
 
-    const monthChanged = updated.month !== state.month || updated.year !== state.year
-
-    // 计算最接近榜单（注入前端展示用）
-    const closestBoard = computeClosestBoard(updated)
-    let closestBoardInfo = null
-    if (closestBoard) {
-      closestBoardInfo = {
-        name: closestBoard.name,
-        diff: closestBoard.diff,
-        on: closestBoard.on,
-        targetPerson: BOARD_TARGET_PERSON[closestBoard.name] || null,
-      }
-    }
-
-    const result = {
+    // ╔══════════════════════════════════════════════════════════════╗
+    // ║ 两阶段改造（先生 2026-07-19 拍板）：                              ║
+    // ║ 第一次 AI 调用(callAI)出结果后 → 立刻写 partial result 返回前端   ║
+    // ║ （玩家先看到叙事文字，属性结算/入库在后台第二步完成）              ║
+    // ║ 然后再启动 finalizeTask 跑第二次 AI 调用(callScoringAI) → 入库    ║
+    // ╚══════════════════════════════════════════════════════════════╝
+    const partialResult = {
       success: true,
+      partial: true,  // 标记：前端先渲染叙事，属性结算中
       branch: picked,
       branches: branches,
-      state: updated,
-      month_changed: monthChanged,
-      new_month: monthChanged ? updated.month : null,
-      new_year: monthChanged ? updated.year : null,
-      // D067（2026-07-05 11:49 先生拍板）：result 顶层带 history，前端 DBG「对话流」tab 不依赖 AI 返回
-      // 真因：之前 messages_to_ai 只在 AI 调用成功才有 → 失败时前端复制按钮给先生复制一份"无数据"
-      // 修法：worker 自己拉的 history 放 result 顶层（不是 debug.messages）→ 失败也带
+      // partial 阶段 state 用旧值（属性尚未结算），前端不 merge、不存档
+      state: state,
+      month_changed: false,
+      new_month: null,
+      new_year: null,
       history: history,
-      // D056（先生 00:30 拍板·①方案）：worker 实时 add ai + system_messages 到 narrate_history
-      // 真因：现在 narrate_history 由前端 player_save 写，message_id 同时间戳冲突
-      // 修法：worker 跑完直接 add 一次 + system_messages 各 add 一次，用云数据库 _id 自动去重
-      // 先生体验：不会再有 106 条同 message_id 的脏数据
-      narrate_history_added_ids: null,  // D056: 后面 add 完填 _id
-
-      // D053（2026-07-03 23:37 先生拍板·①方案）：成功路径补 debug 字段
-      // 真因：D049a 重构后 result 没存 debug → DBG 浮窗 messages_to_ai/system_prompt/raw_response 全空
-      //       → 先生 23:30 反馈"LLM 跑偏, 选 A 给 B 叙事"无法排查
-      // 修复：成功路径 result 也加 debug（含 messages/system_prompt/user_prompt/raw_response/perf_logs/picked_branch/score_prompt/score_raw_response/d048f_log）
-      // 先生看到完整 LLM 上下文，明早能查 D052 + 跑偏真因
+      narrate_history_added_ids: null,
+      // D053：partial 也带 debug（system_prompt/user_prompt/messages/raw_response/perf_logs/picked_branch）
+      // 第二次 AI₂ 的 score_prompt/score_raw_response/d048f_log 在 finalize 后补
       debug: {
         system_prompt: systemPrompt,
         user_prompt: userPrompt,
         messages: messages,
         raw_response: rawContent,
         perf_logs: perfLogs,
-        attr_patch: attrPatch,
         picked_branch: picked,
-        score_prompt: scorePrompt,
-        score_raw_response: scoreRawResponse,
-        d048f_log: (globalThis.__D048F_LOG__ || []).join('\n') || null,
+        attr_patch: null,
+        score_prompt: null,
+        score_raw_response: null,
+        d048f_log: (globalThis.__D048F_LOG__ || []).join("\n") || null,
       },
       event: monthEvent,
-      system_messages: systemMessages,  // v0.1.80 — 前端拿来渲染 [system · XXX]
-      closest_board: closestBoardInfo,  // v0.6.35 — 前端展示榜单接近度
+      system_messages: [],  // finalize 后补
+      closest_board: null,  // finalize 后补（用 updated state 算）
       is_retry: is_retry,
-      attr_patch: attrPatch,  // D046：attrPatch 顶层暴露(前端读 patch.items)
+      attr_patch: {},  // finalize 后补
     }
 
-    // D049a 阶段 2（2026-06-29 01:16 拍板）：写 llm_io 替代 narrate_result
-    // llm_io 单一职责：AI 接口 IO（不存业务数据）
-    // D050 修复（2026-07-03 01:01 先生拍板）：补存完整 result（branch/state/month_changed/event/system_messages/closest_board）
-    // 真因：D049a 阶段 2 只存 { raw_response, parsed }，前端轮询拿不到 result → 永远渲染空对象 → 卡死
-    // 修复：worker 成功路径把 result 整个快照存进 llm_io.output.result（不是改前端，是补后端数据完整性）
+    // 立即写 llm_io：status="success" + partial:true → 前端马上能渲染叙事
     try {
-      await db.collection('llm_io').where({ request_id }).update({
+      await db.collection("llm_io").where({ request_id }).update({
         data: {
-          status: 'success',
+          status: "success",
           output: {
             raw_response: rawContent,
             parsed: picked,
-            result: result,  // D050: 完整业务数据快照（branch/state/month_changed/event/system_messages/closest_board/attr_patch）
+            result: partialResult,
           },
         },
       })
+      console.log("[ai_narrate_worker] partial result 已写, request_id=", request_id, ", callAI_ms=", t3 - t1, ", 等待前端拉取后启动 finalize")
     } catch (e) {
-      console.error('[ai_narrate_worker] update llm_io 失败:', e.message)
+      console.error("[ai_narrate_worker] 写 partial llm_io 失败:", e.message)
     }
 
-    // D056（先生 00:30 拍板·①方案）：worker 实时 add ai + system_messages 到 narrate_history
-    // 真因：narrate_history 由前端 player_save 写 → message_id 同时间戳冲突 → 106 条脏数据
-    // 修法：worker 跑完直接 db.collection('narrate_history').add()，用云数据库 _id 唯一性去重
-    // 注：D056 当初注释写"云数据库 _id 自带去重 / 包含时间戳"是误判（D062 10:13 修正）
-    //   → CloudBase 自动 _id 是 32 hex 随机字符串，**不带时间戳** → 不能用 _id 排序
-    //   → player_load 现已改用 .orderBy('created_at', 'asc') 拿时间顺序
-    // 前端不再写 narrate_history，player_save 只写 player + player_life
-    // D070（2026-07-05 12:43 先生拍板·重构）：user 入库移到 worker 入口（line 142 附近）
-    // 此处只入 ai + system_messages，不再入 user
-    try {
-      const addedIds = []
-      // 1) add ai 消息（D082 加 schema 校验）
-      const _aiRecord = {
-        openid: openid,
-        life_number: state.life_number || 1,
-        role: 'ai',
-        content: picked.content || '',
-        options: picked.options || null,
-        created_at: Date.now(),
-      }
-      const _aiErr = validateNarrateMessage(_aiRecord)
-      if (_aiErr) {
-        console.error('[D082] ai 入库校验失败:', _aiErr, JSON.stringify(_aiRecord))
-      } else {
-        const aiRes = await db.collection('narrate_history').add({ data: _aiRecord })
-        addedIds.push(aiRes._id)
-      }
-      // 2) add system_messages（状态变化，每条 add 一次）
-      if (Array.isArray(systemMessages)) {
-        for (const sm of systemMessages) {
-          const _sysRecord = {
-            openid: openid,
-            life_number: state.life_number || 1,
-            role: 'system',
-            content: (sm && sm.content) || '',
-            created_at: Date.now(),
-          }
-          const _sysErr = validateNarrateMessage(_sysRecord)
-          if (_sysErr) {
-            console.error('[D082] system 入库校验失败:', _sysErr, JSON.stringify(_sysRecord))
-          } else {
-            const sysRes = await db.collection('narrate_history').add({ data: _sysRecord })
-            addedIds.push(sysRes._id)
-          }
-        }
-      }
-      console.log('[D056] narrate_history add 完成, ids=', addedIds.length)
-      result.narrate_history_added_ids = addedIds
-    } catch (e) {
-      console.error('[D056] narrate_history add 失败:', e.message)
-    }
+    // 启动后台 finalize（不 await，让 backgroundTask 结束、云函数实例继续存活）
+    // finalizeTask 内部自己跑 callScoringAI → applyPatch → 死亡判定 → 写 narrate_history → 更新 llm_io 为完整版
+    finalizeTask({
+      request_id, payload, preUpdate, picked, branches,
+      systemPrompt, userPrompt, messages, rawContent,
+      history, openid, monthEvent, perfLogs, is_retry, startTs, t0,
+    }).catch(e => {
+      console.error("[ai_narrate_worker] finalizeTask 异常:", e.message)
+      console.error("[ai_narrate_worker] finalize stack:", e.stack)
+      // finalize 崩溃：把 partial 标记失效 + 写 error，前端轮询到后走错误路径
+      safeWriteResult(request_id, "[finalizeTask_crash] " + e.message + " | stack_first_300=" + (e.stack || "").substring(0, 300), {
+        success: false,
+        error: "属性结算失败: " + e.message,
+        branch: picked,
+        partial: true,
+        debug: { raw_response: rawContent, system_prompt: systemPrompt, user_prompt: userPrompt, messages },
+      })
+    })
 
-    console.log('[ai_narrate_worker] 完成, request_id=', request_id, ', elapsed_ms=', Date.now() - startTs)
+    // backgroundTask 在此结束（finalize 在后台继续）
+    console.log("[ai_narrate_worker] callAI 完成已返回 partial, request_id=", request_id, ", elapsed_ms=", Date.now() - startTs)
   } catch (e) {
     console.error('[ai_narrate_worker] backgroundTask 失败:', e.message)
 
@@ -528,6 +398,219 @@ async function safeWriteResult(request_id, error_str, result) {
   }
 }
 
+// ╔══════════════════════════════════════════════════════════════╗
+// ║ 两阶段改造 · 第二阶段（先生 2026-07-19 拍板）                      ║
+// ║ 接收 backgroundTask 传来的参数，在后台跑第二次 AI 调用：           ║
+// ║   callScoringAI → applyPatch → 死亡判定 → emitSystemMessages    ║
+// ║   → 写 narrate_history（ai + system）→ 把 llm_io.output.result   ║
+// ║   原地更新为完整版（partial:false），前端轮询到后做属性 merge       ║
+// ║ 全程自带 try/catch，异常时通过 safeWriteResult 写 error 状态        ║
+// ╚══════════════════════════════════════════════════════════════╝
+async function finalizeTask(ctx) {
+  const {
+    request_id, payload, preUpdate, picked, branches,
+    systemPrompt, userPrompt, messages, rawContent,
+    history, openid, monthEvent, perfLogs, is_retry, startTs, t0,
+  } = ctx
+  const state = payload.state
+  try {
+    const t4 = Date.now()
+    // D043：解构拿 attrPatch + scorePrompt + scoreRawResponse(前端 DBG 用)
+    const { attrPatch, scorePrompt, scoreRawResponse } = await callScoringAI(picked.content, preUpdate, history)
+    const t5 = Date.now()
+    console.log('[PERF] callScoringAI_ms=', t5 - t4)
+    perfLogs.push({ stage: 'callScoringAI_ms', ms: t5 - t4 })
+    console.log('[PERF] total_so_far_ms=', t5 - t0)
+    perfLogs.push({ stage: 'total_so_far_ms', ms: t5 - t0 })
+    // D036（先生 2026-06-28 01:07 拍板）：applyPatch 输入从叙事 AI 的 picked.patch 改为 AI₂ 输出的 attrPatch
+    const synthPatch = {
+      month_delta: typeof attrPatch.month_delta === 'number' ? attrPatch.month_delta : 0,
+      items: attrPatch.items || {},
+    }
+    // D048f（先生 2026-06-28 12:09 拍板·偶现 bug 排查）：applyPatch 前打印 attrPatch 全文 + state 关键字段
+    console.log('[D048f-debug] applyPatch input: attrPatch=', JSON.stringify(attrPatch), ' state.age=', state.age, ' state.year=', state.year, ' state.month=', state.month, ' preUpdate.age=', preUpdate.age)
+    // D048o（先生 2026-06-28 16:38 拍板·"我看不到后端"）：埋点也推给前端 DBG（先生手机直接看到）
+    globalThis.__D048F_LOG__ = (globalThis.__D048F_LOG__ || []).concat([`applyPatch input: attrPatch=${JSON.stringify(attrPatch)} state.age=${state.age} state.year=${state.year} state.month=${state.month} preUpdate.age=${preUpdate.age}`])
+    const baseUpdated = applyPatch(state, preUpdate, synthPatch)
+    // 合并属性变化到 state
+    const updated = { ...baseUpdated }
+    for (const attr of ATTR_NAMES) {
+      if (typeof attrPatch[attr] === 'number' && Number.isFinite(attrPatch[attr])) {
+        updated[attr] = Math.max(0, Math.min(10000, (baseUpdated[attr] || 0) + attrPatch[attr]))
+      }
+    }
+    // v0.6.61: 全部社会属性归零→社会性死亡（颜值归零只是丑，不会死）
+    // v0.6.85: 未成年人（<15岁）不触发社会性死亡——幼儿/少年自然没有社会属性，不应开局即死
+    const DEATH_ATTRS = ['声望', '财富', '学识', '医术', '战功', '文采', '政绩', '义行'];
+    var allZero = true;
+    if ((updated.age || 0) < 15) {
+      allZero = false;  // 未成年人豁免
+    } else {
+      for (var a = 0; a < DEATH_ATTRS.length; a++) {
+        if ((updated[DEATH_ATTRS[a]] || 0) > 0) { allZero = false; break; }
+      }
+    }
+    if (allZero) {
+      updated.alive = false;
+      updated.health = 0;
+      updated.deathReason = '全部社会属性';
+      var age = updated.age || 20;
+      var isNobility = ['世家', '皇族', '官宦', '士族', '贵族'].indexOf(updated.socialClass) >= 0;
+      if (age < 15) {
+        updated.epitaph = '未及弱冠，便已消散于人海。';
+      } else if (age < 30) {
+        updated.epitaph = isNobility ? '锦衣玉食，终化南柯一梦。' : '青春未展，已无踪迹可寻。';
+      } else if (age < 50) {
+        updated.epitaph = isNobility ? '风云一世，史书半行。' : '碌碌半生，终归尘土。';
+      } else {
+        updated.epitaph = isNobility ? '功过自有后人评。' : '一生如梦，来去无痕。';
+      }
+      console.log('[ai_narrate_worker] 全部社会属性归零触发死亡');
+    }
+    // D009: 寿限兜底——如果寿限到 + AI 没写 epitaph → 按身份/年龄补
+    if (updated.lifespan && updated.age >= updated.lifespan && !updated.epitaph) {
+      var lifespanAge = updated.age || 20;
+      var lifespanNobility = ['世家', '皇族', '官宦', '士族', '贵族'].indexOf(updated.socialClass) >= 0;
+      if (lifespanAge < 15) {
+        updated.epitaph = '未及弱冠，便已消散于人海。';
+      } else if (lifespanAge < 30) {
+        updated.epitaph = lifespanNobility ? '锦衣玉食，终化南柯一梦。' : '青春未展，已无踪迹可寻。';
+      } else if (lifespanAge < 50) {
+        updated.epitaph = lifespanNobility ? '风云一世，史书半行。' : '碌碌半生，终归尘土。';
+      } else {
+        updated.epitaph = lifespanNobility ? '功过自有后人评。' : '一生如梦，来去无痕。';
+      }
+      console.log('[ai_narrate_worker] 寿限已至补 epitaph:', updated.epitaph);
+    }
+    const systemMessages = emitSystemMessages(preUpdate, updated)
+
+    const monthChanged = updated.month !== state.month || updated.year !== state.year
+
+    // 计算最接近榜单（注入前端展示用）
+    const closestBoard = computeClosestBoard(updated)
+    let closestBoardInfo = null
+    if (closestBoard) {
+      closestBoardInfo = {
+        name: closestBoard.name,
+        diff: closestBoard.diff,
+        on: closestBoard.on,
+        targetPerson: BOARD_TARGET_PERSON[closestBoard.name] || null,
+      }
+    }
+
+    const result = {
+      success: true,
+      partial: false,  // 完整版
+      branch: picked,
+      branches: branches,
+      state: updated,
+      month_changed: monthChanged,
+      new_month: monthChanged ? updated.month : null,
+      new_year: monthChanged ? updated.year : null,
+      history: history,
+      narrate_history_added_ids: null,
+      debug: {
+        system_prompt: systemPrompt,
+        user_prompt: userPrompt,
+        messages: messages,
+        raw_response: rawContent,
+        perf_logs: perfLogs,
+        attr_patch: attrPatch,
+        picked_branch: picked,
+        score_prompt: scorePrompt,
+        score_raw_response: scoreRawResponse,
+        d048f_log: (globalThis.__D048F_LOG__ || []).join('\n') || null,
+      },
+      event: monthEvent,
+      system_messages: systemMessages,
+      closest_board: closestBoardInfo,
+      is_retry: is_retry,
+      attr_patch: attrPatch,
+    }
+
+    // 把 llm_io.output.result 原地更新为完整版（partial 已是 success，这里只覆盖 result）
+    try {
+      await db.collection('llm_io').where({ request_id }).update({
+        data: {
+          status: 'success',
+          output: {
+            raw_response: rawContent,
+            parsed: picked,
+            result: result,
+          },
+        },
+      })
+    } catch (e) {
+      console.error('[ai_narrate_worker] finalize 更新 llm_io 失败:', e.message)
+    }
+
+    // D056：worker 实时 add ai + system_messages 到 narrate_history
+    try {
+      const addedIds = []
+      const _aiRecord = {
+        openid: openid,
+        life_number: state.life_number || 1,
+        role: 'ai',
+        content: picked.content || '',
+        options: picked.options || null,
+        created_at: Date.now(),
+      }
+      const _aiErr = validateNarrateMessage(_aiRecord)
+      if (_aiErr) {
+        console.error('[D082] ai 入库校验失败:', _aiErr, JSON.stringify(_aiRecord))
+      } else {
+        const aiRes = await db.collection('narrate_history').add({ data: _aiRecord })
+        addedIds.push(aiRes._id)
+      }
+      if (Array.isArray(systemMessages)) {
+        for (const sm of systemMessages) {
+          const _sysRecord = {
+            openid: openid,
+            life_number: state.life_number || 1,
+            role: 'system',
+            content: (sm && sm.content) || '',
+            created_at: Date.now(),
+          }
+          const _sysErr = validateNarrateMessage(_sysRecord)
+          if (_sysErr) {
+            console.error('[D082] system 入库校验失败:', _sysErr, JSON.stringify(_sysRecord))
+          } else {
+            const sysRes = await db.collection('narrate_history').add({ data: _sysRecord })
+            addedIds.push(sysRes._id)
+          }
+        }
+      }
+      console.log('[D056] narrate_history add 完成, ids=', addedIds.length)
+      result.narrate_history_added_ids = addedIds
+    } catch (e) {
+      console.error('[D056] narrate_history add 失败:', e.message)
+    }
+
+    console.log('[ai_narrate_worker] finalize 完成, request_id=', request_id, ', elapsed_ms=', Date.now() - startTs)
+  } catch (e) {
+    console.error('[ai_narrate_worker] finalizeTask 失败:', e.message)
+    const errBody = e.body ? ` | body: ${String(e.body).substring(0, 500)}` : ''
+    const fullError = (e.message || 'AI属性结算失败') + errBody
+    const errFakeResult = {
+      success: false,
+      error: fullError,
+      branch: picked,
+      partial: true,
+      history: history,
+      debug: {
+        raw_response: '',
+        system_prompt: systemPrompt,
+        user_prompt: userPrompt,
+        messages: messages,
+        parse_error: e.message,
+        llm_error: true,
+        err_status: e.statusCode || 0,
+      },
+    }
+    await safeWriteResult(request_id, fullError, errFakeResult)
+  }
+}
+
 /**
  * v0.1.80 — D008 实施：AI 全权决定时间推进
  *
@@ -545,59 +628,8 @@ async function safeWriteResult(request_id, error_str, result) {
  * AI 漏 month_delta → 默认 0（不推进月份，尊重 AI 决定）
  * AI 输出超过 60 → clamp 到 60
  */
-
-// 死神追杀机制：综合属性 = 9 大属性之和（product-design §5.2）
-// 财富量级可上千，声望/学识等长期积累可破千，传奇一生综合可破 5000
-function calcCompositeScore(state) {
-  if (!state) return 0
-  let sum = 0
-  for (const a of ATTR_NAMES) sum += (Number(state[a]) || 0)
-  return sum
-}
-
-// 死神追杀机制：计算危险度 / 无增长 streak（product-design §5.2 / §5.3）
-// 返回 { deathThreat, historyShelter, noGrowthStreak }
-// 说明：
-//   - 危险度 key：safe / lurking / approaching / urgent / locked（英文存库，注入 prompt 时转中文）
-//   - 综合属性档：>5000 安全 / 3000-5000 潜伏 / 1000-3000 逼近 / <1000 紧迫
-//   - 历史庇护每层降一档（0~5，满 5 永久安全）—— 上榜才 +1，本函数只沿用不自增（榜单系统未上线）
-//   - 锁定：连续 3 回合综合属性无增长（庇护未满时强制锁定）
-const THREAT_KEYS = ['safe', 'lurking', 'approaching', 'urgent', 'locked']
-const THREAT_CN = { safe: '安全', lurking: '潜伏', approaching: '逼近', urgent: '紧迫', locked: '锁定' }
-function computeDeathThreat(updated, preUpdate) {
-  const shelter = Math.max(0, Math.min(5, Number(updated && updated.historyShelter) || 0))
-  const composite = calcCompositeScore(updated)
-  const prevComposite = calcCompositeScore(preUpdate)
-
-  // 无增长 streak：综合属性没涨就 +1，涨了归零
-  let streak = Math.max(0, Number(preUpdate && preUpdate.noGrowthStreak) || 0)
-  if (composite > prevComposite) streak = 0
-  else streak = streak + 1
-
-  // 基础危险档：0=安全 1=潜伏 2=逼近 3=紧迫
-  let base
-  if (composite > 5000) base = 0
-  else if (composite >= 3000) base = 1
-  else if (composite >= 1000) base = 2
-  else base = 3
-
-  // 历史庇护每层降一档
-  let level = Math.max(0, base - shelter)
-  if (shelter >= 5) level = 0  // 满 5 层永久安全
-
-  // 锁定：连续 3 回合无增长（庇护未满 5 时）
-  let key
-  if (streak >= 3 && shelter < 5) key = 'locked'
-  else key = THREAT_KEYS[level] || 'safe'
-
-  return { deathThreat: key, historyShelter: shelter, noGrowthStreak: streak }
-}
-
 function applyPatch(oldState, preUpdate, patch) {
   let s = { ...oldState }
-  if (s.deathThreat === undefined) s.deathThreat = 'safe'
-  if (s.historyShelter === undefined) s.historyShelter = 0
-  if (s.noGrowthStreak === undefined) s.noGrowthStreak = 0
   if (!s.month) s.month = 1
   if (!s.health) s.health = 100
   if (!s.coin) s.coin = 1000
@@ -1116,26 +1148,6 @@ function buildSystemPrompt(state, monthEvent) {
     `- 8个属性全部归零才是终点，单独降一个属性只是"活得很惨"——你需要在多个维度上同时施压`,
     `- 但不要刻意追求属性归零——按剧情走，什么样态就对应什么属性变化。让属性变化自然伴随叙事发生`,
     ``,
-    `# 死神追杀机制（系统信号 — 你必须据此调节危险强度）`,
-    ``,
-    `下方"当前状态"会告诉你两件事:`,
-    `- **死神危险度**：安全 / 潜伏 / 逼近 / 紧迫 / 锁定（5 档，从安全到锁定，你越逼越紧）`,
-    `- **历史庇护层数**：0~5（玩家留名青史、积累属性获得庇护，层数越高越逢凶化吉）`,
-    ``,
-    `**危险度→危险强度映射**：`,
-    `- 安全：本回合可生活化、轻度危险或无危险`,
-    `- 潜伏：应出现 1 处小信号或轻度危机（一次摔跤 / 小病 / 小失窃），玩家有退路`,
-    `- 逼近：危险事件必须发生（意外/疾病/冲突任一），预警缩短，3 个选项至少 1 个高代价`,
-    `- 紧迫：危险已成现实且持续升级，选项里至少 1 个可能直接致命`,
-    `- 锁定：死神必下杀手，本回合应制造无可躲避的致命危机，3 个选项都可能有致命代价`,
-    ``,
-    `**历史庇护的"气运"效果**：`,
-    `- 庇护 0~2：死神凶狠，正常危险`,
-    `- 庇护 3~4：玩家气运加身，危险事件里至少 1 个"意外生路"（NPC 伸手 / 物品恰好有用 / 贵人出现）`,
-    `- 庇护 5（满层）：玩家近乎传奇化，危险事件多次化解为"虚惊"或"逢凶化吉"，本回合死亡概率应极低（你应让玩家感受到"这人命不该绝"）`,
-    ``,
-    `**硬约束**：死亡仍由系统判定（健康归零 / 锁定致命 / 社会性死亡），你只写危险的"出现"与"损耗"，不决定生死。但你要让玩家**感受到死神在逼近**——这是这个游戏的核心爽点。`,
-    ``,
     `# 跨世机制`,
     ``,
     `玩家会经历多次穿越——不是只有一世。每一世是不同的朝代、不同的身份。`,
@@ -1298,7 +1310,6 @@ function buildSystemPrompt(state, monthEvent) {
     `- 金钱：${state.coin || 0}文`,
     `- 携带物品：${itemsList || '无'}`,
     `- 声望：${state['声望'] || 0} / 财富：${state['财富'] || 0} / 学识：${state['学识'] || 0} / 颜值：${state['颜值'] || 0} / 医术：${state['医术'] || 0} / 战功：${state['战功'] || 0} / 文采：${state['文采'] || 0} / 政绩：${state['政绩'] || 0} / 义行：${state['义行'] || 0}`,
-    `- 死神危险度：${THREAT_CN[state.deathThreat] || '安全'}（历史庇护 ${state.historyShelter || 0}/5 层）—— 据此调节本回合危险强度`,
     ``,
     `# 前世痕迹`,
     legacyContext || `这是你第一次穿越，没有前世痕迹。`,
@@ -1698,4 +1709,5 @@ function callLLM(messages, modelOverride) {
 // callLLM 还在用（line 1344 callScoringAI）板）：删 callLLMStream（改非流式 callLLM）
 // 凌晨 9 版本真因：保留流式根本做不好（partialWriter 500ms 触发一堆 bug）
 // callLLM 还在用（line 1344 callScoringAI）��式根本做不好（partialWriter 500ms 触发一堆 bug）
+// callLLM 还在用（line 1344 callScoringAI）好（partialWriter 500ms 触发一堆 bug）
 // callLLM 还在用（line 1344 callScoringAI）

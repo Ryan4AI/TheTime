@@ -475,6 +475,9 @@ function callAI(userInput) {
     state: stateData,
     input: realInput,
     is_retry: isRetry,
+    // 2026-07-11 修正：callAI 入口快照写进 data.history，兜底 DBG「对话流」tab
+    // 真因：D067 移除前端 history 后，worker 完全跑不起来时对话流 tab 永远"无数据"；此处存前端已知对话（上轮 + 本轮输入）
+    history: [...(narrativeHistory || []), { role: 'user', content: realInput }],
   }
 
   // ── 调试：记录完整 input ──
@@ -617,6 +620,14 @@ function pollNarrateResult(requestId, action, userInput, attempt, pollStartMs) {
             last.poll_elapsed_ms = (pollResult.result && pollResult.result.elapsed_ms) || 0
             last.poll_attempts = attempt + 1
           }
+          // 两阶段改造（先生 2026-07-19 拍板）：partial 阶段只渲染叙事文字
+          // 不 merge 属性 / 不显示选项 / 不存档 / 不记录 history，继续轮询等完整版
+          if (result.partial === true) {
+            showPartialNarrative(result)
+            loadingText = `史官结算中…（已等 ${elapsedSec} 秒）`
+            pollNarrateResult(requestId, action, userInput, attempt + 1, pollStartMs)
+            return
+          }
           handleAIResponse(result, action, userInput)
         } else if (pollResult.status === 'error') {
           loading = false
@@ -697,6 +708,30 @@ function pollNarrateResult(requestId, action, userInput, attempt, pollStartMs) {
       },
     })
   }, POLL_INTERVAL_MS)
+}
+
+// ─────── 两阶段改造 · partial 阶段渲染（先生 2026-07-19 拍板） ───────
+// 只渲染叙事文字（打字机），不 merge 属性 / 不显示选项 / 不存档 / 不记录 history
+// 玩家先看到剧情，属性结算完（finalize 完整版到达）再补选项 + 飘字 + 存档
+function showPartialNarrative(result) {
+  const branch = result.branch || {}
+  if (!branch || !branch.content) return
+  // 渲染叙事文字：partial 阶段直接显示完整文字（不走打字机）
+  // 原因：finalize 完整版到达时 handleAIResponse 会重设打字机从零打，
+  // 若 partial 也走打字机会出现"打一半→重头打"的突兀感；
+  // 直接全显则 finalize 到达时文字已在、只是补选项+飘字，观感连贯
+  const finalContent = (branch.content || '').slice(0, MAX_NARRATIVE_CHARS)
+  narrative = finalContent
+  displayedChars = finalContent.length  // 标记已显示完，渲染层不再逐字
+  displayStartTime = Date.now() - (finalContent.length + 1) * TYPEWRITE_SPEED
+  streamedText = ''
+  systemLineCount = 0
+  userScrolledAway = false
+  // 选项暂不出现（等 finalize 完整版到达再渲染），保持 loading 态
+  options = []
+  optionsAppearTime = 0
+  // 标记 partial 进行中，防止其它逻辑误判为完成
+  loading = true
 }
 
 // ─────── 处理 AI 返回 ───────
@@ -1268,8 +1303,10 @@ function adjustFluidLayout() {
 
   const typingDone = narrative && displayedChars >= narrative.length
 
-  // C 方案：输入框常驻区紧贴叙事区下方（不依赖 typingDone，永远在）
-  const inputY = layout.textY + layout.textH + 6
+  // C 方案：输入框常驻区在叙事区下方（不依赖 typingDone，永远在）
+  // 2026-07-11 先生反馈叙事页与输入框挨太近 → 间距 6→16
+  const narrInputGap = 16
+  const inputY = layout.textY + layout.textH + narrInputGap
   // 选项区贴在输入框下方 + freeGap
   const optionY = inputY + freeH + freeGap
 
@@ -1282,7 +1319,7 @@ function adjustFluidLayout() {
     const overflow = optionBottomEst - maxOptionBottom
     layout.textH = Math.max(60, layout.textH - overflow)
     // 重算
-    const inputY2 = layout.textY + layout.textH + 6
+    const inputY2 = layout.textY + layout.textH + narrInputGap
     layout.inputY = inputY2
     layout.optionY = inputY2 + freeH + freeGap
   } else {
@@ -1307,7 +1344,7 @@ function adjustFluidLayout() {
     const freeH2 = layout.inputZoneH || 56
     const kbdTop = layout.windowH - keyboardHeight - (layout.safeBottom || 0)
     const textY0 = layout._textY0 != null ? layout._textY0 : layout.textY
-    const inputY_normal = textY0 + layout.textH + 6
+    const inputY_normal = textY0 + layout.textH + narrInputGap
     const inputY_kbd = kbdTop - freeH2
     // 不盖榜单栏靠 render 绘制顺序（顶栏/榜单在内容之后画 + 不透明背景覆盖），此处不限制 kbdShift
     // 允许真实贴键盘顶 → 叙事底(inputY_kbd-6)在键盘顶上方，不被键盘盖
@@ -3134,9 +3171,11 @@ function drawDebugPanel(ctx) {
   layout._dbgDownBtn = { x: downBtnX, y: ctrlRowY, w: arrowSize, h: 18 }
 
   // 内容区（D039：减去底部 tab 条高度 bottomBarH）
+  // 2026-07-11 修正：裁剪底边用 bottomBarY（= h - bottomBarH - safeBottom），否则比真实底栏顶低 safeBottom(34px)
+  // 导致文字能画进底栏区域，和底部按钮混在一起
   ctx.save()
   ctx.beginPath()
-  ctx.rect(0, closeBarY + closeBarH, w, h - (closeBarY + closeBarH) - bottomBarH)
+  ctx.rect(0, closeBarY + closeBarH, w, bottomBarY - (closeBarY + closeBarH))
   ctx.clip()
 
   ctx.font = '10px monospace'
@@ -3198,19 +3237,17 @@ function drawDebugPanel(ctx) {
       }
     } else if (dbgActiveTab === 2) {
       // tab 2 = 对话流（user/assistant/历史 system 短消息，剔除主 system prompt 8000 字）
-      // D054（2026-07-03 23:44 先生拍板·①方案）：主 system prompt 拆到 tab 5
-      // 真因：复制本 tab 会复制 8000 字主 system prompt + 短对话 200 字 → 先生排查要找真实对话得手动翻
-      // 修法：tab 2 只显示 messages.filter(m => m.role !== 'system' || m.content.length < 2000)
-      // D066（2026-07-05 11:32 先生拍板）：改读 d.data.history（callAI 入口 push 的快照）
-      // 真因：原来读 d.messages_to_ai（worker 回传的）→ AI 失败时没传 → 复制按钮给先生复制一份"无数据"
-      // 修法：data.history 在 callAI 入口 debugLog.push 时就存的，不依赖 AI 生成结果
-      const _history = (d.data && Array.isArray(d.data.history)) ? d.data.history : null
-      if (_history && _history.length > 0) {
-        const shortMsgs = _history.filter(m => m.role !== 'system' || (m.content || '').length < 2000)
+      // 2026-07-11 修正：优先读 d.messages_to_ai（worker 回传的完整对话流，成功/正常错误都有）
+      //   兜底读 d.data.history（callAI 入口快照，worker 完全跑不起来时也能看到输入）
+      // 真因：D067 把前端 history 从 payload 移除后 d.data.history 永远空 → 对话流 tab 永远"无数据"
+      const _conv = (d.messages_to_ai && d.messages_to_ai.length > 0) ? d.messages_to_ai
+                  : ((d.data && Array.isArray(d.data.history)) ? d.data.history : null)
+      if (_conv && _conv.length > 0) {
+        const shortMsgs = _conv.filter(m => m.role !== 'system' || (m.content || '').length < 2000)
         if (shortMsgs.length > 0) {
-          allText += `[发给 AI 的 history 短消息]:\n`
+          allText += `[发给 AI 的完整对话流]:\n`
           shortMsgs.forEach((m, j) => {
-            allText += `  ── history[${j}].role="${m.role}" ──\n${m.content}\n\n`
+            allText += `  ── msg[${j}].role="${m.role}" ──\n${m.content}\n\n`
           })
         } else {
           allText += '[对话流] 全部都是主 system prompt，已挪到 tab 5\n'
@@ -3305,7 +3342,8 @@ function drawDebugPanel(ctx) {
 
   // 限制 debugScroll 不超过内容总长
   const totalH = lines.length * lineH
-  const viewH = h - closeBarH
+  // 2026-07-11 修正：viewH 用真实内容高度（裁剪区高度），否则对话流滚不到底
+  const viewH = bottomBarY - (closeBarY + closeBarH)
   const maxScroll = Math.max(0, totalH - viewH)
   if (debugScroll > maxScroll) debugScroll = maxScroll
   if (debugScroll < 0) debugScroll = 0
@@ -3313,7 +3351,8 @@ function drawDebugPanel(ctx) {
   const startY = closeBarY + closeBarH + 8 - debugScroll
   for (let i = 0; i < lines.length; i++) {
     const y = startY + i * lineH
-    if (y < closeBarY + closeBarH || y > h) continue
+    // 2026-07-11 修正：双保险——显式跳过底栏(bottomBarY)以下的行，即使裁剪失效对话流也不压按钮
+    if (y < closeBarY + closeBarH || y > bottomBarY) continue
     // 颜色：标题/请求/响应不同
     const line = lines[i]
     if (line.startsWith('━━━')) ctx.fillStyle = '#f0c878'
@@ -3717,7 +3756,7 @@ function handleTouch(x, y, type) {
 
       // D039（先生 2026-06-28 01:29 拍板）：tab 按钮在底部条, 顶部只保留关闭按钮
       // D048g（先生 2026-06-28 13:23 拍板·骂我是蠢货）：底部条上移 34px 避 iOS Home Indicator
-      const _bottomBarH = 64  // D058 44→64
+      const _bottomBarH = 84  // 2026-07-11 修正：与 drawDebugPanel 一致（绘制用 84），否则 ▲▼/复制本tab 命中区偏低 20px 整段错过按钮
       const _bottomBarY = _h - _bottomBarH - (layout.safeBottom || 34)
       const _ARROW_SZ = 28
       // 5 个 tab 按钮（仅上行 row1Y 20px 区域）

@@ -28,6 +28,7 @@ var keyboardHeight = 0       // D077：键盘高度（wx.onKeyboardHeightChange 
 var loading = false          // AI 调用中
 var loadingStart = 0
 var loadingText = '史官正在落笔…'  // v0.1.74 (D008): 轮询期间显示等待时长
+var partialRendered = false  // D089 两阶段：标记 partial 阶段已渲染文字+选项，finalize 到达时只补属性不重渲
 var errorMsg = ''
 var narrativeHistory = []    // {role, content}
 var lastRawAiResp = null    // v0.6.85: 最后AI原始JSON，history送AI时代替普通content
@@ -716,10 +717,10 @@ function pollNarrateResult(requestId, action, userInput, attempt, pollStartMs) {
 function showPartialNarrative(result) {
   const branch = result.branch || {}
   if (!branch || !branch.content) return
-  // 渲染叙事文字：partial 阶段直接显示完整文字（不走打字机）
-  // 原因：finalize 完整版到达时 handleAIResponse 会重设打字机从零打，
-  // 若 partial 也走打字机会出现"打一半→重头打"的突兀感；
-  // 直接全显则 finalize 到达时文字已在、只是补选项+飘字，观感连贯
+  // 渲染叙事文字 + 选项：partial 阶段直接显示完整文字（不走打字机）
+  // 选项来自 callAI（第一次调用），与属性评分无关，可以立刻显示让玩家点
+  // 原因：finalize 完整版到达时 handleAIResponse 会重设，若 partial 也走打字机
+  // 会出现"打一半→重头打"的突兀感；直接全显则 finalize 到达时文字已在
   const finalContent = (branch.content || '').slice(0, MAX_NARRATIVE_CHARS)
   narrative = finalContent
   displayedChars = finalContent.length  // 标记已显示完，渲染层不再逐字
@@ -727,11 +728,13 @@ function showPartialNarrative(result) {
   streamedText = ''
   systemLineCount = 0
   userScrolledAway = false
-  // 选项暂不出现（等 finalize 完整版到达再渲染），保持 loading 态
-  options = []
-  optionsAppearTime = 0
-  // 标记 partial 进行中，防止其它逻辑误判为完成
-  loading = true
+  // 选项立即显示（来自 callAI，无需等属性评分）
+  const opts = (branch.options || []).slice(0, 3).map(label => ({ label, key: label }))
+  options = opts
+  optionsAppearTime = Date.now()  // 立即可点
+  // 标记 partial 已渲染，finalize 到达时只补属性不重渲
+  partialRendered = true
+  loading = false
 }
 
 // ─────── 处理 AI 返回 ───────
@@ -744,6 +747,13 @@ function handleAIResponse(result, action, userInput) {
   // v0.2.5-D: 每轮重置 system 行计数（v0.1.80 D008 system 进 narrativeHistory 但渲染层没 reset）
   // 之前会一直累计，导致 system 行越积越多
   systemLineCount = 0
+
+  // D089 两阶段：若 partial 阶段已渲染文字+选项（partialRendered=true），
+  // 且本次是 finalize 完整版到达（成功、非错误），则跳过 narrative/options 重渲，
+  // 只做属性 merge + 飘字 + 存档 + history 同步（避免文字重打、选项重排）
+  const skipRerender = partialRendered && result && !result.error && result.branch && result.branch.content
+  // 消费标记：无论是否 skip，本次处理完都重置（下一轮从干净状态开始）
+  partialRendered = false
 
   if (!result || result.error) {
     // 显式错误：玩家看得懂的史官风格
@@ -993,6 +1003,8 @@ function handleAIResponse(result, action, userInput) {
   // system message 仍然进 narrativeHistory（给 LLM 看）
   // D048c（2026-06-28 09:42 拍板）：恢复打字机
   // 改回 TYPEWRITE_SPEED 累加显示（前端假打字机：拿到完整 content 后逐字显示）
+  // D089 两阶段：partial 已渲染文字+选项时，跳过重渲（避免文字重打、选项重排）
+  if (!skipRerender) {
   const finalContent = (branch.content || '').slice(0, MAX_NARRATIVE_CHARS)
   if (streamedText && finalContent.length >= streamedText.length) {
     // 兼容：done 来了但 streamedText 已被 done 路径填过（不再发生——后端非流式，streamedText 始终为空）
@@ -1009,6 +1021,7 @@ function handleAIResponse(result, action, userInput) {
   options = (branch.options || []).slice(0, 3).map(label => ({ label, key: label }))
   // D048c: 恢复打字机·选项等打字完再出（TYPEWRITE_SPEED × 字数 + 300ms）
   optionsAppearTime = displayStartTime + narrative.length * TYPEWRITE_SPEED + 300
+  }
   monthChanged = month_changed
   newEvent = event || null
 

@@ -29,6 +29,8 @@ var loading = false          // AI 调用中
 var loadingStart = 0
 var loadingText = '史官正在落笔…'  // v0.1.74 (D008): 轮询期间显示等待时长
 var partialRendered = false  // D089 两阶段：标记 partial 阶段已渲染文字+选项，finalize 到达时只补属性不重渲
+var awaitingFinalize = false // D089：上一轮 finalize 未到达时为 true，玩家点击先缓存等结算完
+var pendingSelection = null  // D089：awaitingFinalize 期间缓存的玩家输入，finalize 到后自动发出
 var errorMsg = ''
 var narrativeHistory = []    // {role, content}
 var lastRawAiResp = null    // v0.6.85: 最后AI原始JSON，history送AI时代替普通content
@@ -409,6 +411,20 @@ function callAI(userInput) {
     loading = false
     return
   }
+  // D089 两阶段（先生 2026-07-20 拍板）：新一轮生成必须等上一轮属性结算完
+  // 玩家在 finalize 未到达（awaitingFinalize=true）时点了选项/输入 → 先缓存，不立即发
+  // 等上一轮 finalize 完整版到达、handleAIResponse 消费完 partialRendered 后自动发出
+  // 避免拿"还没结算属性的旧 state"去生成下一轮（属性少算一轮）
+  // 重试/继续（__retry__/__continue__）不缓存——错误恢复应立即发
+  const _isRetryOrContinue = userInput === '__retry__' || userInput === '__continue__'
+  if (awaitingFinalize && !_isRetryOrContinue) {
+    console.log('[D089] awaitingFinalize 中，缓存点击:', userInput.slice(0, 20))
+    pendingSelection = userInput
+    options = []  // 清空选项防重复点
+    loading = true  // 保持 loading 态（等 finalize 到再发下一轮）
+    loadingText = '史官结算中…'
+    return
+  }
   // v0.6.50j 寿限检测：寿限已至 → 注入临终 system message
   // v3.0.14n-fix: 删掉"生成墓志铭写入 epitaph 字段"（先生 19:25 拍板·方案A）
   // epitaph 由独立的 ai_write_death 云函数生成（玩家点封笔后调用）
@@ -734,6 +750,7 @@ function showPartialNarrative(result) {
   optionsAppearTime = Date.now()  // 立即可点
   // 标记 partial 已渲染，finalize 到达时只补属性不重渲
   partialRendered = true
+  awaitingFinalize = true  // D089：finalize 未到，玩家点击先缓存
   loading = false
 }
 
@@ -754,6 +771,19 @@ function handleAIResponse(result, action, userInput) {
   const skipRerender = partialRendered && result && !result.error && result.branch && result.branch.content
   // 消费标记：无论是否 skip，本次处理完都重置（下一轮从干净状态开始）
   partialRendered = false
+
+  // D089：上一轮 finalize 已到达（无论成功/错误），若期间玩家点了选项则现在自动发出
+  // 保证新一轮生成一定基于"上一轮属性已结算"的 state
+  if (awaitingFinalize) {
+    awaitingFinalize = false
+    if (pendingSelection) {
+      const _pending = pendingSelection
+      pendingSelection = null
+      console.log('[D089] finalize 到达，自动发出缓存的点击:', _pending.slice(0, 20))
+      // 延后一帧发，让本轮属性 merge + 飘字先渲染
+      setTimeout(() => callAI(_pending), 0)
+    }
+  }
 
   if (!result || result.error) {
     // 显式错误：玩家看得懂的史官风格

@@ -1799,10 +1799,26 @@ async function callScoringAI(content, prevState, history) {
     }
     // D090-hotfix：raw 已在 try 外声明（函数顶层 let raw = ''），此处直接赋值
     raw = (response.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
-    const firstObj = raw.indexOf('{')
-    const lastObj = raw.lastIndexOf('}')
-    if (firstObj !== -1 && lastObj !== -1) {
-      const parsed = JSON.parse(raw.substring(firstObj, lastObj + 1))
+    // D090-hotfix6（先生 22:24 反馈声望卡194+DBG跳）：AI 偶发格式不规范导致 finalize 崩
+    //   现象：'Unexpected token " in JSON at position 1' —— AI 用中文引号包裹键名（"财富" 而非 "财富"）
+    //   或漏写外层花括号（返回 "财富":-200 而非 {"财富":-200}）
+    //   原来 callScoringAI 直接 JSON.parse 无容错 → 崩 → 前端标记卡死 → 声望卡旧值 + DBG 跳
+    // 修法：解析前中文引号转英文 + 多层 fallback 尝试解析（直接 / 截取{} / 补{}）
+    raw = raw.replace(/[“”]/g, '"')
+    let parsed = null
+    const tryParse = (s) => { try { return JSON.parse(s) } catch (e) { return null } }
+    parsed = tryParse(raw)                                                  // 1. 直接解析（已清 think/围栏+中文引号）
+    if (!parsed) {
+      const firstObj = raw.indexOf('{')
+      const lastObj = raw.lastIndexOf('}')
+      if (firstObj !== -1 && lastObj !== -1) {
+        parsed = tryParse(raw.substring(firstObj, lastObj + 1))               // 2. 截取 {} 内
+      }
+    }
+    if (!parsed && raw.includes(':')) {
+      parsed = tryParse('{' + raw + '}')                                     // 3. 补外层 {}
+    }
+    if (parsed) {
       // D048b：只取真正变化的属性（LLM 不写 = 没变化 = 不进 result）
       // result 可能是 {}（全无变化）或 {财富:-200, ...}（部分变化）
       // 兼容旧习惯：LLM 旧 prompt 会填 9 个 0 → 我们滤掉 0 值（0 视为"无变化"）
@@ -1824,6 +1840,10 @@ async function callScoringAI(content, prevState, history) {
       // D043：返回完整结构(含 prompt + raw + parsed attrPatch), 前端 DBG tab 1 能展示
       return { attrPatch: result, scorePrompt, scoreRawResponse: raw }
     }
+    // D090-hotfix6：AI 返回纯文本(无 JSON 结构)时 firstObj===-1，不进上面 if → 原函数会 return undefined
+    // → finalizeTask 里 attrPatch[attr] 崩(Cannot read property of undefined) → finalize 崩
+    // 修法：无 JSON 时返回空 attrPatch（属性按原样传，不增不减，不崩）
+    return { attrPatch: {}, scorePrompt, scoreRawResponse: raw }
   } catch (e) {
     // 评分AI失败：直接抛出，不掩盖（先生 14:12 拍板去掉温和变动兜底，错就暴露）
     console.error('[callScoringAI] 评分AI失败:', e.message, '| statusCode=', e.statusCode || 'n/a', '| body=', String(e.body || '').substring(0, 300))

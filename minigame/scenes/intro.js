@@ -105,6 +105,12 @@ function init(items, identity, gender) {
   // 异步生成身份（动画播放期间在后台跑）
   var params = {}
   if (state.genderPref) params.gender = state.genderPref
+  // D090（2026-07-20）：generate_identity 需 openid 才能写首世 player_life（后端自治 state）
+  // 不传 openid → 后端不写 player_life → 进 game 后 worker 拉不到 state 直接崩
+  if (typeof wx !== 'undefined' && wx.getStorageSync) {
+    const _oid = wx.getStorageSync('openid')
+    if (_oid) params.openid = _oid
+  }
   wx.cloud.callFunction({
     name: 'generate_identity',
     data: params,

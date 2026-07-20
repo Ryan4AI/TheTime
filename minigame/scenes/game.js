@@ -452,49 +452,18 @@ function callAI(userInput) {
     realInput = (lastUserMsg && lastUserMsg.content) || userInput
   }
 
-  const stateData = {
-    life_number: state.life_number,
-    name: state.name,
-    gender: state.gender,
-    age: state.age,
-    occupation: state.occupation,
-    socialClass: state.socialClass,
-    dynasty: state.dynasty,
-    eraDisplay: state.eraDisplay,
-    city: state.city,
-    year: state.year,
-    month: state.month,
-    round: state.round,
-    health: state.health,
-    coin: state.coin,
-    // v2 新增：9属性 + 历史庇护
-    '声望': state['声望'] || 0,
-    '财富': state['财富'] || 0,
-    '学识': state['学识'] || 0,
-    '颜值': state['颜值'] || 0,
-    '医术': state['医术'] || 0,
-    '战功': state['战功'] || 0,
-    '文采': state['文采'] || 0,
-    '政绩': state['政绩'] || 0,
-    '义行': state['义行'] || 0,
-    items: state.items.map(i => ({ id: i.id, name: i.name, desc: i.desc })),
-    legacy: state.legacy,
-    alive: state.alive,
-    lifespan: state.lifespan,
-    historical_shelter: state.historical_shelter,
-  }
-
-  // D067（2026-07-05 11:49 先生拍板）：前端不再传 history，worker 自己从云端 narrate_history 拉
-  // 真因：前端拼 historyForAi 是冗余设计，worker 后端能直接查云数据库
-  // 修法：data 不带 history 字段
+  // D090（2026-07-20）：后端自治 state，前端不再构造/传递 state/history
+  // state 真值在云端 player_life：generate_identity 写首世，worker 每轮 finalize 后写回，
+  // 前端通过 get_result 返回的 result.state 刷新本地（渲染缓存）。submit 只传 openid + input。
+  // openid 优先用微信上下文（submit/worker 已从 getWXContext 拿），前端再带一份作兜底。
+  const openid = (typeof wx !== 'undefined' && wx.getStorageSync)
+    ? (wx.getStorageSync('openid') || '')
+    : ''
 
   const data = {
-    state: stateData,
     input: realInput,
     is_retry: isRetry,
-    // 2026-07-11 修正：callAI 入口快照写进 data.history，兜底 DBG「对话流」tab
-    // 真因：D067 移除前端 history 后，worker 完全跑不起来时对话流 tab 永远"无数据"；此处存前端已知对话（上轮 + 本轮输入）
-    history: [...(narrativeHistory || []), { role: 'user', content: realInput }],
+    openid,
   }
 
   // ── 调试：记录完整 input ──

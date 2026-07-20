@@ -1045,6 +1045,20 @@ function fallbackExtractBranch(rawText) {
       .replace(/\\t/g, '\t')
       .replace(/\\\\/g, '\\')
   }
+  // D090-hotfix5（先生 22:00 查"AI 偶尔返回非 JSON 崩"）：AI 偶发返回纯叙事文本（不包 JSON 结构，
+  // 如"你攥紧货郎的手腕..."），contentMatch 抽不到 → 原来返回 null → finalize 崩。
+  // 修法：抽不到 JSON content 时，把整段文本（清掉 ```json 围栏/think 标签）当 content 兜底，
+  // 让 AI 已写的有效叙事不浪费、游戏不崩（D059 A 方案精神：正则 fallback 提取 content）
+  if (!content) {
+    const cleanedText = rawText
+      .replace(/<think>[\s\S]*?<\/think>/g, '')
+      .replace(/```json\s*/gi, '')
+      .replace(/```\s*/g, '')
+      .trim()
+    if (cleanedText.length > 20) {
+      content = cleanedText
+    }
+  }
   // 抽 options："options"\s*:\s*\[...\]
   const optionsMatch = rawText.match(/"options"\s*:\s*\[([\s\S]*?)\]/)
   let options = []

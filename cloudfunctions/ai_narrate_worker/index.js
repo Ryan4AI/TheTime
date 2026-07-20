@@ -745,7 +745,8 @@ async function finalizeTask(ctx) {
       success: false,
       error: fullError,
       branch: picked,
-      partial: true,
+      partial: false,  // D090-hotfix7: finalize 崩时写 error 结果，partial 必须 false
+      // 否则前端 success 分支 if(result.partial===true) 误判为 partial → 继续轮询不处理 error → poll 死循环
       history: history,
       debug: {
         raw_response: '',

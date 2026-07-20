@@ -702,6 +702,11 @@ function pollNarrateResult(requestId, action, userInput, attempt, pollStartMs) {
 function showPartialNarrative(result) {
   const branch = result.branch || {}
   if (!branch || !branch.content) return
+  // D090-hotfix3（先生 21:26 反馈选项闪）：partial 已渲染过一次后，后续轮询拿到的 partial 不再重渲
+  // 真因：pollNarrateResult 每 500ms 轮询一次 partial，每次都调本函数重设 options + optionsAppearTime=Date.now()
+  // → drawOptions 用 optionsAppearTime 做 300ms 淡入 → 每 500ms 重置一次 = 选项反复从透明渐显 = 闪
+  // 修法：partialRendered 已 true 说明本轮 partial 已渲染过，直接跳过，保留首次的 options/narrative/淡入
+  if (partialRendered) return
   // 渲染叙事文字 + 选项：partial 阶段直接显示完整文字（不走打字机）
   // 选项来自 callAI（第一次调用），与属性评分无关，可以立刻显示让玩家点
   // 原因：finalize 完整版到达时 handleAIResponse 会重设，若 partial 也走打字机

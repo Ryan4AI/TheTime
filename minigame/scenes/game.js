@@ -403,6 +403,14 @@ function initLayout() {
 //   1. submit（< 2 秒返回 request_id）
 //   2. 每 5 秒轮询一次 get_result，直到 done/error
 function callAI(userInput) {
+  // D090-hotfix4（先生 21:42 反馈声望一直是旧数据）：新一轮发起时无条件重置本轮状态标记
+  // 真因：partialRendered/awaitingFinalize 原来只在 finalize 成功路径重置(730行)，
+  //       若上一轮 finalize 崩(错误分支提前 return) → 标记卡在 true → 本轮 partial 到达时
+  //       showPartialNarrative 开头 if(partialRendered) return 直接跳过 → 选项/叙事不更新 → 前端冻结在旧 state(如声望179)
+  // 修法：callAI 入口(新一轮)先重置，确保无论上轮成功/失败都从干净状态开始
+  partialRendered = false
+  awaitingFinalize = false
+  pendingSelection = null
   // v3.0.14h-fix: 死亡后禁止再调 LLM（先生 18:48 反馈"死了继续有选项继续走剧情"）
   // 之前 alive=false 后选项还在 → 玩家点选项又调 callAI → 死循环
   // 修复：alive=false 时设 deathConfirmPending=true（不调 LLM，让玩家点屏幕走流程）

@@ -1811,14 +1811,10 @@ async function callScoringAI(content, prevState, history) {
       return { attrPatch: result, scorePrompt, scoreRawResponse: raw }
     }
   } catch (e) {
-    console.error('[callScoringAI] 评分AI失败:', e.message)
+    // 评分AI失败：直接抛出，不掩盖（先生 14:12 拍板去掉温和变动兜底，错就暴露）
+    console.error('[callScoringAI] 评分AI失败:', e.message, '| statusCode=', e.statusCode || 'n/a', '| body=', String(e.body || '').substring(0, 300))
+    throw e
   }
-  // D045：fallback 改温和变动(财富-10 因吃饭, 其他 0), 避免玩家属性永远不变
-  const fallback = {}; for (const a of ATTR_NAMES) fallback[a] = 0
-  fallback.财富 = -10
-  fallback.month_delta = 0
-  // 记录 raw 内容(不是字符串"(解析失败)")方便 D045 排查
-  return { attrPatch: fallback, scorePrompt, scoreRawResponse: raw || '(无响应)' }
 }
 
 function callLLM(messages, modelOverride) {

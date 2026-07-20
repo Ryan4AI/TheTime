@@ -113,10 +113,11 @@ exports.main = async (event) => {
   if (!request_id) {
     return { error: '缺少 request_id', code: 400 }
   }
-  if (!payload || !payload.state) {
-    // v0.2.4: 缺 state 时也要写 narrate_result，前端能查到原因
-    await safeWriteResult(request_id, '', 'worker缺 payload.state')
-    return { error: '缺少 payload.state', code: 400 }
+  // D090（2026-07-20）：后端自治 state，不再要求 payload.state
+  // 要求 openid（submit 已从微信上下文注入）；state 由 worker 从 player_life 拉
+  if (!payload || !payload.openid) {
+    await safeWriteResult(request_id, '', 'worker缺 payload.openid')
+    return { error: '缺少 payload.openid', code: 400 }
   }
 
   console.log('[ai_narrate_worker] 启动, request_id=', request_id)
@@ -133,6 +134,120 @@ exports.main = async (event) => {
   return { success: true, status: 'started', elapsed_ms: 0 }
 }
 
+// ─────── D090（2026-07-20）：后端自治 state，player_life 是真值 ───────
+// 从 player_life 拉 openid 最新世 state + life_number
+async function loadLatestLife(openid) {
+  const res = await db.collection('player_life')
+    .where({ openid })
+    .orderBy('life_number', 'desc')
+    .limit(1)
+    .get()
+  const rec = res.data && res.data[0]
+  if (!rec) return null
+  // 把 player_life 字段映射回 worker 内部 state 结构（字段名对齐 game.init）
+  const state = {
+    life_number: rec.life_number,
+    name: rec.name,
+    gender: rec.gender === 'female' ? '女' : '男',
+    age: rec.age,
+    occupation: rec.occupation,
+    social_class: rec.social_class || rec.socialClass,
+    dynasty: rec.dynasty,
+    eraDisplay: rec.era_display || rec.eraDisplay,
+    city: rec.city,
+    year: rec.year,
+    month: rec.month,
+    round: rec.round || 0,
+    health: rec.health,
+    coin: rec.coin != null ? rec.coin : 1000,
+    '声望': rec.reputation || 0,
+    '财富': rec.wealth || 0,
+    '学识': rec.knowledge || 0,
+    '颜值': rec.appearance || 0,
+    '医术': rec.medical || 0,
+    '战功': rec.military || 0,
+    '文采': rec.literary || 0,
+    '政绩': rec.political || 0,
+    '义行': rec.righteous || 0,
+    lifespan: rec.lifespan,
+    historical_shelter: rec.historical_shelter || 0,
+    epitaph: rec.epitaph || '',
+    deathThreat: rec.death_threat || 'safe',
+    historyShelter: typeof rec.history_shelter === 'number' ? rec.history_shelter : 0,
+    noGrowthStreak: typeof rec.no_growth_streak === 'number' ? rec.no_growth_streak : 0,
+    alive: rec.alive !== false,
+    items: rec.current_items || [],
+    created_at: rec.created_at,
+  }
+  return { state, life_number: rec.life_number, last_finalize_at: rec.last_finalize_at || 0, finalize_status: rec.finalize_status || 'idle' }
+}
+
+// 把 worker 算完的 updated state 写回 player_life（含 last_finalize_at 时间戳）
+async function saveLife(openid, life_number, updated) {
+  const now = Date.now()
+  const lifeData = {
+    openid,
+    life_number,
+    alive: updated.alive !== false,
+    name: updated.name,
+    gender: updated.gender === '女' ? 'female' : 'male',
+    age: updated.age,
+    occupation: updated.occupation,
+    social_class: updated.social_class || updated.socialClass,
+    dynasty: updated.dynasty,
+    era_display: updated.eraDisplay,
+    city: updated.city,
+    year: updated.year,
+    month: updated.month,
+    round: updated.round,
+    health: updated.health,
+    coin: updated.coin != null ? updated.coin : 1000,
+    reputation: updated['声望'] || 0,
+    wealth: updated['财富'] || 0,
+    knowledge: updated['学识'] || 0,
+    appearance: updated['颜值'] || 0,
+    medical: updated['医术'] || 0,
+    military: updated['战功'] || 0,
+    literary: updated['文采'] || 0,
+    political: updated['政绩'] || 0,
+    righteous: updated['义行'] || 0,
+    lifespan: updated.lifespan,
+    historical_shelter: updated.historical_shelter || 0,
+    epitaph: updated.epitaph || '',
+    death_threat: updated.deathThreat || 'safe',
+    history_shelter: typeof updated.historyShelter === 'number' ? updated.historyShelter : 0,
+    no_growth_streak: typeof updated.noGrowthStreak === 'number' ? updated.noGrowthStreak : 0,
+    current_items: updated.items || [],
+    updated_at: now,
+    last_finalize_at: now,
+    finalize_status: 'idle',
+  }
+  // 宽松 upsert：先 update（where openid+life_number），无记录则 add
+  const exists = await db.collection('player_life').where({ openid, life_number }).count()
+  if (exists.total > 0) {
+    await db.collection('player_life').where({ openid, life_number }).update({ data: lifeData })
+  } else {
+    await db.collection('player_life').add({ data: { ...lifeData, created_at: now } })
+  }
+  return now
+}
+
+// 第二轮 worker 开头短等：若上一轮 finalize 还在算（player_life.finalize_status==='pending'），
+// 轮询直到 status==='idle' 且 last_finalize_at > initialFinalizeAt（说明等待期间有一轮 finalize 完成了）
+// 保证下一轮基于"上一轮结算后"的 state
+async function waitForFinalize(openid, initialFinalizeAt, maxWaitMs) {
+  const maxWait = maxWaitMs || 10000
+  const deadline = Date.now() + maxWait
+  while (Date.now() < deadline) {
+    const cur = await loadLatestLife(openid)
+    if (!cur) return null
+    if (cur.finalize_status === 'idle' && cur.last_finalize_at > initialFinalizeAt) return cur
+    await new Promise(r => setTimeout(r, 200))
+  }
+  console.log('[D090] waitForFinalize 超时，退化用当前 player_life state')
+  return await loadLatestLife(openid)
+}
+
 // v0.2.4 — 主逻辑移到 backgroundTask（与 main 分离）
 async function backgroundTask(request_id, payload) {
   const startTs = Date.now()
@@ -147,7 +262,32 @@ async function backgroundTask(request_id, payload) {
   let history = null
 
   try {
-    const { state, input, is_retry } = payload
+    const { input, is_retry } = payload
+
+    // D090：后端自治 state，从 player_life 拉最新世
+    let loaded = await loadLatestLife(openid)
+    if (!loaded) {
+      // 能发 submit 必已有世（generate_identity 已写 player_life），读到空是异常，直接报错返回
+      await safeWriteResult(request_id, '', 'player_life 无记录（应不可能：能发 submit 必已有世）')
+      return
+    }
+    // 若上一轮 finalize 还在算（pending）→ 短等它完成（status=idle 且 last_finalize_at 已更新）
+    if (loaded.finalize_status === 'pending') {
+      loaded = await waitForFinalize(openid, loaded.last_finalize_at || 0)
+      if (!loaded) {
+        await safeWriteResult(request_id, '', 'waitForFinalize 无记录')
+        return
+      }
+    }
+    const state = loaded.state
+    const life_number = loaded.life_number
+
+    // 本回合标记 pending（标记本世正在结算），并发轮次看到 pending 就会等
+    try {
+      await db.collection('player_life').where({ openid, life_number }).update({ data: { finalize_status: 'pending' } })
+    } catch (e) {
+      console.error('[D090] 标记 finalize_status=pending 失败:', e.message)
+    }
 
     const realInput = is_retry ? '' : (input || '')
 
@@ -282,6 +422,7 @@ async function backgroundTask(request_id, payload) {
       request_id, payload, preUpdate, picked, branches,
       systemPrompt, userPrompt, messages, rawContent,
       history, openid, monthEvent, perfLogs, is_retry, startTs, t0,
+      state, life_number,
     }).catch(e => {
       console.error("[ai_narrate_worker] finalizeTask 异常:", e.message)
       console.error("[ai_narrate_worker] finalize stack:", e.stack)
@@ -411,8 +552,8 @@ async function finalizeTask(ctx) {
     request_id, payload, preUpdate, picked, branches,
     systemPrompt, userPrompt, messages, rawContent,
     history, openid, monthEvent, perfLogs, is_retry, startTs, t0,
+    state, life_number,
   } = ctx
-  const state = payload.state
   try {
     const t4 = Date.now()
     // D043：解构拿 attrPatch + scorePrompt + scoreRawResponse(前端 DBG 用)
@@ -549,7 +690,7 @@ async function finalizeTask(ctx) {
       const addedIds = []
       const _aiRecord = {
         openid: openid,
-        life_number: state.life_number || 1,
+        life_number: life_number,
         role: 'ai',
         content: picked.content || '',
         options: picked.options || null,
@@ -566,7 +707,7 @@ async function finalizeTask(ctx) {
         for (const sm of systemMessages) {
           const _sysRecord = {
             openid: openid,
-            life_number: state.life_number || 1,
+            life_number: life_number,
             role: 'system',
             content: (sm && sm.content) || '',
             created_at: Date.now(),
@@ -584,6 +725,15 @@ async function finalizeTask(ctx) {
       result.narrate_history_added_ids = addedIds
     } catch (e) {
       console.error('[D056] narrate_history add 失败:', e.message)
+    }
+
+    // D090（2026-07-20）：finalize 算完，把 updated state 写回 player_life（云端真值）
+    // 下一轮 submit 的 worker 从 player_life 拉到的就是"本世结算后"的 state
+    try {
+      const savedAt = await saveLife(openid, life_number, updated)
+      console.log('[D090] saveLife 完成, life_number=', life_number, ', last_finalize_at=', savedAt)
+    } catch (e) {
+      console.error('[D090] saveLife 失败:', e.message)
     }
 
     console.log('[ai_narrate_worker] finalize 完成, request_id=', request_id, ', elapsed_ms=', Date.now() - startTs)
@@ -1618,6 +1768,8 @@ async function callScoringAI(content, prevState, history) {
     `例（全无变化）：{}`,
   ].join('\n')
 
+  // D090-hotfix：raw 提到 try 外声明，避免 callLLM 抛错时 fallback 引用未声明 raw → "raw is not defined"
+  let raw = ''
   try {
     const t_score_start = Date.now()
     // v0.1.85 教训: MiniMax 单 system 消息会 2013（实测 2026-06-28 D048b 部署后 LLM 测试报 2013）
@@ -1631,7 +1783,8 @@ async function callScoringAI(content, prevState, history) {
     if (typeof globalThis.__PERF_LOGS__ !== 'undefined') {
       globalThis.__PERF_LOGS__.push({ stage: 'callScoringAI.llm_ms', ms: t_score_end - t_score_start, score_prompt_chars: scorePrompt.length })
     }
-    const raw = (response.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+    // D090-hotfix：raw 已在 try 外声明（函数顶层 let raw = ''），此处直接赋值
+    raw = (response.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
     const firstObj = raw.indexOf('{')
     const lastObj = raw.lastIndexOf('}')
     if (firstObj !== -1 && lastObj !== -1) {

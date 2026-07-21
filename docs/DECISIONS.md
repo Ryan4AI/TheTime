@@ -265,3 +265,68 @@ v3.0.9c 描述变更段（也是 D040 精神违规）：
 **未做（待先生决定）：**
 - DECISIONS.md 落后 D051-D061 60+ 决策未落档（先生没让补，先不动）
 - 远端 ahead 12 + 本次 D062 commit 仍未 push（先生自助）
+
+---
+
+## D090（2026-07-20 01:11 先生拍板"彻底整改"）state 真值迁移到云端 player_life，前端变纯视图+输入
+
+### 背景（先生连续 4 问逼出的架构本质）
+D089 两阶段改造后，发现"新一轮生成拿旧 state"的隐患。先生连续质疑：
+1. 选项为何等属性评分？→ 已修(partial 同屏)
+2. 新一轮要等上一轮属性结算完 → 最初想前端缓存(awaitingFinalize)，先生否
+3. 为何前端传 state 给后端？→ 先生：后端自己有 state 吗？
+4. 为何前端传 life_number？→ 先生：后端不是自己也有吗？转世为何要专门 action？→ 先生：调 generate_identity 就创建新世了
+
+**本质**：前端不该持有真值。state 权威必须在云端 player_life，前端只发 openid+input，收 result 渲染。
+
+### 决策（彻底整改）
+- **player_life 是真值**：life_number + state 全部由云端持有。
+- **generate_identity 改为写库**：生成 identity 后分配 life_number（查 player_life 最新世+1，首世=1），把初始 state 写进 player_life（含 openid）。转世=调 generate_identity 创建新世，不新增 action。
+- **ai_narrate_submit 只传 openid + input**（删 state / life_number 传递）。
+- **ai_narrate_worker 从 player_life 拉最新世 state**（不读 event.state）；finalize 算完写回 player_life（updated + last_finalize_at 时间戳）；第二轮 worker 开头若上一轮 finalize 未完（last_finalize_at 早于本轮 callAI 开始时间），短等重试直到拿到结算后 state。
+- **前端 callAI 只发 openid + input**；handleAIResponse 保留 result.state merge（仅显示用副本，非真值）；autoSaveToCloud 删 state 写入（后端已是真值）。
+- **initIdentity 改为**：调 generate_identity（后端写 player_life）→ submit 拉回 state 渲染（首屏用 identity 占位）。
+- **回滚 D089-fix2 的 awaitingFinalize / pendingSelection**（后端自治后前端零缓存）。
+
+### 真值时序保证
+- 首世：generate_identity 写 player_life（life_number=1, initial state）
+- 续世：submit → worker 读 player_life 最新世 → callAI → finalize 写回 player_life（updated）
+- 转世：death scene 调 generate_identity → 写 player_life（life_number=N+1）→ submit 续新世
+- 第二轮 submit 永远读到"上一轮 finalize 写回的 state"（短等保证），不会拿旧值算
+
+### 字段变更（无 schema 破坏，仅新增）
+- player_life 新增 `last_finalize_at`（finalize 完成时间戳），用于第二轮 worker 短等仲裁。
+
+### 风险
+- 涉及身份生成+存档+叙事三条核心链路，需 mock 测试 + 后端部署 + 前端上传 + 真机验收。
+- 首局时序：generate_identity 必须先在 player_life 落记录，worker 才能读到；若 worker 读到空（异常）直接报错返回，不兜底生成（先生：能发 submit 必已有世）。
+
+### 状态
+- 实施中（2026-07-20 01:11 起）
+
+## D094（2026-07-22 01:18 先生拍板）业务数据与 AI 调试数据彻底分离
+
+### 问题
+D089/D090 两阶段实现错误地把 `llm_io.output.result` 当成前端业务结果和 A₂ 完成通道。`llm_io` 的正确职责只是 AI 调用调试记录；当前 worker 先写 `partial:true`，再用未 await 的后台 `finalizeTask` 覆盖同一条 `llm_io`，导致最新真实记录长期停在 partial，前端属性和年月不刷新。
+
+### 定案
+- `llm_io` 只记录调试信息：prompt、原始响应、耗时、错误；不得作为业务状态、业务结果、A₂ 任务队列或前端业务结果来源。
+- `player_life` 是状态真值：年月、回合、年龄、九属性、物品及最终结算状态写入这里。
+- `narrate_history` 是玩家可见消息真值：AI₁ 生成的叙事和选项必须先入库，再返回前端展示；A₂ 以这条已入库的玩家可见 AI 消息为评分对象，不以 llm_io 或前端上下文为业务依据。
+- 前端只负责提交输入和展示，不提交 state/history；前端轮询业务结果接口，不直接依赖 llm_io。
+- A₂ 必须是独立、可靠的云函数调用，不能依赖主函数返回后的悬空 Promise。
+- `request_id` 仅作为一次异步任务/结果轮询的关联号，不是业务内容真值；业务内容以 narrate_history、状态以 player_life 为准。
+- 同一玩家同一世同一时间只能有一条待结算 AI 消息；已有待结算消息时不得创建下一轮，避免“最新消息”歧义和重复结算。
+- `partial` 作为业务结果接口的展示状态保留：`true`=消息已展示、状态待结算；`false`=A₂ 已完成，前端可刷新状态；失败必须是明确错误状态，不得伪装成 partial。
+
+### 改造范围
+1. AI₁：先写 narrate_history 的 AI 消息，再返回 partial；保存必要的待结算标记。
+2. 独立 A₂ 函数：读取唯一待结算的已入库 AI 消息，调用评分 AI，写回 player_life，并标记消息已结算。
+3. 业务结果函数：从 player_life + narrate_history 返回 pending/final/error，不从 llm_io 读取业务结果。
+4. llm_io 保留旁路 debug 写入，不参与业务判断。
+5. 前端继续 partial→final 的展示流程，但数据源切换到业务结果接口。
+
+### 约束
+- 不删除历史 llm_io 数据。
+- 不新增“前端状态上传”路径。
+- 涉及 narrate_history 待结算字段和业务结果读取路径；实现前须先核对现有 schema，避免破坏历史数据。

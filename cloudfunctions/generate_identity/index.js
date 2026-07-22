@@ -553,6 +553,66 @@ function buildStoryPrompt(identity, items) {
   return `你是穿越日记的游戏主持人。玩家穿越到了${identity.dynasty}的${identity.city}，身份是${identity.name}，${identity.age}岁${identity.gender}子，${identity.occupation || '无业'}。玩家从现代带来了三件物品：${itemDesc}。请根据当前场景生成一段叙事（60-120字），并在末尾给出3个选项。用 JSON 格式回复：{"narrative":"叙事文字","options":[{"label":"选项A","desc":"简短说明"},{"label":"选项B","desc":"简短说明"},{"label":"选项C","desc":"简短说明"}]}`
 }
 
+// ─────── D090（2026-07-20）：身份生成后写 player_life（后端自治 state）───────
+// 构造初始 player_life 记录（state 完整镜像），对齐前端 game.init 的 state 结构
+async function buildAndSavePlayerLife(identity, openid) {
+  try {
+    // 分配 life_number：查 openid 最新世 +1，首世=1
+    const latest = await db.collection('player_life')
+      .where({ openid })
+      .orderBy('life_number', 'desc')
+      .limit(1)
+      .get()
+    const maxLife = (latest.data && latest.data[0] && latest.data[0].life_number) || 0
+    const life_number = maxLife + 1
+
+    const now = Date.now()
+    const lifespan = 55 + Math.floor(Math.random() * 26)  // 55~80 岁隐藏寿限（对齐 game.init）
+    const initialLife = {
+      openid,
+      life_number,
+      alive: true,
+      name: identity.name || '无名',
+      gender: identity.gender === '女' ? 'female' : 'male',
+      age: identity.age != null ? identity.age : 20,
+      occupation: identity.occupation || '庶民',
+      social_class: identity.socialClass || '庶人',
+      dynasty: identity.dynasty || '未知',
+      era_display: identity.eraDisplay || identity.eraLabel || '',
+      city: identity.city || '某地',
+      year: typeof identity.year === 'number' ? identity.year : parseInt(identity.year) || 0,
+      month: 1,
+      round: 0,
+      health: 100,
+      coin: 1000,
+      reputation: identity['声望'] || 0,
+      wealth: identity['财富'] || 0,
+      knowledge: identity['学识'] || 0,
+      appearance: identity['颜值'] || 0,
+      medical: 0,
+      military: 0,
+      literary: 0,
+      political: 0,
+      righteous: 0,
+      lifespan,
+      historical_shelter: identity.historical_shelter || 0,
+      epitaph: identity.epitaph || '',
+      current_items: identity.items || [],
+      created_at: now,
+      updated_at: now,
+      is_scoring: false,
+    }
+
+    // 写 player_life（add 新记录；_id 由云数据库自动给）
+    const addRes = await db.collection('player_life').add({ data: initialLife })
+    console.log('[generate_identity] 写 player_life 成功, life_number=', life_number, ' _id=', addRes._id)
+    return { life_number, _id: addRes._id }
+  } catch (e) {
+    console.error('[generate_identity] 写 player_life 失败:', e.message)
+    return null
+  }
+}
+
 exports.main = async (rawEvent, context) => {
   // 防御性：有时 event 是字符串（云函数从网关转发）
   let event = rawEvent
@@ -593,5 +653,15 @@ exports.main = async (rawEvent, context) => {
   }
 
   // ─────── 身份生成模式（原有逻辑） ───────
-  return _generateIdentity(event, {})
+  const genResult = await _generateIdentity(event, {})
+  // D090（2026-07-20）：若传了 openid，生成后写 player_life（首世/转世都走这）
+  // 后端自治 state 真值，前端不再构造/持有 state
+  if (genResult.success && event.openid) {
+    const saved = await buildAndSavePlayerLife(genResult.identity, event.openid)
+    if (saved) {
+      genResult.life_number = saved.life_number
+      genResult.player_life_id = saved._id
+    }
+  }
+  return genResult
 }

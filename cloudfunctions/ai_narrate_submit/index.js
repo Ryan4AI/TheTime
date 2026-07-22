@@ -27,8 +27,11 @@ const db = cloud.database()
 const CALL_WORKER_TIMEOUT_MS = 5000
 
 exports.main = async (event) => {
-  if (!event || !event.state) {
-    return { error: '缺少 state', code: 400 }
+  // D090（2026-07-20）：后端自治 state，submit 只传 openid + input
+  // openid 从微信上下文拿（不依赖前端传），state 由 worker 从 player_life 拉
+  const openid = (cloud.getWXContext && cloud.getWXContext().OPENID) || (event && event.openid) || ''
+  if (!openid) {
+    return { error: '缺少 openid', code: 400 }
   }
 
   const ts = Date.now()
@@ -36,14 +39,13 @@ exports.main = async (event) => {
   const requestId = `narrate_${ts}_${rand}`
 
   // 1. D049a: 写 llm_io (status=pending) 替代 narrate_pending + narrate_result
-  // 校验：input/output/error 都填默认值
   try {
     await db.collection('llm_io').add({
       data: {
         request_id: requestId,
         category: 'narrate',
         status: 'pending',
-        input: { state_round: event.state.round, life_number: event.state.life_number, is_retry: !!event.is_retry },
+        input: { openid, input: (event && event.input) || '', is_retry: !!(event && event.is_retry) },
         output: {},
         error: '',
         created_at: ts,
@@ -61,12 +63,10 @@ exports.main = async (event) => {
         data: {
           request_id: requestId,
           payload: {
-            state: event.state,
-            input: event.input || '',
-            history: event.history || [],
-            is_retry: !!event.is_retry,
-            // D056: 传 openid 给 worker，worker 写 narrate_history 用
-            openid: (cloud.getWXContext && cloud.getWXContext().OPENID) || '',
+            // D090：不再传 state（worker 从 player_life 拉最新世）
+            input: (event && event.input) || '',
+            is_retry: !!(event && event.is_retry),
+            openid,
           },
         },
       }),

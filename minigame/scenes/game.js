@@ -31,6 +31,7 @@ var loadingText = '史官正在落笔…'  // v0.1.74 (D008): 轮询期间显示
 var partialRendered = false  // D089 两阶段：标记 partial 阶段已渲染文字+选项，finalize 到达时只补属性不重渲
 var awaitingFinalize = false // D089：上一轮 finalize 未到达时为 true，玩家点击先缓存等结算完
 var pendingSelection = null  // D089：awaitingFinalize 期间缓存的玩家输入，finalize 到后自动发出
+var finalizeFailed = false  // Y1-B（2026-07-20）：finalize 崩但 partial 已出选项，标记本轮属性未结算，玩家用旧 state 继续
 var errorMsg = ''
 var narrativeHistory = []    // {role, content}
 var lastRawAiResp = null    // v0.6.85: 最后AI原始JSON，history送AI时代替普通content
@@ -60,6 +61,7 @@ const C = {
 var debugLog = []            // 最近 N 轮完整 input/result
 var debugOpen = false        // 浮窗展开/折叠
 var debugScroll = 0          // 浮窗内滚动偏移
+var dbgUserScrolled = false  // Y3（2026-07-20）：用户是否手动滑动过 DBG 内容；未滑动时默认贴底，滑动后锁位置
 var dbgActiveTab = 0          // v3.0.14aiij D035: 大浮窗顶部 tab 切换(0=AI原始 / 1=对话流 / 2=POLL / 3=渲染 / 4=场景)
 var dbgSelectorOpen = false  // 折叠态点 DBG 图标弹出的"选组复制"弹层(已废, D035 改为直接展开大浮窗)
 var dbgCopyToast = ''        // 复制成功的 toast（自动消失）
@@ -217,14 +219,10 @@ module.exports = {
       items: items.map(i => ({ ...i })),
       legacy: id.legacy || '',
       alive: true,
-      // v0.6.50j 新增：寿限 + 轮回数据
+      // D094（2026-07-22 先生拍板）：移除死神机制三字段（deathThreat/historyShelter/noGrowthStreak）
+      //   寿限 prompt 化（worker 在 system prompt 里提示"寿限将至"），不再存 state
       lifespan: 55 + Math.floor(Math.random() * 26),  // 55~80 岁隐藏寿限
-      historical_shelter: id.historical_shelter || 0,
       epitaph: id.epitaph || '',
-      // 死神追杀机制：首回合初始值（worker 每回合重算并 merge 回来）
-      deathThreat: id.deathThreat || 'safe',
-      historyShelter: typeof id.historyShelter === 'number' ? id.historyShelter : 0,
-      noGrowthStreak: typeof id.noGrowthStreak === 'number' ? id.noGrowthStreak : 0,
     }
 
     currentItems = items
@@ -610,8 +608,16 @@ function pollNarrateResult(requestId, action, userInput, attempt, pollStartMs) {
               if (result.debug.score_raw_response) last.score_raw_response = result.debug.score_raw_response
               // D048o（先生 16:38 拍板·"我看不到后端"）：D048f 埋点推给前端 DBG
               if (result.debug.d048f_log) last.d048f_log = result.debug.d048f_log
+              // D093（2026-07-21）：补存 perf_logs —— 原 611 行块漏了这行，导致 last.perf_logs 永远 undefined
+              // 真因：perf_logs 只在 handleAIResponse 内部存，但 partial 阶段 return 不调 handleAIResponse
+              // → partial 那帧的 last 没有 perf_logs → DBG tab0/tab1/tab3 全看不到延时数据
+              // 修法：在 611 行块（partial + 完整版都经过）补存，两帧都有
+              if (result.debug.perf_logs) last.perf_logs = result.debug.perf_logs
             }
-            last.poll_elapsed_ms = (pollResult.result && pollResult.result.elapsed_ms) || 0
+            // D091（2026-07-20）：poll_elapsed_ms 改前端自己算（Date.now() - pollStartMs）
+            // 真因：原代码读 pollResult.result.elapsed_ms，但后端从没在 result 顶层写这个字段 → 永远 0
+            // 前端 pollStartMs 是 submit 成功时记录的起点，到拿到结果为止的墙钟时间（含网络往返），比后端 elapsed 更准
+            last.poll_elapsed_ms = (typeof pollStartMs === 'number' && pollStartMs > 0) ? (Date.now() - pollStartMs) : 0
             last.poll_attempts = attempt + 1
           }
           // 两阶段改造（先生 2026-07-19 拍板）：partial 阶段只渲染叙事文字
@@ -715,21 +721,21 @@ function showPartialNarrative(result) {
   // → drawOptions 用 optionsAppearTime 做 300ms 淡入 → 每 500ms 重置一次 = 选项反复从透明渐显 = 闪
   // 修法：partialRendered 已 true 说明本轮 partial 已渲染过，直接跳过，保留首次的 options/narrative/淡入
   if (partialRendered) return
-  // 渲染叙事文字 + 选项：partial 阶段直接显示完整文字（不走打字机）
-  // 选项来自 callAI（第一次调用），与属性评分无关，可以立刻显示让玩家点
-  // 原因：finalize 完整版到达时 handleAIResponse 会重设，若 partial 也走打字机
-  // 会出现"打一半→重头打"的突兀感；直接全显则 finalize 到达时文字已在
+  // Y2（2026-07-20 先生拍板）：partial 阶段恢复打字机（逐字显示叙事文字）
+  // 选项来自 callAI（第一次调用），与属性评分无关，立即可点
+  // finalize 完整版到达时走 skipRerender 分支 → 不重置 displayedChars → 若已打完则停在完整文字，不重打
   const finalContent = (branch.content || '').slice(0, MAX_NARRATIVE_CHARS)
   narrative = finalContent
-  displayedChars = finalContent.length  // 标记已显示完，渲染层不再逐字
-  displayStartTime = Date.now() - (finalContent.length + 1) * TYPEWRITE_SPEED
+  displayedChars = 0  // Y2：从 0 开始逐字打（原 D089 为 finalContent.length 整段出）
+  displayStartTime = Date.now()
   streamedText = ''
   systemLineCount = 0
   userScrolledAway = false
   // 选项立即显示（来自 callAI，无需等属性评分）
   const opts = (branch.options || []).slice(0, 3).map(label => ({ label, key: label }))
   options = opts
-  optionsAppearTime = Date.now()  // 立即可点
+  // Y2：选项等打字完成再淡入（与正常叙事页一致，不打字中误触）
+  optionsAppearTime = displayStartTime + finalContent.length * TYPEWRITE_SPEED + 300
   // 标记 partial 已渲染，finalize 到达时只补属性不重渲
   partialRendered = true
   awaitingFinalize = true  // D089：finalize 未到，玩家点击先缓存
@@ -754,20 +760,54 @@ function handleAIResponse(result, action, userInput) {
   // 消费标记：无论是否 skip，本次处理完都重置（下一轮从干净状态开始）
   partialRendered = false
 
-  // D089：上一轮 finalize 已到达（无论成功/错误），若期间玩家点了选项则现在自动发出
-  // 保证新一轮生成一定基于"上一轮属性已结算"的 state
+  // Y1-B（2026-07-20 先生拍板）：捕获"finalize 到达前是否在等"——用于区分 finalize 崩 vs AI₁ 就崩
+  // 若 wasAwaiting=true 且本次 error → 说明 finalize 在 AI₂/applyPatch 阶段崩了，partial 已出过选项
+  // 此时不抹掉选项、不 return 重试，保留已显示的叙事+选项让玩家继续玩（用上一轮旧 state 继续，error 路径本就不改 state）
+  const wasAwaiting = awaitingFinalize
+
+  // D089（修正·2026-07-21）：上一轮 finalize 到达，若期间玩家点了选项，暂存到 _pendingAfterFinalize
+  // 修法：不在此时无条件自动重发——finalize 崩（Y1-B）时重发会陷入"崩→重发→又崩"死循环
+  // 正确做法：finalize 成功（state 已结算）时才自动重发；崩时只保留选项让玩家手动再点
+  let _pendingAfterFinalize = null
   if (awaitingFinalize) {
     awaitingFinalize = false
     if (pendingSelection) {
-      const _pending = pendingSelection
+      _pendingAfterFinalize = pendingSelection
       pendingSelection = null
-      console.log('[D089] finalize 到达，自动发出缓存的点击:', _pending.slice(0, 20))
-      // 延后一帧发，让本轮属性 merge + 飘字先渲染
-      setTimeout(() => callAI(_pending), 0)
+      console.log('[D089] finalize 到达，缓存点击暂存（成功时才自动重发）:', _pendingAfterFinalize.slice(0, 20))
     }
   }
 
   if (!result || result.error) {
+    // Y1-B（2026-07-20）：finalize 崩（wasAwaiting 且 partial 已渲染选项）时，保留已显示的叙事+选项不覆盖
+    // 玩家可继续点选项推进（下一轮 callAI 用当前 state = 上一轮崩前的值，天然是旧 state）
+    // 仅标记 finalizeFailed 供 DBG/后续诊断，不阻断游戏
+    if (wasAwaiting && options && options.length > 0 && !(options.length === 1 && options[0].key === '__retry__')) {
+      if (debugLog.length > 0) {
+        const last = debugLog[debugLog.length - 1]
+        last.resultError = `[FINALIZE_FAIL_KEEP_OPTIONS] ${(result && result.error) || '属性结算失败'}, ts=${Date.now()}, elapsed_ms=${Date.now() - last.ts}`
+        if (result && result.debug) {
+          if (result.debug.raw_response) last.raw_response = result.debug.raw_response
+          if (result.debug.system_prompt) last.system_prompt = result.debug.system_prompt
+          if (result.debug.user_prompt) last.user_prompt = result.debug.user_prompt
+          if (result.debug.messages) last.messages_to_ai = result.debug.messages
+          if (!last.messages_to_ai && result.history) last.messages_to_ai = result.history
+          if (result.debug.perf_logs) last.perf_logs = result.debug.perf_logs
+          if (result.debug.attr_patch) last.attr_patch = result.debug.attr_patch
+          if (result.debug.picked_branch) last.picked_branch = result.debug.picked_branch
+          if (result.debug.score_prompt) last.score_prompt = result.debug.score_prompt
+          if (result.debug.score_raw_response) last.score_raw_response = result.debug.score_raw_response
+        }
+        if (result && Array.isArray(result.history) && result.history.length > 0) {
+          narrativeHistory = result.history
+        }
+      }
+      finalizeFailed = true
+      loading = false
+      errorMsg = ''  // 不显示错误条，玩家无感继续
+      return  // 保留已显示的 narrative/options，不覆盖为"重试"
+    }
+
     // 显式错误：玩家看得懂的史官风格
     // v0.2.3: 把错误填进 debugLog
     // v0.2.5-H（先生 2026-06-13 拍板）：即使 result.error 也要保留 debug 信息
@@ -876,11 +916,7 @@ function handleAIResponse(result, action, userInput) {
     if (newState.year) state.year = newState.year
     if (newState.round !== undefined) state.round = newState.round
     if (newState.epitaph) state.epitaph = newState.epitaph  // v0.6.89: 云函数生成的墓志铭
-    // 死神追杀机制：worker 算出的危险度/庇护/无增长streak 必须 merge 回 state
-    // 否则下回合发给 worker 时 noGrowthStreak 又是 undefined → 锁定(需连续3回合)永远触发不了
-    if (newState.deathThreat !== undefined) state.deathThreat = newState.deathThreat
-    if (newState.historyShelter !== undefined) state.historyShelter = newState.historyShelter
-    if (newState.noGrowthStreak !== undefined) state.noGrowthStreak = newState.noGrowthStreak
+    // D094（2026-07-22 先生拍板）：死神三字段已删，不再 merge
     // v0.6.35: AI₂ 评分后的属性从 newState 读（patch 不再含属性）
     const V2_ATTRS = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
     for (const attr of V2_ATTRS) {
@@ -897,10 +933,23 @@ function handleAIResponse(result, action, userInput) {
         }
       }
     }
+    // D089（修正·2026-07-21）：finalize 成功 + state 已结算后，才自动重发缓存的点击
+    // 真因：原逻辑在 error 判断前无条件 setTimeout 重发 → finalize 崩（Y1-B 保留选项）仍重发下一轮
+    //       → 下一轮又崩又重发 → "一直在轮询、选项从正常变失败"死循环
+    // 修法：重发只放成功路径（此处 newState 已 merge），崩路径不重发，玩家手动再点
+    if (_pendingAfterFinalize) {
+      console.log('[D089] finalize 成功，自动发出缓存点击:', _pendingAfterFinalize.slice(0, 20))
+      const _p = _pendingAfterFinalize
+      _pendingAfterFinalize = null
+      setTimeout(() => callAI(_p), 0)
+    }
   }
 
-  // 2. 基础 patch（items/月—D046: patch 来源从 branch.patch 改 result.attr_patch(D036 后 AI₁ 不输出 patch)）
-  const patch = (result && result.attr_patch) || {}
+  // D094（2026-07-22 先生拍板）：不再依赖 result.attr_patch
+  // 属性变化：从 result.state (newState) 读取（前端 merge 那块 line 920 已就绪）
+  // 物品变化：state.items 直接用云端 current_items（player_load 已拉，line 853-876 同步）
+  // month_changed：result.month_changed 仍可用（D008 字段），继续读
+  const patch = (result && result.attr_patch) || {}  // 保留兼容旧调式（worker 可能仍在写）
   // D010（先生 2026-06-24 19:41 拍板）：AI 叙事回合不写 epitaph，全部由 ai_write_death 独立生成
   // v0.6.50j 旧逻辑删除：if (patch.epitaph) state.epitaph = patch.epitaph
   // D010 落地（先生 2026-06-27 01:51 反馈"为啥死亡还会输出 epitaph"顺手清）
@@ -909,7 +958,8 @@ function handleAIResponse(result, action, userInput) {
   closestBoardInfo = computeClosestBoard(state)
   fetchClosestBoard()
 
-  // 物品状态变化 — v10（D-1 改造）
+  // 物品状态变化 — D094（2026-07-22 先生拍板）：优先用云端 current_items（state.items 直接覆盖）
+  // 保留 patch.items 兜底：如果 worker 仍按旧协议写 patch.items，物品增删改协议继续工作
   // 改：AI 用物品中文名（"茶包"）当 key，不再用 id
   // 改：数字 = 减 durability（0 时自动删物品）
   // 改：字符串 = 拼接到 desc 后缀
@@ -1118,10 +1168,6 @@ function stateToPlayerLife(s) {
     political: s['政绩'] || 0,
     righteous: s['义行'] || 0,
     epitaph: s.epitaph || '',
-    // 死神追杀机制：危险度等级 + 历史庇护层数 + 无增长 streak（validatePlayerLife 兼容额外字段）
-    deathThreat: s.deathThreat || 'safe',
-    historyShelter: typeof s.historyShelter === 'number' ? s.historyShelter : 0,
-    noGrowthStreak: typeof s.noGrowthStreak === 'number' ? s.noGrowthStreak : 0,
     current_items: currentItems || [],
     // D079：created_at undefined 时输出 null，云端保留原值
     created_at: s.created_at || null,
@@ -2962,6 +3008,28 @@ function dbgCopyHistory() {
   if (last && last.data && Array.isArray(last.data.history)) return `[对话流]\n${dbgTrunc(JSON.stringify(last.data.history, null, 2))}`
   return '[对话流] 无数据'
 }
+// D092（2026-07-20 先生拍板 B 方案）：两阶段改造后，PERF 按阶段拆分
+// AI₁ 段：queryMonthEvent_ms / callAI_ms / pickBranch_ms → tab0（AI₁ 叙事）
+// AI₂ 段：callScoringAI_ms / total_so_far_ms → tab1（AI₂ 评分）
+// 从 d.perf_logs（扁平数组）按 stage 名分组提取，返回格式化文本
+function dbgPerfLines(perfLogs, stageNames) {
+  if (!perfLogs || !perfLogs.length) return ''
+  let out = ''
+  for (const name of stageNames) {
+    const p = perfLogs.find(x => x.stage === name)
+    if (!p) continue
+    if (p.ms !== undefined) {
+      out += `  ${p.stage}: ${p.ms}ms${p.model ? ' (' + p.model + ')' : ''}${p.prompt_chars ? ' prompt=' + p.prompt_chars : ''}${p.score_prompt_chars ? ' prompt=' + p.score_prompt_chars : ''}${p.first_chunk_ms !== undefined && p.first_chunk_ms >= 0 ? ' first_chunk=' + p.first_chunk_ms + 'ms' : ''}\n`
+    } else if (p.value !== undefined) {
+      out += `  ${p.stage}: ${p.value}\n`
+    }
+  }
+  return out
+}
+// D092：各阶段 stage 名常量
+const DBG_PERF_STAGE_AI1 = ['queryMonthEvent_ms', 'callAI_ms', 'pickBranch_ms']
+const DBG_PERF_STAGE_AI2 = ['callScoringAI_ms', 'total_so_far_ms']
+
 // D054（2026-07-03 23:44 先生拍板·①方案）：tab 5 复制函数，单独复制主 system prompt
 // 现在 tab 5 复制会读 dbgLastRenderedText（先生看到的），dbgCopySystem 仅作 COPY_FNS 兜底
 function dbgCopySystem() {
@@ -3240,6 +3308,11 @@ function drawDebugPanel(ctx) {
       if (d.picked_branch) {
         allText += `[AI₁ 选中分支]:\n  content: ${(d.picked_branch.content || '').slice(0, 200)}...\n  options: ${JSON.stringify(d.picked_branch.options)}\n\n`
       }
+      // D092（2026-07-20 B 方案）：AI₁ 段 PERF 拆进 tab0（与 AI₁ 调用对应）
+      if (d.perf_logs && d.perf_logs.length > 0) {
+        const _ai1 = dbgPerfLines(d.perf_logs, DBG_PERF_STAGE_AI1)
+        if (_ai1) allText += `⏱️ [PERF · 第一阶段 AI₁ 叙事]\n${_ai1}\n`
+      }
       if (d.resultError) allText += `\n╔════ ERROR ════╗\n${d.resultError}\n╚════════════════╝\n\n`
     } else if (dbgActiveTab === 1) {
       // tab 1 = AI₂ 评分（attrPatch: 9 属性 + month_delta + items, D036 patch 字段从叙事 AI 拆出）
@@ -3259,6 +3332,11 @@ function drawDebugPanel(ctx) {
         }
       } else {
         allText += '[AI₂ attrPatch] 无数据(可能 AI₂ 未调用或失败)\n'
+      }
+      // D092（2026-07-20 B 方案）：AI₂ 段 PERF 拆进 tab1（与 AI₂ 调用对应）
+      if (d.perf_logs && d.perf_logs.length > 0) {
+        const _ai2 = dbgPerfLines(d.perf_logs, DBG_PERF_STAGE_AI2)
+        if (_ai2) allText += `⏱️ [PERF · 第二阶段 AI₂ 评分]\n${_ai2}\n`
       }
     } else if (dbgActiveTab === 2) {
       // tab 2 = 对话流（user/assistant/历史 system 短消息，剔除主 system prompt 8000 字）
@@ -3283,19 +3361,10 @@ function drawDebugPanel(ctx) {
       // 提示先生：长 system prompt 在 tab 5
       allText += '\n💡 [长 system prompt] 在 "System Prompt" tab\n'
     } else if (dbgActiveTab === 3) {
-      // tab 3 = POLL + 性能诊断
-      if (d.poll_attempts !== undefined) allText += `[poll_attempts]: ${d.poll_attempts}, [poll_elapsed_ms]: ${d.poll_elapsed_ms || 0}\n`
-      if (d.perf_logs && d.perf_logs.length > 0) {
-        allText += `⏱️ [PERF 延迟诊断]\n`
-        for (const p of d.perf_logs) {
-          if (p.ms !== undefined) {
-            allText += `  ${p.stage}: ${p.ms}ms${p.model ? ' (' + p.model + ')' : ''}${p.prompt_chars ? ' prompt=' + p.prompt_chars : ''}${p.score_prompt_chars ? ' prompt=' + p.score_prompt_chars : ''}${p.first_chunk_ms !== undefined && p.first_chunk_ms >= 0 ? ' first_chunk=' + p.first_chunk_ms + 'ms' : ''}\n`
-          } else if (p.value !== undefined) {
-            allText += `  ${p.stage}: ${p.value}\n`
-          }
-        }
-      }
+      // tab 3 = POLL（仅前端轮询信息；PERF 已按两阶段拆进 tab0/tab1，见 D092）
+      if (d.poll_attempts !== undefined) allText += `[poll_attempts]: ${d.poll_attempts}, [poll_elapsed_ms]: ${d.poll_elapsed_ms || 0} (前端端到端墙钟·含网络)\n`
       if (d.poll_status) allText += `[poll_status]: ${d.poll_status}\n`
+      allText += '\n💡 [PERF 延迟诊断] 已按两阶段拆分：\n   AI₁ 叙事耗时 → tab「AI原始」底部\n   AI₂ 评分耗时 → tab「AI₂评分」底部\n'
     } else if (dbgActiveTab === 4) {
       // tab 4 = 场景（合并旧 tab 3 渲染 + 旧 tab 4 场景）
       // A: 渲染信息
@@ -3370,6 +3439,8 @@ function drawDebugPanel(ctx) {
   // 2026-07-11 修正：viewH 用真实内容高度（裁剪区高度），否则对话流滚不到底
   const viewH = bottomBarY - (closeBarY + closeBarH)
   const maxScroll = Math.max(0, totalH - viewH)
+  // Y3（2026-07-20 先生拍板）：未手动滑动过时默认贴底（看最新内容），手动滑过后锁位置
+  if (!dbgUserScrolled && maxScroll > 0) debugScroll = maxScroll
   if (debugScroll > maxScroll) debugScroll = maxScroll
   if (debugScroll < 0) debugScroll = 0
 
@@ -3766,6 +3837,7 @@ function handleTouch(x, y, type) {
           // D035（先生 23:55 拍板 A 方案）：折叠态点 DBG 直接进大浮窗顶部 tab 切换
           debugOpen = true
           debugScroll = 0
+          dbgUserScrolled = false  // Y3：打开浮窗重置为"未手动滑"，下一帧 drawDebugPanel 会贴底
           dbgActiveTab = 0  // 默认第一个 tab
         }
         return null  // 拦截，不传给游戏主流程
@@ -3789,6 +3861,41 @@ function handleTouch(x, y, type) {
       // 修前：tab 循环只检查 x 范围，5 tab 占满整行 6~386 → "复制本tab"按钮 x [261, 325]
       //      落在 POLL tab [234, 310] 内 → onTouch 误判切 POLL，没复制
       // 修：tab 循环加 y 上限 = row1Y + 20（只匹配上行 20px 高）
+      // ── 复制本 tab 按钮（优先级最高，放在 tab 循环前，避免任何误判）──
+      // D094（2026-07-21 先生反馈"tab0 复制失败"）：加明确 y 上限 + 移到 tab 循环前
+      // 真因：原复制按钮命中区 y >= _bottomBarY+62 无上限，且排在 tab 循环后 → 边界误判 / 被 tab 抢
+      // 修法：明确 y ∈ [_bottomBarY+62, _bottomBarY+62+18]，且先于此判断
+      if (type === 'end' && layout._dbgCopyTabBtn
+          && y >= _bottomBarY + 62 && y <= _bottomBarY + 62 + 18
+          && x >= layout._dbgCopyTabBtn.x && x <= layout._dbgCopyTabBtn.x + layout._dbgCopyTabBtn.w) {
+        if (debugLog.length === 0) {
+          if (wx.showToast) wx.showToast({ title: '本局还没跑过 AI 调用，没数据可复制', icon: 'none' })
+          return null
+        }
+        const COPY_FNS = [dbgCopyAIActual, dbgCopyScoringAI, dbgCopyHistory, dbgCopyPollStatus, dbgCopyScene, dbgCopySystem, dbgCopyDataPanel]
+        let txt
+        if (dbgLastRenderedText) {
+          txt = dbgSafeForClipboard(dbgLastRenderedText)
+        } else {
+          txt = dbgSafeForClipboard(COPY_FNS[dbgActiveTab]())
+        }
+        const _doCopy = (data) => wx.setClipboardData({
+          data,
+          success: () => { if (wx.showToast) wx.showToast({ title: '已复制本 tab · ' + (data || '').length + ' 字符', icon: 'none', duration: 1500 }) },
+          fail: (e) => {
+            // D094：首次失败兜底重试一次（真机偶发 fail）
+            try {
+              wx.setClipboardData({
+                data,
+                success: () => { if (wx.showToast) wx.showToast({ title: '已复制本 tab · ' + (data || '').length + ' 字符', icon: 'none', duration: 1500 }) },
+                fail: () => { if (wx.showToast) wx.showToast({ title: '复制失败：' + ((e && e.errMsg) || ''), icon: 'none' }) },
+              })
+            } catch (_) {}
+          },
+        })
+        _doCopy(txt)
+        return null
+      }
       if (type === 'end' && layout._dbgTabs && y >= _bottomBarY && y < _bottomBarY + 62) {  // D058 tab 区 3 行（含 tab 6 第 3 行）
         for (let _ti = 0; _ti < layout._dbgTabs.length; _ti++) {
           const _tb = layout._dbgTabs[_ti]
@@ -3802,33 +3909,6 @@ function handleTouch(x, y, type) {
             return null
           }
         }
-      }
-      // "复制本 tab"按钮（在底部条第 3 行 y>=_bottomBarY+42）
-      if (type === 'end' && layout._dbgCopyTabBtn && y >= _bottomBarY + 62
-          && x >= layout._dbgCopyTabBtn.x && x <= layout._dbgCopyTabBtn.x + layout._dbgCopyTabBtn.w) {
-        if (debugLog.length === 0) {
-          if (wx.showToast) wx.showToast({ title: '本局还没跑过 AI 调用，没数据可复制', icon: 'none' })
-          return null
-        }
-        const COPY_FNS = [dbgCopyAIActual, dbgCopyScoringAI, dbgCopyHistory, dbgCopyPollStatus, dbgCopyScene, dbgCopySystem, dbgCopyDataPanel]
-        // D051（2026-07-03 22:07 先生拍板·①方案）：优先读 dbgLastRenderedText（drawDebugPanel 渲染时缓存）
-        // 修复前：COPY_FNS[dbgActiveTab]() 调 dbgGetLast() 重新取，debugLog 新 push 会拿到错的 last
-        // 修复后：所见即所得，DBG 浮窗显示什么就复制什么
-        let txt
-        if (dbgLastRenderedText) {
-          txt = dbgSafeForClipboard(dbgLastRenderedText)
-        } else {
-          // 兜底：DBG 浮窗未打开过（不常见）→ 走原 dbgCopy* 路径
-          txt = dbgSafeForClipboard(COPY_FNS[dbgActiveTab]())
-        }
-        if (typeof wx !== 'undefined' && wx.setClipboardData) {
-          wx.setClipboardData({
-            data: txt,
-            success: () => { if (wx.showToast) wx.showToast({ title: '已复制本 tab · ' + txt.length + ' 字符', icon: 'none', duration: 1500 }) },
-            fail: (e) => { if (wx.showToast) wx.showToast({ title: '复制失败：' + (e.errMsg || ''), icon: 'none' }) }
-          })
-        }
-        return null
       }
       // 顶部关闭按钮（x）
       // D064（2026-07-05 10:44 先生拍板）：用 bounds 替代硬编码 closeBarH，跟随 safeTop 下移
@@ -3845,6 +3925,7 @@ function handleTouch(x, y, type) {
         if (dbgActiveTab > 0) {
           dbgActiveTab--
           debugScroll = 0
+          dbgUserScrolled = false  // Y3：切 tab 重置为"未手动滑"，新 tab 默认贴底
           if (dbgActiveTab === 6 && dbgDataList.length === 0 && !dbgDataLoading) dbgLoadCloudNh(true)
         }
         return null
@@ -3855,6 +3936,7 @@ function handleTouch(x, y, type) {
         if (dbgActiveTab < 6) {
           dbgActiveTab++
           debugScroll = 0
+          dbgUserScrolled = false  // Y3：切 tab 重置为"未手动滑"，新 tab 默认贴底
           if (dbgActiveTab === 6 && dbgDataList.length === 0 && !dbgDataLoading) dbgLoadCloudNh(true)
         }
         return null
@@ -3955,16 +4037,19 @@ function handleTouch(x, y, type) {
       // ▲ 向上箭头（控制行右 _bottomBarY+62）
       if (type === 'end' && y >= _bottomBarY + 62 && x >= _w - _ARROW_SZ * 2 - 16 && x < _w - _ARROW_SZ - 8) {
         debugScroll = Math.max(0, debugScroll - 80)
+        dbgUserScrolled = true  // Y3：用户手动滑动，锁住位置不再自动贴底
         return null
       }
       // ▼ 向下箭头（控制行最右 _bottomBarY+62）
       if (type === 'end' && y >= _bottomBarY + 62 && x >= _w - _ARROW_SZ - 8) {
         debugScroll = debugScroll + 80
+        dbgUserScrolled = true  // Y3：用户手动滑动，锁住位置不再自动贴底
         return null
       }
       // 点击文本区任意位置 = 向下滚 1 屏
       if (type === 'end' && y > (layout._dbgCloseBtn.y + layout._dbgCloseBtn.h) && y < _bottomBarY) {
         debugScroll = debugScroll + 100
+        dbgUserScrolled = true  // Y3：用户手动滑动，锁住位置不再自动贴底
         return null
       }
       // 展开时整个浮窗区域拦截

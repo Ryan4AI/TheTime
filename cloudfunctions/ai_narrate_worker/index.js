@@ -170,19 +170,19 @@ async function loadLatestLife(openid) {
     '政绩': rec.political || 0,
     '义行': rec.righteous || 0,
     lifespan: rec.lifespan,
-    historical_shelter: rec.historical_shelter || 0,
     epitaph: rec.epitaph || '',
-    deathThreat: rec.death_threat || 'safe',
-    historyShelter: typeof rec.history_shelter === 'number' ? rec.history_shelter : 0,
-    noGrowthStreak: typeof rec.no_growth_streak === 'number' ? rec.no_growth_streak : 0,
     alive: rec.alive !== false,
     items: rec.current_items || [],
     created_at: rec.created_at,
   }
-  return { state, life_number: rec.life_number, last_finalize_at: rec.last_finalize_at || 0, finalize_status: rec.finalize_status || 'idle' }
+  // D094（2026-07-22 先生拍板）：精简为单一 is_scoring bool 字段
+  // 兼容老世 record：老字段 finalize_status / last_finalize_at / death_threat / history_shelter /
+  //   no_growth_streak / historical_shelter 仍在 player_life 里，只是不再读写
+  const is_scoring = rec.is_scoring === true || rec.finalize_status === 'pending'
+  return { state, life_number: rec.life_number, is_scoring }
 }
 
-// 把 worker 算完的 updated state 写回 player_life（含 last_finalize_at 时间戳）
+// 把 worker 算完的 updated state 写回 player_life（is_scoring=false 标记空闲）
 async function saveLife(openid, life_number, updated) {
   const now = Date.now()
   const lifeData = {
@@ -212,15 +212,10 @@ async function saveLife(openid, life_number, updated) {
     political: updated['政绩'] || 0,
     righteous: updated['义行'] || 0,
     lifespan: updated.lifespan,
-    historical_shelter: updated.historical_shelter || 0,
     epitaph: updated.epitaph || '',
-    death_threat: updated.deathThreat || 'safe',
-    history_shelter: typeof updated.historyShelter === 'number' ? updated.historyShelter : 0,
-    no_growth_streak: typeof updated.noGrowthStreak === 'number' ? updated.noGrowthStreak : 0,
     current_items: updated.items || [],
     updated_at: now,
-    last_finalize_at: now,
-    finalize_status: 'idle',
+    is_scoring: false,
   }
   // 宽松 upsert：先 update（where openid+life_number），无记录则 add
   const exists = await db.collection('player_life').where({ openid, life_number }).count()
@@ -232,19 +227,18 @@ async function saveLife(openid, life_number, updated) {
   return now
 }
 
-// 第二轮 worker 开头短等：若上一轮 finalize 还在算（player_life.finalize_status==='pending'），
-// 轮询直到 status==='idle' 且 last_finalize_at > initialFinalizeAt（说明等待期间有一轮 finalize 完成了）
+// 第二轮 worker 开头短等：若上一轮 is_scoring==true（评分中）→ 轮询直到 is_scoring=false
 // 保证下一轮基于"上一轮结算后"的 state
-async function waitForFinalize(openid, initialFinalizeAt, maxWaitMs) {
+async function waitForFinalize(openid, maxWaitMs) {
   const maxWait = maxWaitMs || 10000
   const deadline = Date.now() + maxWait
   while (Date.now() < deadline) {
     const cur = await loadLatestLife(openid)
     if (!cur) return null
-    if (cur.finalize_status === 'idle' && cur.last_finalize_at > initialFinalizeAt) return cur
+    if (!cur.is_scoring) return cur
     await new Promise(r => setTimeout(r, 200))
   }
-  console.log('[D090] waitForFinalize 超时，退化用当前 player_life state')
+  console.log('[D094] waitForFinalize 超时，退化用当前 player_life state')
   return await loadLatestLife(openid)
 }
 
@@ -271,9 +265,9 @@ async function backgroundTask(request_id, payload) {
       await safeWriteResult(request_id, '', 'player_life 无记录（应不可能：能发 submit 必已有世）')
       return
     }
-    // 若上一轮 finalize 还在算（pending）→ 短等它完成（status=idle 且 last_finalize_at 已更新）
-    if (loaded.finalize_status === 'pending') {
-      loaded = await waitForFinalize(openid, loaded.last_finalize_at || 0)
+    // 若上一轮还在算（is_scoring=true）→ 短等它完成
+    if (loaded.is_scoring) {
+      loaded = await waitForFinalize(openid)
       if (!loaded) {
         await safeWriteResult(request_id, '', 'waitForFinalize 无记录')
         return
@@ -282,11 +276,11 @@ async function backgroundTask(request_id, payload) {
     const state = loaded.state
     const life_number = loaded.life_number
 
-    // 本回合标记 pending（标记本世正在结算），并发轮次看到 pending 就会等
+    // 本回合标记评分中（并发轮次看到 is_scoring=true 就会等）
     try {
-      await db.collection('player_life').where({ openid, life_number }).update({ data: { finalize_status: 'pending' } })
+      await db.collection('player_life').where({ openid, life_number }).update({ data: { is_scoring: true } })
     } catch (e) {
-      console.error('[D090] 标记 finalize_status=pending 失败:', e.message)
+      console.error('[D094] 标记 is_scoring=true 失败:', e.message)
     }
 
     const realInput = is_retry ? '' : (input || '')
@@ -432,7 +426,7 @@ async function backgroundTask(request_id, payload) {
         error: "属性结算失败: " + e.message,
         branch: picked,
         partial: true,
-        debug: { raw_response: rawContent, system_prompt: systemPrompt, user_prompt: userPrompt, messages },
+        debug: { raw_response: rawContent, system_prompt: systemPrompt, user_prompt: userPrompt, messages, perf_logs: (typeof perfLogs !== 'undefined') ? perfLogs : null },
       })
     })
 
@@ -727,13 +721,13 @@ async function finalizeTask(ctx) {
       console.error('[D056] narrate_history add 失败:', e.message)
     }
 
-    // D090（2026-07-20）：finalize 算完，把 updated state 写回 player_life（云端真值）
-    // 下一轮 submit 的 worker 从 player_life 拉到的就是"本世结算后"的 state
+    // D094（2026-07-22）：finalize 算完，把 updated state 写回 player_life（云端真值）
+    // saveLife 内部把 is_scoring 标回 false
     try {
-      const savedAt = await saveLife(openid, life_number, updated)
-      console.log('[D090] saveLife 完成, life_number=', life_number, ', last_finalize_at=', savedAt)
+      await saveLife(openid, life_number, updated)
+      console.log('[D094] saveLife 完成, life_number=', life_number)
     } catch (e) {
-      console.error('[D090] saveLife 失败:', e.message)
+      console.error('[D094] saveLife 失败:', e.message)
     }
 
     console.log('[ai_narrate_worker] finalize 完成, request_id=', request_id, ', elapsed_ms=', Date.now() - startTs)
@@ -1889,6 +1883,12 @@ function callLLM(messages, modelOverride) {
 }
 
 // D048c（2026-06-28 09:42 拍板）：删 callLLMStream（改非流式 callLLM）
+// 凌晨 9 版本真因：保留流式根本做不好（partialWriter 500ms 触发一堆 bug）
+// callLLM 还在用（line 1344 callScoringAI）板）：删 callLLMStream（改非流式 callLLM）
+// 凌晨 9 版本真因：保留流式根本做不好（partialWriter 500ms 触发一堆 bug）
+// callLLM 还在用（line 1344 callScoringAI）��式根本做不好（partialWriter 500ms 触发一堆 bug）
+// callLLM 还在用（line 1344 callScoringAI）好（partialWriter 500ms 触发一堆 bug）
+// callLLM 还在用（line 1344 callScoringAI）c（2026-06-28 09:42 拍板）：删 callLLMStream（改非流式 callLLM）
 // 凌晨 9 版本真因：保留流式根本做不好（partialWriter 500ms 触发一堆 bug）
 // callLLM 还在用（line 1344 callScoringAI）板）：删 callLLMStream（改非流式 callLLM）
 // 凌晨 9 版本真因：保留流式根本做不好（partialWriter 500ms 触发一堆 bug）

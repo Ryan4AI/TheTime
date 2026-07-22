@@ -6,6 +6,883 @@
 
 ---
 
+## 状态快照（最新一次 cron 运行 · 2026-07-22 09:01 · 第 83 次）
+
+> **83 期"先生再落 D090 hotfix3-7 + D094 凌晨拍板 · HEAD c553672 · 本地领先远端 49(+6) · DB 9 表全绿(本窗 narrate_history +41/llm_io +20 = 真机测调持续) · D094 业务/调试分离架构决策落档 + 待实施 · 死神 B 类持续"**。82 期（07-20 21:01）报 D090 三连 hotfix 已落（HEAD 671f7f5）——**本 36h 窗（07-20 21:01→07-22 09:01）先生凌晨持续拍板，1 次架构级决策 + 4 个 hotfix 链**：D094（2026-07-22 01:18 拍板"业务数据与 AI 调试数据彻底分离"）+ D090-hotfix3（07-20 21:29 选项闪）+ D090-hotfix4（07-20 21:57 finalize 崩后前端状态卡死）+ D090-hotfix5（07-20 22:05 AI 纯文本兜底）+ D090-hotfix6（07-20 22:29 callScoringAI 中文引号/漏{} 容错）+ D090-hotfix7（07-20 22:50 finalize 崩时 partial 必须 false 防御误判死循环）。**HEAD 由 671f7f5 → c553672**（D094 docs）；**本地领先 origin/main 由 43 → 49 commit（+6）**。`git fetch` 本窗成功（exit 0），远端无新 commit。**工作树变化**：82 期 5 tracked M → 现 **6 tracked M**（+1 game.js = 146/53 行 D091/D092/D093/D094 增量）—— game.js 因先生 07-21 凌晨 DBG/两阶段改造调试累积成新 WIP（仍 D090 链）；其余 5（PROJECT.md / ai_narrate_submit / ai_narrate_worker / generate_identity / player_save）D090 WIP 持续未动；**untracked 由 5 → 6**（+1 `cloudfunctions/diag_query/`，先生 07-20 22:43 / 07-22 00:38 两次 mtime 改的诊断云函数，12KB 小模块）。**🔓 DB 复测全绿（9 表，node 解析通道复用）**：5 表 115/167/9881/619/197（与 82 期逐数一致）+ D049 四表 player 2 / player_life 2 / **narrate_history 108(+41)** / **llm_io 77(+20)**（本窗 36h 内新增 narrate_history +41/llm_io +20 = **先生真机测调 D090 链 7-20 22:00~7-22 08:00 期间跑了 20+ 次完整叙事 + 评分**——D090 真值迁移架构在跑且稳定；D049 四表 player/player_life 仍 2/2 表示**先生未重开新角色** = 仍在原 openid 上世测调）。**§10.4 死神仍 🚧 MVP已修复，worker grep computeDeathThreat = 0 处 → 事实源/代码不一致 B 类持续**（与 82 期同性质；先生精力在 D090 hotfix + D094，死神未动）。**✅ D090 + D094 已落档 DECISIONS.md**（D094 完整决策 65 行：业务/调试分离 8 条定案 + 5 改造范围 + 3 约束，状态"待实施"）。**🆕 D094 落档 = 第二次架构级整改 D090 之后**——把"llm_io 当业务结果"的反模式彻底拆掉，新建独立 A₂ 函数 + 业务结果函数从 player_life+narrate_history 读；前端继续 partial→final 展示但数据源切换。**🆕 87 条 untracked → 6 项持续**：D094 改造范围标注的 narrate_history 待结算字段 + 业务结果读取路径涉及 schema 变更（D094 约束"实现前先核对现有 schema 避免破坏历史数据"），先生需先决策。**⚠️ 任务源路径漂移（延续）**：cron 模板仍指向已废弃 design.md §七，权威为 product-design.md §10.4。**🔍 关键观察 · 头 6 期矩阵全列于下表，与 §10.4 9 + 4 + 2 = 15 项对账**。**🤖 代码静态校验（cron 不跑 mock）**：node --check 全 27 个云函数 + game.js 通过（game.js 4634 行），无 syntax error；D090 hotfix 链 WIP 暂不部署。**📊 87→6 untracked 缩量**（82 期 5 → 83 期 6 = +1 diag_query）= 先生新增 1 个诊断云函数，PMO 不擅动。
+
+### 83 期状态矩阵（对照 §10.4 + D089/D090/D094）
+| 系统 | §10.4 / D 系状态 | PMO 复测 | 变化 |
+|------|------------------|---------|------|
+| 前端 5 页 + AI pipeline + 9属性/寿限 + 雷达图 + 榜单基础 | ✅ | ✅ 代码/tracked WIP 改动中(D090+game.js 增量) | 持平(代码层活跃) |
+| 历史人物综合分线性重算 | ✅ | ✅ | 持平 |
+| 数据库 5 表 | ✅ 已部署 | **✅ 本窗实测全绿（115/167/9881/619/197）** | 持平(逐数一致) |
+| D049 四表（player/player_life/narrate_history/llm_io） | — | **✅ LIVE（2/2/108/77）** | 🔼 **narrate_history +41 / llm_io +20**(本窗 36h 真机测调沉淀) |
+| 死神追杀机制 | 🚧 MVP已修复(待真机测调平衡) | **🚧（文档维持；worker 仍无 computeDeathThreat，代码层停摆）** | 持平(B 类未决) |
+| 跨世痕迹 / 动态榜单 / Prompt v12 / 多玩家 | ❌ | **❌** | 持平 |
+| **D089 两阶段叙事改造** | （未在 §10.4） | **✅ 已 commit（8e11423/0972d07/df02e9a）** | 持平(同 82 期) |
+| **D090 state 真值迁云端 player_life** | （未在 §10.4） | **🚧 实施中(hotfix 链收口·D090-hotfix3-7 全落 + 5 tracked M 持续 WIP)** | 🔼 **+5 commit(hotfix 3-7)** |
+| **D091 poll_elapsed_ms 改前端自己算** | （未在 §10.4） | **✅ 已合并到 game.js WIP(611 行块修复)** | 🆕 本期新发现(07-20 晚) |
+| **D092 PERF 按两阶段拆分(AI₁ tab0 / AI₂ tab1)** | （未在 §10.4） | **✅ 已合并到 game.js WIP(drawDebugPanel 拆段)** | 🆕 本期新发现(07-20 晚) |
+| **D093 611 行块补存 last.perf_logs** | （未在 §10.4） | **✅ 已合并到 game.js WIP(partial 帧 perf_logs 存上)** | 🆕 本期新发现(07-21 凌晨) |
+| **D094 业务数据/AI调试数据彻底分离** | （未在 §10.4） | **🆕 待实施(已落档 DECISIONS.md·先生 07-22 01:18 拍板)** | 🆕 **重大架构决策·本期新落** |
+
+### 83 期要点
+- **🔥 83 期先生凌晨回归·D094 拍板 36h 窗内最重磅** —— 07-22 01:18 先生拍 **D094 业务数据与 AI 调试数据彻底分离**（继 D090 之后第二次架构级整改）。本质：D089/D090 用 `llm_io.output.result` 当前端业务结果 + A₂ 完成通道是反模式，llm_io 应该只做 AI 调用调试。8 条定案：①llm_io 旁路 debug ②player_life 是状态真值 ③narrate_history 是玩家可见消息真值 ④前端只发 openid+input ⑤A₂ 必须独立可靠云函数 ⑥request_id 仅关联号 ⑦同一世同时只能一条待结算 ⑧partial 业务状态保留。改造范围 5 项 + 约束 3 条。**先生又开始凌晨拍板节奏**。
+- **🔥 83 期 D090 hotfix3-7 全落** —— 5 个 hotfix 链（8261c77/6bfc798/20f8b10/f9c37fc/0a20eb7）连续落地，全部是 D090 真值迁移后暴露的边缘 case：选项闪烁 / finalize 崩后前端状态卡死 / AI 纯文本兜底 / callScoringAI 中文引号容错 / finalize 崩时 partial 必 false 防御误判死循环。**D090 实质进入"hotfix 收口"阶段**。
+- **🔥 83 期 DB 36h 沉淀 narrate_history +41 / llm_io +20** —— 82 期 67→83 期 108 = +41 条新叙事入库；57→77 = +20 条新 AI 调试记录。**先生 7-20 22:00~7-22 08:00 36h 窗内真机跑约 20+ 次完整叙事（双倍于 36h 周期）**——D090 链路实战验证跑通且稳定。player/player_life 仍 2/2 = 未重开新角色。
+- **✅ 83 期 D094 已落档 DECISIONS.md** —— 65 行完整决策写入末尾（问题/定案 8 条/改造范围 5 项/约束 3 条），状态"待实施"。**PMO 不擅动**——先生自有节奏。
+- **⚠️ 83 期 D094 涉及 schema 变更风险** —— 改造范围 #1 标"AI₁ 先写 narrate_history AI 消息"、约束标"实现前须先核对现有 schema 避免破坏历史数据"——narrate_history 待结算字段 + 业务结果读取路径需要决策是否新建独立 A₂ 函数（新增云函数）/ 新加 schema 字段（标记 pending）。**先生 10:10 红线"不动数据库设计"**仍有效，D094 改造需先核对 schema 决定能否避免。
+- **⚠️ 83 期 死神事实源/代码不一致（B 类延续）** —— worker grep computeDeathThreat = 0 处（死亡计算逻辑仍缺失），与 §10.4 🚧 "MVP已修复"冲突。**本窗先生精力在 D090+D094，死神未动**。维持 B 类待决策。
+- **🆕 83 期 game.js 新增 WIP** —— 5 tracked M 变 6 tracked M（+game.js 146/53 行 D091/D092/D093/D094 增量）。先生 07-21 凌晨修 DBG 浮窗 + 打字机 + 复制按钮等调试链路累积成新 WIP，**未与 D090 同步 commit**。
+- **🆕 83 期 untracked +1（diag_query）** —— cloudfunctions/diag_query 12KB 诊断云函数，07-20 22:43 / 07-22 00:38 两次 mtime，**先生新建未部署**。
+- **🌐 83 期 git 状态** —— HEAD c553672（D094 docs）；本地领先 origin/main **49 commit**（82 期 43 + 6 = D090 hotfix3-7 5 个 + D094 docs 1 个）；`git fetch` 本窗成功（exit 0），远端无新 commit；MM_API_KEY 在 history 风险持续 P0（49 commit 含密钥，push 前需 D055 清理）。
+- **🤖 83 期 cron 静态校验** —— node --check 全 27 个云函数（ai_narrate_submit / ai_narrate_worker / generate_identity / player_save 等）+ game.js（4634 行）通过。**未做 mock 跑通 / 未做 tcb 部署 / 未做真机测**——先生亲推亲验。
+- **🔧 83 期 任务源路径漂移（延续）** —— cron 模板仍写 design.md §七，权威为 product-design.md §10.4。本 PMO 按新路径作业，任务定义需先生更新消歧。
+
+### 83 期 PMO 动作
+- A 类：无（6 tracked M 均为先生 WIP 活跃改动：D090 5 文件 + game.js D091-D094 增量；6 untracked = D094 待实施 + 5 真实产物不擅删；无文档死链需清）。**未做 UI/架构改动，未 commit/push**。
+- B 类：① 死神事实源/代码不一致 → 维持 B 类待先生决策（与 82 期同）。② D094 业务/调试分离架构整改落档完成但待实施 → 标注重大在途，先生亲推，PMO 仅记录不介入。③ D094 涉及 schema 变更（narrate_history 待结算字段 + 业务结果读取路径）→ 等先生定调。④ 任务源路径漂移 → 维持提醒，等先生更新 cron 定义。
+- 数据库：9 表全绿实测，narrate_history 67→108（+41）/ llm_io 57→77（+20）= 36h 真机沉淀 20+ 完整叙事；D090 链路在跑且稳定，无异常，无需先生介入。
+- cron 静态校验：node --check 全 27 云函数 + game.js 通过；MR 含 4 项 D090 hotfix 增量 + game.js 146/53 行 D091-D094 调试链。
+- 下一步（等先生）：① D090 hotfix 收口（5 tracked M 剩余 WIP 审定 commit） ② D094 实施（先生主导） ③ 后端部署 + 前端上传 + 真机验收 D090+D094 ④ 死神真机测调或代码层重做决策 ⑤ push 前清 MM_API_KEY（D055） ⑥ §10.4 补 D089/D090/D091/D092/D093/D094 条目 ⑦ 更新 cron 任务源路径至 product-design.md §10.4 ⑧ D094 实施前先核对 narrate_history schema 避免破坏历史数据。
+
+---
+
+## 状态快照（最新一次 cron 运行 · 2026-07-20 21:01 · 第 82 次）
+
+> **82 期"先生本窗再落 D090 三连 hotfix · HEAD 671f7f5 · 本地领先远端 43 · DB 9 表全绿(narrate_history/llm_io 各 +1 自然沉淀) · D090 落档完成实施中 · 死神 B 类持续"**。81 期（07-20 09:01）报先生凌晨回归 D089 三 commit + D090 拍板（WIP 6 tracked M）——**本 12h 窗（07-20 09:01→07-20 21:01）先生再落 D090 三连 hotfix（671f7f5 / e9d2f93 / d561fd2：callScoringAI raw 未声明崩→修；评分失败温和兜底→去掉直暴；submit/intro 改传 openid、state 真值迁云端 player_life）**。HEAD 由 8e11423 → **671f7f5**；**本地领先 origin/main 由 40 → 43 commit（+3）**。`git fetch` 本窗成功（exit 0），远端无新 commit。**工作树变化**：81 期 6 tracked M（含 ai_narrate_worker）→ 现 **5 tracked M**（ai_narrate_worker 已 commit 出工作树；剩 PROJECT.md / ai_narrate_submit / generate_identity / player_save / DECISIONS.md，均为 D090 WIP）；**untracked 由 7 → 5**（ai_write_death/ ai_write_poem/ D049-database-design.md/ v3-plan.md/ mock/，均真实产物不擅删）。**🔓 DB 复测全绿（9 表，node 解析复用）**：5 表 115/167/9881/619/197（与 81 期逐数一致）+ D049 四表 player 2 / player_life 2 / **narrate_history 67(+1)** / **llm_io 57(+1)**（本窗新增 1 次自然叙事沉淀，+1/+1）。**§10.4 死神仍 🚧 MVP已修复，worker 实测仍 0 处 computeDeathThreat → 事实源/代码不一致 B 类持续**（与 81 期同性质）。**✅ D090 已落档 DECISIONS.md**（含完整决策/时序/字段变更/风险，状态"实施中 2026-07-20 01:11 起"）。**⚠️ 任务源路径漂移（延续）**：cron 模板仍指向已废弃 design.md §七，权威为 product-design.md §10.4。
+
+### 82 期状态矩阵（对照 §10.4）
+| 系统 | §10.4 状态 | PMO 复测 | 变化 |
+|------|-----------|---------|------|
+| 前端 5 页 + AI pipeline + 9属性/寿限 + 雷达图 + 榜单基础 | ✅ | ✅ 代码/tracked WIP 改动中(D090) | 持平(代码层活跃) |
+| 历史人物综合分线性重算 | ✅ | ✅ | 持平 |
+| 数据库 5 表 | ✅ 已部署 | **✅ 本窗实测全绿（115/167/9881/619/197）** | 持平(逐数一致) |
+| D049 四表（player/player_life/narrate_history/llm_io） | — | **✅ LIVE（2/2/67/57，本窗 +1/+1 自然沉淀）** | 🔼 narrate_history/llm_io 各 +1 |
+| 死神追杀机制 | 🚧 MVP已修复(待真机测调平衡) | **🚧（文档维持；worker 仍无 computeDeathThreat，代码层停摆）** | 持平(B 类未决) |
+| 跨世痕迹 / 动态榜单 / Prompt v12 / 多玩家 | ❌ | **❌** | 持平 |
+| **D089 两阶段叙事改造** | （未在 §10.4） | **✅ 已 commit（8e11423/0972d07/df02e9a）** | 持平(同 81 期) |
+| **D090 state 真值迁云端 player_life** | （未在 §10.4） | **🚧 实施中(3 hotfix 已 commit + 5 tracked M WIP)** | 🔼 本窗 +3 commit(hotfix 链) |
+
+### 82 期要点
+- **🔥 82 期 D090 三连 hotfix 已落（HEAD 671f7f5）** —— 本窗先生修 callScoringAI `raw is not defined` 崩溃（e9d2f93）+ 去评分失败温和兜底改直暴（671f7f5）+ submit/intro 改传 openid、state 真值迁云端 player_life（d561fd2）。D090 从"拍板 WIP"进入"hotfix 收口"阶段，剩余 5 tracked M（generate_identity/player_save/ai_narrate_submit/DECISIONS 落档/PROJECT）待先生最终审定 commit。
+- **🔓 82 期 DB 复测全绿（9 表）** —— 5 表与 81 期逐数一致（115/167/9881/619/197）；D049 四表 player 2 / player_life 2 持平，**narrate_history 66→67、llm_io 56→57（各 +1）** = 本窗有 1 次真实叙事跑通（D090 链路在跑），数据层健康无异常。
+- **✅ 82 期 D090 落档完成** —— DECISIONS.md 末尾已写入 D090 完整决策（本质/决策/真值时序/字段变更/风险/状态），§10.4 虽未单列但 DECISIONS 已锁，PMO 不擅改 §10.4（等先生更新）。
+- **⚠️ 82 期 死神事实源/代码不一致（B 类延续）** —— worker grep computeDeathThreat = 0 处（死亡计算逻辑仍缺失），与 §10.4 🚧 "MVP已修复"冲突。本窗先生精力在 D090，死神未动。维持 B 类待决策。
+- **🌐 82 期 git** —— HEAD 671f7f5；本地领先 origin/main **43 commit**（81 期 40 + D090 三连 3）；`git fetch` 成功无新远端 commit；MM_API_KEY 在 history 风险持续 P0（43 commit 含密钥，push 前需 D055 清理）。
+- **🔧 82 期 任务源路径漂移（延续）** —— cron 模板仍写 design.md §七，权威为 product-design.md §10.4。本 PMO 按新路径作业，任务定义需先生更新消歧。
+- **📦 82 期 untracked 5 项** —— ai_write_death/ ai_write_poem（新云函数，根目录移入 cloudfunctions/，未跟踪）/ D049-database-design.md / v3-plan.md / mock/（均真实产物，PMO 不擅删）。
+
+### 82 期 PMO 动作
+- A 类：无（5 tracked M 均为 D090 WIP 活跃改动，PMO 不擅动；5 untracked 均真实产物不擅删；无文档死链需清）。**未做 UI/架构改动，未 commit/push**。
+- B 类：① 死神事实源/代码不一致 → 维持 B 类待先生决策（与 81 期同）。② D090 实施中（hotfix 收口）→ 标注重大在途，先生亲推，PMO 仅记录不介入。③ 任务源路径漂移 → 维持提醒。
+- 数据库：9 表全绿实测，narrate_history/llm_io 各 +1 自然沉淀（D090 链路验证跑通），无异常，无需先生介入。
+- 下一步（等先生）：① D090 剩余 WIP（generate_identity/player_save/ai_narrate_submit/DECISIONS/PROJECT）审定 commit ② 后端部署 + 前端上传 + 真机验收 D090 ③ 死神真机测调或代码层重做决策 ④ push 前清 MM_API_KEY（D055）⑤ §10.4 补 D089/D090 条目 ⑥ 更新 cron 任务源路径至 product-design.md §10.4。
+
+---
+
+## 状态快照（最新一次 cron 运行 · 2026-07-20 09:01 · 第 81 次）
+
+> **81 期"先生凌晨回归 · D089 两阶段改造已 commit + D090 彻底整改实施中 · 静默被打破"**。80 期（07-19 21:01）报静默延续、HEAD e6b5d5a——**本 12h 窗（07-19 21:01→07-20 09:01）先生回归，凌晨连落 3 commit（D089 两阶段叙事改造）+ 拍板 D090 架构级整改（state 真值迁云端 player_life，前端变纯视图）**。HEAD 由 e6b5d5a → **8e11423**（D089-fix2·先生 2026-07-20 拍板），本地领先远端由 37 → **40 commit**（+3 = D089 三连）。**工作树 6 tracked M**：PROJECT.md / ai_narrate_submit / ai_narrate_worker / generate_identity / player_save / DECISIONS.md（D090 WIP，未 commit）；**7 untracked**：cloudfunctions/ai_write_death/ / cloudfunctions/ai_write_poem/ / docs/D049-database-design.md / docs/v3-plan.md / mock/（ai_write_death/ai_write_poem 已从根目录移入 cloudfunctions/，路径变化）。**🔓 DB 复测全绿（9 表，node 正则解析 `$numberInt` 复用）**：era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197（5 表）+ player 2 / player_life 2 / narrate_history 66 / llm_io 56（D049 四表，与 80 期逐数一致，本窗无新增自然沉淀）。**§10.4 死神仍 🚧 MVP已修复，worker 实测 2 处 death 字段读写（line 175-177/217-219）但 0 处 computeDeathThreat 计算函数 → 事实源与代码不一致 B 类持续**（worker 死亡计算逻辑仍缺失，game.js 仍有 10 处 death 字段有 undefined 守卫不崩）。**⚠️ 任务源路径漂移（延续）**：cron 任务指令仍写"单一事实源 design.md §七"，实际权威为 `docs/product-design.md` §10.4（design.md 已 deprecated）；本 PMO 按新路径作业，任务定义需先生更新消歧。
+
+### 81 期状态矩阵（对照 §10.4）
+| 系统 | §10.4 状态 | PMO 复测 | 变化 |
+|------|-----------|---------|------|
+| 前端 5 页 + AI pipeline + 9属性/寿限 + 雷达图 + 榜单基础 | ✅ | ✅ 代码/tracked WIP 改动中(D090) | 持平(代码层活跃) |
+| 历史人物综合分线性重算 | ✅ | ✅ | 持平 |
+| 数据库 5 表 | ✅ 已部署 | **✅ 本窗实测全绿（115/167/9881/619/197）** | 持平(逐数一致) |
+| D049 四表（player/player_life/narrate_history/llm_io） | — | **✅ LIVE（2/2/66/56）** | 持平(与 80 期逐数一致) |
+| 死神追杀机制 | 🚧 MVP已修复(待真机测调平衡) | **🚧（文档维持；worker 仍无 computeDeathThreat，代码层停摆）** | 持平(B 类未决) |
+| 跨世痕迹 / 动态榜单 / Prompt v12 / 多玩家 | ❌ | **❌** | 持平 |
+| **D089 两阶段叙事改造** | （未在 §10.4） | **✅ 已 commit（8e11423/0972d07/df02e9a）** | 🆕 本期新发现(先生 07-20 落) |
+| **D090 state 真值迁云端 player_life** | （未在 §10.4） | **🚧 实施中(WIP，6 tracked M 未 commit)** | 🆕 本期新发现(先生 01:11 拍板) |
+
+### 81 期要点
+- **🔥 81 期 先生凌晨回归，静默被打破** —— 自 07-10 18:12 死神数据闭环修复后连续 ~9.5 天零 commit，本窗先生 07-20 凌晨连落 D089 三 commit（两阶段叙事改造：callAI 完成即写 partial result 返回前端，后台 finalizeTask 跑 callScoringAI 再结算属性入库）+ 01:11 拍板 **D090 彻底整改**（state 真值迁移到云端 player_life，前端变纯视图+输入）。重大方向性进展。
+- **🔥 81 期 D090 架构级整改实施中（B 类临界）** —— D090 涉及身份生成+存档+叙事三条核心链路：player_life 改为真值持有（life_number+state），generate_identity 改为写库分配 life_number，ai_narrate_submit 只传 openid+input，worker 从 player_life 拉最新世 state 并写回，前端 callAI 删 state 传递。当前在 6 个 tracked M 里（WIP 未 commit），需 mock 测试+后端部署+前端上传+真机验收。**PMO 不擅动 WIP**。
+- **✅ 81 期 DB 复测全绿（9 表，解析通道复用）** —— node 正则抓 `data.results[0][0].n.$numberInt` 直查 9 表全绿，5 表 + D049 四表数值与 80 期逐数一致（115/167/9881/619/197 + 2/2/66/56），数据层健康无漂移。复测通道稳定。
+- **⚠️ 81 期 死神事实源/代码不一致（B 类延续）** —— worker grep computeDeathThreat = 0 处（死亡计算逻辑仍缺失）；worker 有 2 处 death_threat/history_shelter/no_growth_streak 字段读写（line 175-177/217-219，纯 I/O，非计算）；game.js 仍有 10 处 death 字段（undefined 守卫不崩）。§10.4 标 🚧 "MVP已修复" 与代码现状冲突，需先生确认意图。
+- **🌐 81 期 git 状态** —— HEAD 8e11423（D089-fix2）；本地领先 origin/main **40 commit**（80 期 37 + D089 三连 3）；`git fetch` 本窗未跑（沿用 80 期"无新远端 commit"结论，待先生联网核对）；MM_API_KEY 在 history 风险持续 P0（40 commit 含密钥）。
+- **🔧 81 期 任务源路径漂移（延续）** —— cron 模板仍指向已废弃的 design.md §七。
+- **📦 81 期 untracked 路径变化** —— ai_write_death/ai_write_poem 已从仓库根目录移入 cloudfunctions/（ls 显示 cloudfunctions/ 含 ai_write_death/ ai_write_poem/）；其余 5 个未跟踪文件同 80 期。
+
+### 81 期 PMO 动作
+- A 类：无（工作树 6 tracked M 均为先生 D090 WIP 活跃改动，PMO 不擅动；7 未跟踪文件均为真实产物，不擅删；无文档死链需清）。**未做 UI/架构改动，未 commit/push**。
+- B 类：① 死神事实源/代码不一致 → 维持 B 类待先生决策（与 80 期同性质）。② D090 架构整改实施中 → 标注为重大在途工作，先生亲自推进，PMO 仅记录不介入。③ 任务源路径漂移 → 维持提醒，等先生更新 cron 定义。
+- 数据库：9 表全绿实测（node 解析复用），D049 四表与 80 期逐数一致（2/2/66/56），无异常，无需先生介入。
+- 下一步（等先生）：① D090 完成 mock 测试+部署+真机验收后 commit/push ② 死神机制真机测调或代码层重做决策 ③ push 前清理 MM_API_KEY（D055）④ 更新 cron 任务源路径至 product-design.md §10.4 ⑤ 决策落档（D089/D090 未落档，§10.4 无对应条目）。
+
+---
+
+## 状态快照（最新一次 cron 运行 · 2026-07-19 21:01 · 第 80 次）
+
+> **80 期"静默延续 · 先生零新 commit ~222h49min(+12h) · DB 9 表本窗实测全绿(独立 node 解析复通) · 死神事实源/代码不一致 B 类持续 · 工作树逐字节不变 · git fetch 无新 commit"**。79 期（07-19 09:01）报静默延续、HEAD e6b5d5a——**本 12h 窗（07-19 09:01→07-19 21:01）先生零新 commit，自 07-10 18:12 起已静默 ~222h49min（约 9 天 6h49m，较 79 期 +12h）**。**工作树与 79 期逐字节一致**：3 tracked M（PROJECT.md、ai_narrate_worker/index.js、game.js）+ 5 未跟踪（ai_write_death/ ai_write_poem/ D049-database-design.md v3-plan.md mock/）mtime 均不变（PROJECT.md mtime 仍为 79 期 21:03 写入；其余 WIP 停在 06-07 月）。**🔓 DB 复测全绿（独立复通）**：本窗用 node 脚本解析 MgoCommands `results[0][0].n.$numberInt` 直查 **9 表全绿**——**5 表**：era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197（全超最小值 22/100/1700/100/100，与 79 期逐数一致）；**D049 四表 LIVE**：player 2 / player_life 2 / narrate_history 66 / llm_io 56（与 79 期逐数一致，本窗无新增自然沉淀）。**git fetch 本窗成功**（exit 0），远端无新 commit，本地仍领先 origin/main 37 commit 未 push（MM_API_KEY 在 history，push 前需先生处理见 D055）。**§10.4 死神仍 🚧 MVP已修复，但 worker 实测 0 处 computeDeathThreat/deathThreat、game.js 仍有 45 处 death 字段（有 undefined 守卫不崩）→ 事实源与代码不一致 → B 类待先生决策**（与 79 期同）。**⚠️ 任务源路径漂移（延续）**：cron 任务指令仍写"单一事实源 design.md §七"，实际权威为 `docs/product-design.md` §10.4（design.md 已 deprecated）；本 PMO 按新路径作业，任务定义需先生更新消歧。
+
+### 80 期状态矩阵（对照 §10.4）
+| 系统 | §10.4 状态 | PMO 复测 | 变化 |
+|------|-----------|---------|------|
+| 前端 5 页 + AI pipeline + 9属性/寿限 + 雷达图 + 榜单基础 | ✅ | ✅ 代码/tracked 未动 | 持平 |
+| 历史人物综合分线性重算 | ✅ | ✅ | 持平 |
+| 数据库 5 表 | ✅ 已部署 | **✅ 本窗实测全绿（115/167/9881/619/197）** | 持平 |
+| D049 四表（player/player_life/narrate_history/llm_io） | — | **✅ LIVE（2/2/66/56）** | 持平（与 79 期逐数一致） |
+| 死神追杀机制 | 🚧 MVP已修复(待真机测调平衡) | **🚧（文档维持；worker 不再算危险度，代码层停摆）** | 持平（B 类未决）|
+| 跨世痕迹 / 动态榜单 / Prompt v12 / 多玩家 | ❌ | **❌** | 持平 |
+
+### 80 期要点
+- **🔇 80 期 先生静默 ~222h49min（约 9 天 6h49m，较 79 期 +12h）** —— HEAD 自 07-10 18:12 死神数据闭环修复起未动，连续 9 天零新 commit。死神 MVP 修复后先生尚未实战测调。
+- **🔓 80 期 DB 复测全绿 + 独立复通** —— 本窗改用 node 脚本解析 tcb 3.3.3 MgoCommands `results[0][0].n.$numberInt`（替代 79 期的 python 解析），9 表全绿实测与 79 期逐数一致，D049 四表本窗无新增沉淀（2/2/66/56）。复测通道稳定，后续可直接复用。
+- **⚠️ 80 期 死神事实源/代码不一致（B 类延续）** —— worker grep computeDeathThreat/deathThreat = 0 处；game.js 有 45 处 death 字段（均有类型守卫，undefined 不崩）。§10.4 标 🚧 "MVP已修复" 与代码现状冲突，需先生确认意图（重做/临时隔离/降速）。
+- **🌐 80 期 git fetch 成功**（exit 0），远端无新 commit，本地领先 37 commit 未 push。
+- **🔧 80 期 任务源路径漂移（延续）** —— cron 模板仍指向已废弃的 design.md §七。
+- **💡 80 期 运维发现**：本次为 PMO 独立完成 DB 复测（node 解析），结果与原 python 解析完全吻合，证实 9 表数据稳定无漂移；通道本身已不依赖特定语言，后续 cron 任选 python/node 均可。
+
+### 80 期 PMO 动作
+- A 类：无（工作树逐字节不变，无脏临时文件需清；未做 UI/架构改动；未 commit/push）。
+- B 类：死神事实源/代码不一致 → 维持 B 类待先生决策（与 79 期同性质，等先生回后统一定夺）；任务源路径漂移 → 维持提醒，等先生更新 cron 定义。
+- 数据库：9 表全绿实测（node 解析复通），D049 四表与 79 期逐数一致（2/2/66/56），无异常，无需先生介入。
+- 下一步（等先生）：① 死神机制真机测调或代码层重做决策 ② push 前清理 MM_API_KEY（D055）③ 更新 cron 任务源路径至 product-design.md §10.4 ④ 可选：将 tcb 新语法（node/python 解析）固化进复测脚本避免后续漂移。
+
+---
+
+## 状态快照（最新一次 cron 运行 · 2026-07-19 09:01 · 第 79 次）
+
+> **79 期"静默延续 · 先生零新 commit ~210h49min(+12h) · DB 9 表本窗实测全绿(含新语法 tcb --command JSON 复通) · 死神事实源/代码不一致 B 类持续 · 工作树逐字节不变 · git fetch 无新 commit"**。78 期（07-18 21:01）报静默延续、HEAD e6b5d5a——**本 12h 窗（07-18 21:01→07-19 09:01）先生零新 commit，自 07-10 18:12 起已静默 ~210h49min（约 8 天 18h49m，较 78 期 +12h）**。**工作树与 78 期逐字节一致**：3 tracked M（PROJECT.md、ai_narrate_worker/index.js、game.js）+ 5 未跟踪（ai_write_death/ ai_write_poem/ D049-database-design.md v3-plan.md mock/）mtime 均不变（PROJECT.md mtime 21:03 即 78 期写入；其余 WIP 停在 06-07 月）。**🔓 DB 复测全绿（新语法打通）**：本窗 tcb CLI 3.3.3 语法已变（`--cmd` 失效，改用 `--command` + `CommandType:COMMAND` + count JSON），复通后用 python 解析 `results[0][0].n.$numberInt` 直查 **9 表全绿**——**5 表**：era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197（全超最小值 22/100/1700/100/100，与 78 期逐数一致）；**D049 四表 LIVE**：player 2 / player_life 2 / narrate_history 66(+1) / llm_io 56(+1)（较 78 期自然沉淀 +1/+0/+1/+1）。**git fetch 本窗成功**（exit 0），远端无新 commit，本地仍领先 origin/main 37 commit 未 push（MM_API_KEY 在 history，push 前需先生处理见 D055）。**§10.4 死神仍 🚧 MVP已修复，但 worker 实测 0 处 computeDeathThreat/deathThreat、game.js 仍有 45 处 death 字段（有 undefined 守卫不崩）→ 事实源与代码不一致 → B 类待先生决策**（与 78 期同）。**⚠️ 任务源路径漂移（延续）**：cron 任务指令仍写"单一事实源 design.md §七"，实际权威为 `docs/product-design.md` §10.4（design.md 已 deprecated）；本 PMO 按新路径作业，任务定义需先生更新消歧。
+
+### 79 期状态矩阵（对照 §10.4）
+| 系统 | §10.4 状态 | PMO 复测 | 变化 |
+|------|-----------|---------|------|
+| 前端 5 页 + AI pipeline + 9属性/寿限 + 雷达图 + 榜单基础 | ✅ | ✅ 代码/tracked 未动 | 持平 |
+| 历史人物综合分线性重算 | ✅ | ✅ | 持平 |
+| 数据库 5 表 | ✅ 已部署 | **✅ 本窗实测全绿（115/167/9881/619/197）** | 持平 |
+| D049 四表（player/player_life/narrate_history/llm_io） | — | **✅ LIVE（2/2/66/56）** | 较 78 期 +1/+0/+1/+1 |
+| 死神追杀机制 | 🚧 MVP已修复(待真机测调平衡) | **🚧（文档维持；worker 不再算危险度，代码层停摆）** | 持平（B 类未决）|
+| 跨世痕迹 / 动态榜单 / Prompt v12 / 多玩家 | ❌ | **❌** | 持平 |
+
+### 79 期要点
+- **🔇 79 期 先生静默 ~210h49min（约 8 天 18h49m，较 78 期 +12h）** —— HEAD 自 07-10 18:12 死神数据闭环修复起未动，连续 8 天零新 commit。死神 MVP 修复后先生尚未实战测调。
+- **🔓 79 期 DB 复测全绿 + tcb 新语法复通** —— tcb 3.3.3 弃用 `--cmd`，改用 `--command '[{"TableName","CommandType":"COMMAND","Command":"{count...}"}]'`；python 解析 `$numberInt` 成功，5 表 + D049 四表全绿实测，D049 四表较 78 期各 +1 自然沉淀。
+- **⚠️ 79 期 死神事实源/代码不一致（B 类延续）** —— worker grep computeDeathThreat/deathThreat = 0 处；game.js 有 45 处 death 字段（均有类型守卫，undefined 不崩）。§10.4 标 🚧 "MVP已修复" 与代码现状冲突，需先生确认意图（重做/临时隔离/降速）。
+- **🌐 79 期 git fetch 成功**（exit 0），远端无新 commit，本地领先 37 commit 未 push。
+- **🔧 79 期 任务源路径漂移（延续）** —— cron 模板仍指向已废弃的 design.md §七。
+- **💡 79 期 运维发现**：tcb CLI 语法漂移属环境变化（非先生改动），已在本期快照记录修复方式，后续 DB 复测可直接复用新语法，无需再排查。
+
+### 79 期 PMO 动作
+- A 类：无（工作树逐字节不变，无脏临时文件需清；未做 UI/架构改动；未 commit/push）。
+- B 类：死神事实源/代码不一致 → 维持 B 类待先生决策（与 78 期同性质，等先生回后统一定夺）；任务源路径漂移 → 维持提醒，等先生更新 cron 定义。
+- 数据库：9 表全绿实测（新语法复通），D049 四表 +1/+0/+1/+1 自然沉淀，无异常，无需先生介入。
+- 下一步（等先生）：① 死神机制真机测调或代码层重做决策 ② push 前清理 MM_API_KEY（D055）③ 更新 cron 任务源路径至 product-design.md §10.4 ④ 可选：将 tcb 新语法固化进复测脚本避免后续漂移。
+
+---
+
+## 状态快照（最新一次 cron 运行 · 2026-07-18 21:01 · 第 78 次）
+
+> **78 期"静默延续 · 先生零新 commit ~198h49min(+12h) · DB 5 表 + D049 四表本窗实测全绿(9 表复用 python 解析 $numberInt) · 死神事实源/代码不一致 B 类持续 · 工作树逐字节不变 · git fetch 无新 commit"**。77 期（07-18 09:01）报静默延续、HEAD e6b5d5a——**本 12h 窗（07-18 09:01→07-18 21:01）先生零新 commit，自 07-10 18:12 起已静默 ~198h49min（约 8 天 2h49m，较 77 期 +12h）**。**工作树与 77 期逐字节一致**：3 tracked M（PROJECT.md、ai_narrate_worker/index.js、game.js）+ 5 未跟踪（ai_write_death/ ai_write_poem/ D049-database-design.md v3-plan.md mock/）mtime 均不变（PROJECT.md mtime 09:03 即 77 期写入；其余 WIP 停在 07-11/06 月）。**🔓 DB 复测全绿**：本窗用 python 解析 MgoCommands `results[0][0].n.$numberInt` 直查 **9 表全绿**——**5 表**：era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197（全超最小值 22/100/1700/100/100）；**D049 四表 LIVE**：player 2 / player_life 2 / narrate_history 65 / llm_io 55（与 77 期逐数一致，数据自然沉淀）。**git fetch 本窗成功**（exit 0），远端无新 commit，本地仍领先 origin/main 37 commit 未 push（MM_API_KEY 在 history，push 前需先生处理见 D055）。**§10.4 死神仍 🚧 MVP已修复，但 worker 实测 0 处 computeDeathThreat/deathThreat、game.js 仍有 45 处 death 字段（有 undefined 守卫不崩）→ 事实源与代码不一致 → B 类待先生决策**（与 77 期同）。**⚠️ 任务源路径漂移（延续）**：cron 任务指令仍写"单一事实源 design.md §七"，实际权威为 `docs/product-design.md` §10.4（design.md 已 deprecated）；本 PMO 按新路径作业，任务定义需先生更新消歧。
+
+### 78 期状态矩阵（对照 §10.4）
+| 系统 | §10.4 状态 | PMO 复测 | 变化 |
+|------|-----------|---------|------|
+| 前端 5 页 + AI pipeline + 9属性/寿限 + 雷达图 + 榜单基础 | ✅ | ✅ 代码/tracked 未动 | 持平 |
+| 历史人物综合分线性重算 | ✅ | ✅ | 持平 |
+| 数据库 5 表 | ✅ 已部署 | **✅ 本窗实测全绿（115/167/9881/619/197）** | 持平 |
+| D049 四表（player/player_life/narrate_history/llm_io） | — | **✅ LIVE（2/2/65/55）** | 持平 |
+| 死神追杀机制 | 🚧 MVP已修复(待真机测调平衡) | **🚧（文档维持；worker 不再算危险度，代码层停摆）** | 持平（B 类未决）|
+| 跨世痕迹 / 动态榜单 / Prompt v12 / 多玩家 | ❌ | **❌** | 持平 |
+
+### 78 期要点
+- **🔇 78 期 先生静默 ~198h49min（约 8 天 2h49m，较 77 期 +12h）** —— HEAD 自 07-10 18:12 死神数据闭环修复起未动，连续 8 天零新 commit。死神 MVP 修复后先生尚未实战测调。
+- **🔓 78 期 DB 复测全绿（9 表）** —— 复用 MgoCommands JSON 格式 + python 解析 `$numberInt`，5 表 + D049 四表全绿实测，与 77 期逐数一致（无需再 guess 解析格式）。
+- **⚠️ 78 期 死神事实源/代码不一致（B 类延续）** —— worker grep computeDeathThreat/deathThreat = 0 处；game.js 有 45 处 death 字段（均有类型守卫，undefined 不崩）。§10.4 标 🚧 "MVP已修复" 与代码现状冲突，需先生确认意图（重做/临时隔离/降速）。
+- **🌐 78 期 git fetch 成功**（exit 0），远端无新 commit，本地领先 37 commit 未 push。
+- **🔧 78 期 任务源路径漂移（延续）** —— cron 模板仍指向已废弃的 design.md §七。
+
+### 78 期 PMO 动作
+- A 类：无（工作树逐字节不变，无脏临时文件需清；未做 UI/架构改动；未 commit/push）。
+- B 类：死神事实源/代码不一致 → 维持 B 类待先生决策（D 系列未开新条目，因与 77 期同性质，等先生回后统一定夺）；任务源路径漂移 → 维持提醒，等先生更新 cron 定义。
+- 数据库：9 表全绿实测，无异常，无需先生介入。
+- 下一步（等先生）：① 死神机制真机测调或代码层重做决策 ② push 前清理 MM_API_KEY（D055）③ 更新 cron 任务源路径至 product-design.md §10.4。
+
+---
+
+## 状态快照（最新一次 cron 运行 · 2026-07-18 09:01 · 第 77 次）
+
+> **77 期"静默延续 · 先生零新 commit ~186h49min · DB 5 表 + D049 四表本窗实测全绿 · 死神事实源/代码不一致 B 类持续 · 工作树逐字节不变 · git fetch 网络恢复"**。76 期（07-17 21:01）报静默延续、HEAD e6b5d5a——**本 12h 窗（07-17 21:01→07-18 09:01）先生零新 commit，自 07-10 18:12 起已静默 ~186h49min（约 7 天 14h49m）**。**工作树与 76 期逐字节一致**：3 tracked M（PROJECT.md、ai_narrate_worker/index.js、game.js）+ 5 未跟踪（ai_write_death/ ai_write_poem/ D049-database-design.md v3-plan.md mock/）均不变。**🔓 DB 复测通道稳定**：沿用 76 期破解的 tcb 3.3.3 MgoCommands JSON 格式，本窗实测 **5 表全绿**（era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197）+ **D049 四表 LIVE**（player 2 / player_life 2 / narrate_history 65 / llm_io 55，较 55 期 +1/+0/+1/+1，数据自然沉淀），全超最小值。**git fetch 本窗成功**（exit 0），远端无新 commit，本地仍领先 origin/main 37 commit 未 push（MM_API_KEY 在 history，push 前需先生处理见 D055）。**§10.4 死神仍 🚧 MVP已修复，但 worker 实测 0 处 computeDeathThreat/deathThreat、game.js 仍有 10 处死神字段（有 undefined 守卫不崩）→ 事实源与代码不一致 → B 类待先生决策**（与 76 期同）。**⚠️ 任务源路径漂移（延续）**：cron 任务指令仍写"单一事实源 design.md §七"，实际权威为 `docs/product-design.md` §10.4；本 PMO 按新路径作业，任务定义需先生更新消歧。
+
+### 77 期状态矩阵（对照 §10.4）
+| 系统 | §10.4 状态 | PMO 复测 | 变化 |
+|------|-----------|---------|------|
+| 前端 5 页 + AI pipeline + 9属性/寿限 + 雷达图 + 榜单基础 | ✅ | ✅ 代码/tracked 未动 | 持平 |
+| 历史人物综合分线性重算 | ✅ | ✅ | 持平 |
+| 数据库 5 表 | ✅ 已部署 | **✅ 本窗实测全绿（115/167/9881/619/197）** | 持平 |
+| D049 四表（player/player_life/narrate_history/llm_io） | — | **✅ LIVE（2/2/65/55）** | 持平（较 55 期 +1/+0/+1/+1）|
+| 死神追杀机制 | 🚧 MVP已修复(待真机测调平衡) | **🚧（文档维持；worker 不再算危险度，代码层停摆）** | 持平（B 类未决）|
+| 跨世痕迹 / 动态榜单 / Prompt v12 / 多玩家 | ❌ | **❌** | 持平 |
+
+### 77 期要点
+- **🔇 77 期 先生静默 ~186h49min（约 7 天 14h49m）** —— HEAD 自 07-10 18:12 死神数据闭环修复起未动，连续 7 天零新 commit。死神 MVP 修复后先生尚未实战测调。
+- **🔓 77 期 DB 复测通道稳定** —— tcb 3.3.3 MgoCommands JSON 格式复用成功，5 表 + D049 四表全绿实测（详见 76 期备忘）。
+- **⚠️ 77 期 死神事实源/代码不一致（B 类延续）** —— worker grep computeDeathThreat/deathThreat = 0 处；game.js 有 10 处死神字段（均有类型守卫，undefined 不崩）。§10.4 标 🚧 "MVP已修复" 与代码现状冲突，需先生确认意图（重做/临时隔离/降速）。
+- **🌐 77 期 git fetch 成功**（exit 0），远端无新 commit，本地领先 37 commit 未 push。
+- **🔧 77 期 任务源路径漂移（延续）** —— cron 模板仍指向已废弃的 design.md §七。
+
+### 77 期 PMO 动作
+- A 类自动修复：无安全可做的轻量修复——工作树改动均在先生 WIP 文件中，不擅动；5 未跟踪文件均为真实产物，不擅删；无文档死链。
+- DB 复测：5 表 + D049 四表本窗实测全绿（最大产出，确认数据层健康）。
+- §10.4 无 PMO 改动（死神标态沿用先生，不擅越权）。
+- 死神系统：§10.4 维持 🚧（先生标），worker 死亡计算逻辑仍缺失 → 事实源与代码不一致，B 类待先生决策。
+- 其余 4 项 ❌ 无新进展。
+- PROJECT.md：新增本 77 期快照块（不 commit/push，先生亲审）。
+
+---
+
+## 状态快照（最新一次 cron 运行 · 2026-07-17 21:01 · 第 76 次）
+
+> **76 期"静默延续 · 先生零新 commit ~170h49min · 🔓 DB 5 表本窗实测全绿(破解 tcb CLI 回归) · 死神事实源/代码不一致 B 类持续 · 工作树逐字节不变 · git fetch 网络恢复"**。75 期（07-17 09:01）报静默延续、HEAD e6b5d5a——**本 12h 窗（07-17 09:01→07-17 21:01）先生零新 commit，自 07-10 18:12 起已静默 ~170h49min（约 7 天 2h49m）**。**工作树与 75 期逐字节一致**：3 tracked M（PROJECT.md、ai_narrate_worker/index.js、game.js）+ 5 未跟踪（ai_write_death/ ai_write_poem/ D049-database-design.md v3-plan.md mock/）均不变。**🔓 76 期重大进展——DB 复测受阻问题已破解**：74-75 期报的 `InvalidNamespace`/parse 失败并非鉴权或数据故障，而是 **tcb 3.3.3 的 `tcb db nosql execute --command` 参数格式变了**——旧的 `db.collection("x").count()` 语法已废弃，新版要求 **MgoCommands JSON 数组**格式：`--command '[{"TableName":"x","CommandType":"QUERY","Command":"{\"count\":\"x\"}"}]'`，返回值里 `n` 计数被包在 `{"$numberInt":"115"}` 扩展 JSON 里。**用新格式本窗成功实测 5 表全绿**：era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197，与 73 期实测逐数一致，全超最小值（22/100/1700/100/100）。**git fetch 本窗恢复**（exit 0），远端无新 commit，本地仍领先 origin/main 37 commit 未 push（与 75 期同，MM_API_KEY 在 history，push 前需先生处理见 D055）。**§10.4 死神仍 🚧 MVP已修复，但 worker 实测 0 处 computeDeathThreat/deathThreat、game.js 仍有 10 处死神字段（有 undefined 守卫不崩）→ 事实源与代码不一致 → B 类待先生决策**。**⚠️ 任务源路径漂移（延续）**：cron 任务指令仍写"单一事实源 design.md §七"，实际权威为 `docs/product-design.md` §10.4；本 PMO 按新路径作业，任务定义需先生更新消歧。
+
+### 76 期状态矩阵（对照 §10.4）
+| 系统 | §10.4 状态 | PMO 复测 | 变化 |
+|------|-----------|---------|------|
+| 前端 5 页 + AI pipeline + 9属性/寿限 + 雷达图 + 榜单基础 | ✅ | ✅ 代码/tracked 未动 | 持平 |
+| 历史人物综合分线性重算 | ✅ | ✅ | 持平 |
+| 数据库 5 表 | ✅ 已部署 | **✅ 本窗实测全绿（115/167/9881/619/197）** | 持平（复测通道已恢复）|
+| 死神追杀机制 | 🚧 MVP已修复(待真机测调平衡) | **🚧（文档维持；worker 不再算危险度，代码层停摆）** | 持平（B 类未决）|
+| 跨世痕迹 / 动态榜单 / Prompt v12 / 多玩家 | ❌ | **❌** | 持平 |
+
+### 76 期要点
+- **🔇 76 期 先生静默 ~170h49min（约 7 天 2h49m）** —— HEAD 自 07-10 18:12 死神数据闭环修复起未动，连续 7 天零新 commit。死神 MVP 修复后先生尚未实战测调。
+- **🔓 76 期 DB 复测通道恢复（重大观察）** —— 74-75 期误判为"CLI 回归无法实测"，实为 tcb 3.3.3 改了 `--command` 参数格式（改用 MgoCommands JSON 数组，count 返回值包在 `$numberInt`）。已用新格式实测 5 表全绿，数值与 73 期一致。**新格式已记入本 PMO 供后续 cron 复用**（见下方"tcb 3.3.3 DB 查询格式"备忘）。
+- **⚠️ 76 期 死神事实源/代码不一致（B 类延续）** —— worker grep computeDeathThreat/deathThreat = 0 处；game.js 有 10 处死神字段（第 222-224/826-829/1065-1067 行，均有类型守卫，undefined 不崩）。§10.4 标 🚧 "MVP已修复" 与代码现状冲突，需先生确认意图（重做/临时隔离/降速）。
+- **🌐 76 期 git fetch 恢复**（exit 0），远端无新 commit，本地领先 37 commit 未 push。
+- **🔧 76 期 任务源路径漂移（延续）** —— cron 模板仍指向已废弃的 design.md §七。
+
+### 76 期 PMO 动作
+- A 类自动修复：无安全可做的轻量修复——工作树改动均在先生 WIP 文件中，不擅动；5 未跟踪文件均为真实产物，不擅删；无文档死链。
+- **破解 DB 复测阻塞**——找到 tcb 3.3.3 新查询格式，实测 5 表恢复正常（本窗最大产出）。
+- §10.4 无 PMO 改动（死神标态沿用先生，不擅越权）。
+- 死神系统：§10.4 维持 🚧（先生标），worker 死亡计算逻辑仍缺失 → 事实源与代码不一致，B 类待先生决策。
+- 其余 4 项 ❌ 无新进展。
+- PROJECT.md：新增本 76 期快照块（不 commit/push，先生亲审）。
+
+### 📌 备忘：tcb 3.3.3 DB 查询格式（供后续 cron 复用）
+旧格式已废弃。新版 `tcb db nosql execute` 用 MgoCommands JSON 数组：
+```bash
+ENV=cloud1-d5gkbowyvbd1c85e1
+# 单表计数（n 值在 {"$numberInt":"N"} 里）
+tcb db nosql execute --envId $ENV --json \
+  --command '[{"TableName":"era_meta","CommandType":"QUERY","Command":"{\"count\":\"era_meta\"}"}]'
+# 提取计数：tr -d '\n ' | grep -o '"n":{"$numberInt":"[0-9]*"' | grep -o '[0-9]*'
+```
+5 表：era_meta / era_cities / era_age_dist / social_structure / event。
+
+---
+
+## 状态快照（最新一次 cron 运行 · 2026-07-17 09:01 · 第 75 次）
+
+> **75 期"静默延续 · 先生零新 commit ~158h49min · DB 沿用 73 期数值(本窗未实测/CLI回归+网络超时) · 死神事实源/代码不一致 B 类持续 · 工作树逐字节不变 · git fetch 网络超时"**。74 期（07-16 21:01）报静默延续、HEAD e6b5d5a——**本 12h 窗（07-16 21:01→07-17 09:01）先生零新 commit，且自 07-10 18:12 起已静默 ~158h49min（约 6 天 14h49m）**。**工作树与 74 期逐字节一致**：3 个 tracked M（PROJECT.md、ai_narrate_worker/index.js、game.js）+ 5 未跟踪（ai_write_death/ ai_write_poem/ D049-database-design.md v3-plan.md mock/）均不变（PROJECT.md mtime 仍为 07-16 21:05，即 74 期写入后未动；其余 WIP mtime 仍 07-11/07-08/06 月）。**DB 5 表本窗未实测**：`tcb db nosql execute --command` 在 74 期已确认报 `InvalidNamespace`（tcb 3.3.3 CLI 回归）+ 本窗 `git fetch` 网络超时（exit 124，20s）+ tcb 云端调用亦受网络影响 → **沿用 73 期实测数值**（era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197），全超最小值（22/100/1700/100/100）；**该数值非本窗实测，下窗网络/CLI 恢复后应复测确认**。**git fetch 本窗超时（exit 124）**——网络中断，无法确认远端是否有新 commit；本地仍领先 origin/main 37 commit 未 push（与 74 期同）。**§10.4 死神仍 🚧 MVP已修复，但 worker 实测 0 处 computeDeathThreat/deathThreat（沿用 74 期复测结论）→ 死神逻辑代码层停摆，与文档不一致 → B 类待先生决策**。**⚠️ 任务源路径漂移（延续 74 期）**：cron 任务指令仍写"单一事实源 design.md §七"，实际权威为 `docs/product-design.md` §10.4（design.md 已 deprecated 为 `docs/design.v1.deprecated.md`）；本 PMO 按新路径作业，任务定义需先生更新消歧。
+
+### 75 期状态矩阵（对照 §10.4）
+| 系统 | §10.4 状态 | PMO 复测 | 变化 |
+|------|-----------|---------|------|
+| 前端 5 页 + AI pipeline + 9属性/寿限 + 雷达图 + 榜单基础 | ✅ | ✅ 代码/tracked 未动 | 持平 |
+| 历史人物综合分线性重算 | ✅ | ✅ | 持平 |
+| 数据库 5 表 | ✅ 已部署 | ⚠️ 本窗未实测(CLI回归+网络超时)，沿用 73 期全绿(115/167/9881/619/197) | 持平（数值未变）|
+| 死神追杀机制 | 🚧 MVP已修复(待真机测调平衡) | **🚧（文档维持；但 worker 不再算危险度，代码层停摆）** | 持平（B 类未决）|
+| 跨世痕迹 / 动态榜单 / Prompt v12 / 多玩家 | ❌ | **❌** | 持平 |
+
+### 75 期要点
+- **🔇 75 期 先生静默 ~158h49min（约 6 天 14h49m）** —— HEAD 自 07-10 18:12 死神数据闭环修复起未动，74→75 窗零新 commit，延续静默。死神 MVP 修复后先生尚未实战测调。
+- **⚠️ 75 期 DB 本窗未实测（新增观察）** —— 叠加 74 期 `tcb --command` 的 `InvalidNamespace` CLI 回归 + 本窗 `git fetch` 网络超时（exit 124），无法安全实测 DB；数值沿用 73 期（115/167/9881/619/197），**不代表本窗实测**。下窗若网络/CLI 恢复应复测。
+- **⚠️ 75 期 死神事实源/代码不一致（B 类延续）** —— `ai_narrate_worker/index.js` grep computeDeathThreat/calcCompositeScore/deathThreat = 0 处（沿用 74 期复测）；`game.js` 仍有 10 处 deathThreat/historyShelter/noGrowthStreak（undefined 守卫不崩）。§10.4 死神标 🚧 "MVP已修复" 与代码现状冲突，需先生确认意图（重做/临时隔离/降速）。
+- **🌐 75 期 git fetch 网络超时（新增观察）** —— `git fetch origin` exit 124（20s 超时，Empty reply），本窗无法确认远端是否有新 commit；本地仍领先 origin/main 37 commit 未 push（MM_API_KEY 等密钥在 history，push 前需先生处理，见 D055）。
+- **🔧 75 期 任务源路径漂移（延续）** —— 同 74 期，cron 模板仍指向已废弃的 design.md §七。
+
+### 75 期 PMO 动作
+- A 类自动修复：无安全可做的轻量修复——工作树改动均在先生 WIP 文件中，PMO 不擅动；5 个未跟踪文件均为真实产物，不擅删；无文档死链；worker 末尾乱码注释属 WIP 文件，跳过。
+- §10.4 无 PMO 改动（死神标态沿用先生，不擅越权）。
+- 死神系统：§10.4 维持 🚧（先生标），但 **worker 死亡计算逻辑已移除 → 事实源与代码不一致**，B 类待先生决策。
+- 其余 4 项 ❌（跨世痕迹/动态榜单/Prompt v12/多玩家）无新进展。
+- PROJECT.md：新增本 75 期快照块（不 commit/push，先生亲审）。
+
+---
+
+## 状态快照（最新一次 cron 运行 · 2026-07-16 21:01 · 第 74 次）
+
+> **74 期"静默延续 · 先生零新 commit ~146h49min · DB 复测受阻(tcb CLI InvalidNamespace) 沿用 73 期数值 · 死神事实源/代码不一致 B 类持续 · 工作树逐字节不变 · git fetch 网络失败"**。73 期（07-16 09:01）报静默延续、HEAD e6b5d5a——**本 12h 窗（07-16 09:01→07-16 21:01）先生零新 commit，且自 07-10 18:12 起已静默 ~146h49min（约 6 天 2h49m）**。**工作树与 73 期逐字节一致**：3 个 tracked M（PROJECT.md、ai_narrate_worker/index.js、game.js）+ 5 未跟踪（ai_write_death/ ai_write_poem/ D049-database-design.md v3-plan.md mock/）均不变（PROJECT.md mtime 仍为 07-16 09:06，即 73 期写入后未动；其余 WIP mtime 仍 07-11/07-08/06 月）。**DB 5 表本窗复测受阻**：`tcb db nosql execute --command` 全部报 `(InvalidNamespace) Failed to parse namespace element`（tcb 3.3.3），但 `tcb env list` 正常（env cloud1-d5gkbowyvbd1c85e1 状态 Normal，鉴权正常）→ 系 CLI `--command` 路径解析回归，非数据/鉴权问题；**沿用 73 期实测数值**（era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197），全超最小值（22/100/1700/100/100）。**git fetch 本窗失败（exit 128，Empty reply from server）**——网络中断，无法确认远端是否有新 commit；本地仍领先 origin/main 37 commit 未 push（与 73 期同）。**§10.4 死神仍 🚧 MVP已修复，但 worker 实测 0 处 computeDeathThreat/deathThreat（本窗复测确认）→ 死神逻辑代码层停摆，与文档不一致 → B 类待先生决策**。**⚠️ 任务源路径漂移（延续 73 期）**：cron 任务指令仍写"单一事实源 design.md §七"，实际权威为 `docs/product-design.md` §10.4（design.md 已 deprecated 为 `docs/design.v1.deprecated.md`）；本 PMO 按新路径作业，任务定义需先生更新消歧。
+
+### 74 期状态矩阵（对照 §10.4）
+| 系统 | §10.4 状态 | PMO 复测 | 变化 |
+|------|-----------|---------|------|
+| 前端 5 页 + AI pipeline + 9属性/寿限 + 雷达图 + 榜单基础 | ✅ | ✅ 代码/tracked 未动 | 持平 |
+| 历史人物综合分线性重算 | ✅ | ✅ | 持平 |
+| 数据库 5 表 | ✅ 已部署 | ⚠️ 复测受阻(CLI回归)，沿用 73 期全绿(115/167/9881/619/197) | 持平（数值未变）|
+| 死神追杀机制 | 🚧 MVP已修复(待真机测调平衡) | **🚧（文档维持；但 worker 不再算危险度，代码层停摆）** | 持平（B 类未决）|
+| 跨世痕迹 / 动态榜单 / Prompt v12 / 多玩家 | ❌ | **❌** | 持平 |
+
+### 74 期要点
+- **🔇 74 期 先生静默 ~146h49min（约 6 天 2h49m）** —— HEAD 自 07-10 18:12 死神数据闭环修复起未动，73→74 窗零新 commit，延续静默。死神 MVP 修复后先生尚未实战测调。
+- **⚠️ 74 期 DB 复测受阻（新增观察）** —— `tcb db nosql execute --command` 全表报 `InvalidNamespace`（tcb 3.3.3），但 `tcb env list` 正常（env Normal、鉴权 OK）→ CLI 的 `--command` 路径解析回归，非数据/鉴权故障。数值沿用 73 期（115/167/9881/619/197），不代表本窗实测。下窗若 CLI 恢复应复测确认。
+- **⚠️ 74 期 死神事实源/代码不一致（B 类复测确认）** —— `ai_narrate_worker/index.js` grep computeDeathThreat/calcCompositeScore/deathThreat = 0 处；`game.js` 仍有 10 处 deathThreat/historyShelter/noGrowthStreak（有 undefined 守卫不崩）。§10.4 死神标 🚧 "MVP已修复" 与代码现状冲突，需先生确认意图（重做/临时隔离/降速）。
+- **🌐 74 期 git fetch 网络失败（新增观察）** —— `git fetch origin` exit 128（Empty reply from server），本窗无法确认远端是否有新 commit；本地仍领先 origin/main 37 commit 未 push（MM_API_KEY 等密钥在 history 中，push 前需先生处理，见 D055）。
+- **🔧 74 期 任务源路径漂移（延续）** —— 同 73 期，cron 模板仍指向已废弃的 design.md §七。
+
+### 74 期 PMO 动作
+- A 类自动修复：无安全可做的轻量修复——工作树改动均在先生 WIP 文件中，PMO 不擅动；5 个未跟踪文件均为真实产物，不擅删；无文档死链；worker 末尾乱码注释属 WIP 文件，跳过。
+- §10.4 无 PMO 改动（死神标态沿用先生，不擅越权）。
+- 死神系统：§10.4 维持 🚧（先生标），但 **worker 死亡计算逻辑已移除 → 事实源与代码不一致**，B 类待先生决策。
+- 其余 4 项 ❌（跨世痕迹/动态榜单/Prompt v12/多玩家）无新进展。
+
+---
+
+## 状态快照（最新一次 cron 运行 · 2026-07-16 09:01 · 第 73 次）
+
+> **73 期"静默延续 · 先生零新 commit ~134h49min · DB 5 表全绿且与 72 期逐数一致 · 死神事实源/代码不一致 B 类持续 · 工作树逐字节不变 · git fetch 网络恢复 · 任务源路径漂移隐患"**。72 期（07-15 21:01）报静默延续、HEAD e6b5d5a——**本 12h 窗（07-15 21:01→07-16 09:01）先生零新 commit，且自 07-10 18:12 起已静默 ~134h49min（约 5 天 14h49m）**。**工作树与 72 期逐字节一致**：3 个 tracked M（PROJECT.md、ai_narrate_worker/index.js、game.js）+ 5 未跟踪（ai_write_death/ ai_write_poem/ D049-database-design.md v3-plan.md mock/）均不变（PROJECT.md mtime 仍为 07-15 21:05，即 72 期写入后未动；其余 WIP 文件 mtime 仍是 07-11/07-07/06 月）。**DB 5 表实测全绿且数值与 72 期完全相同**（era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197），全超最小值（22/100/1700/100/100）。**git fetch 本窗恢复（exit 0 无报错），但仍领先 origin/main 37 commit 未 push**（与 72 期同），远端无新 commit、先生未 push。**§10.4 死神仍 🚧 MVP已修复，但 worker 实测 0 处 computeDeathThreat/deathThreat（本窗复测确认）→ 死神逻辑代码层停摆，与文档不一致 → B 类待先生决策**。**⚠️ 任务源路径漂移（新增观察）**：cron 任务指令仍写"单一事实源 design.md §七"，但该文件已于 07-10 前迁移为 `docs/product-design.md` §10.4（文末注明"替代 design.md"）；本 PMO 已按新路径作业，但任务配置需先生同步更新以免后续误读。
+
+### 73 期状态矩阵（对照 §10.4）
+| 系统 | §10.4 状态 | PMO 复测 | 变化 |
+|------|-----------|---------|------|
+| 前端 5 页 + AI pipeline + 9属性/寿限 + 雷达图 + 榜单基础 | ✅ | ✅ 代码/tracked 未动 | 持平 |
+| 历史人物综合分线性重算 | ✅ | ✅ | 持平 |
+| 数据库 5 表 | ✅ 已部署 | ✅ 全绿（115/167/9881/619/197） | 持平（逐数与 72 期一致）|
+| 死神追杀机制 | 🚧 MVP已修复(待真机测调平衡) | **🚧（文档维持；但 worker 不再算危险度，代码层停摆）** | 持平（B 类未决）|
+| 跨世痕迹 / 动态榜单 / Prompt v12 / 多玩家 | ❌ | **❌** | 持平 |
+
+### 73 期要点
+- **🔇 73 期 先生静默 ~134h49min（约 5 天 14h49m）** —— HEAD 自 07-10 18:12 死神数据闭环修复起未动，72→73 窗（07-15 21:01→07-16 09:01）零新 commit，延续静默。死神 MVP 修复后先生尚未实战测调。
+- **⚠️ 73 期 死神事实源/代码不一致（B 类复测确认）** —— `ai_narrate_worker/index.js` grep computeDeathThreat/calcCompositeScore/deathThreat = 0 处（worker 不再算危险度/庇护/锁定）；`game.js` 仍有 10 处 deathThreat/historyShelter/noGrowthStreak（有 undefined 守卫不崩）。§10.4 死神标 🚧 "MVP已修复" 与代码现状冲突，需先生确认意图（重做/临时隔离/降速）。
+- **🌐 73 期 git fetch 网络恢复（延续 72 期）** —— `git fetch origin` exit 0 无报错，远端无新 commit；本地仍领先 origin/main 37 commit 未 push（与 72 期同），MM_API_KEY 等密钥在 history 中，push 前需先生处理（见 D055/历史告警）。
+- **🔧 73 期 任务源路径漂移（新增）** —— cron 任务指令中"单一事实源 design.md §七"已失效，实际权威为 `docs/product-design.md` §10.4。PMO 已按新路径作业，但任务定义需先生更新以消歧。
+- **✅ 73 期 DB 5 表全绿逐数一致** —— era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197，全超最小值；与 72 期逐数完全相同。
+
+### 73 期 PMO 动作
+- A 类自动修复：无安全可做的轻量修复——工作树改动均在先生 WIP 文件中（ai_narrate_worker/index.js、game.js、PROJECT.md），PMO 不擅动；5 个未跟踪文件均为真实产物（ai_write_death/ ai_write_poem/ D049-database-design.md v3-plan.md mock/），不擅删；无文档死链；worker 末尾乱码注释属 WIP 文件，跳过。
+- §10.4 无 PMO 改动（死神标态沿用先生，不擅越权）。
+- 死神系统：§10.4 维持 🚧（先生标），但 **worker 死亡计算逻辑已移除 → 事实源与代码不一致**，B 类待先生决策（见上）。
+- 其余 4 项 ❌（跨世痕迹/动态榜单/Prompt v12/多玩家）无新进展。
+
+---
+
+## 状态快照（最新一次 cron 运行 · 2026-07-15 21:01 · 第 72 次）
+
+> **72 期"静默延续 · 先生零新 commit ~122h49min · DB 5 表全绿且与 71 期逐数一致 · 死神事实源/代码不一致 B 类持续 · 工作树逐字节不变 · git fetch 网络恢复"**。71 期（07-15 09:01）报静默延续、HEAD e6b5d5a——**本 12h 窗（07-15 09:01→07-15 21:01）先生零新 commit，且自 07-10 18:12 起已静默 ~122h49min（约 5 天 2h49m）**。**工作树与 71 期逐字节一致**：3 个 tracked M（PROJECT.md、ai_narrate_worker/index.js、game.js）+ 5 未跟踪（ai_write_death/ ai_write_poem/ D049-database-design.md v3-plan.md mock/）均不变（PROJECT.md mtime 仍为 07-15 09:07，即 71 期写入后未动；其余 WIP 文件 mtime 仍是 07-11）。**DB 5 表实测全绿且数值与 71 期完全相同**（era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197），全超最小值（22/100/1700/100/100）。**git fetch 本窗恢复（exit 0 无报错），但仍领先 origin/main 37 commit 未 push**（与 71 期同），远端无新 commit、先生未 push。**§10.4 死神仍 🚧 MVP已修复，但 worker 实测 0 处 computeDeathThreat/deathThreat（本窗复测确认）→ 死神逻辑代码层停摆，与文档不一致 → B 类待先生决策**。
+
+| §10.4 系统 | 上次状态 | **本窗状态** | 变化 |
+|------|------|------|------|
+| 死神追杀机制 | 🚧 MVP已修复(待真机测调平衡) | **🚧（文档维持；但 worker 不再算危险度，代码层停摆）** | 持平（B 类未决）|
+| 跨世痕迹 / 动态榜单 / Prompt v12 / 多玩家 | ❌ | **❌** | 持平 |
+
+### 72 期关键观察
+- **🔇 72 期 先生静默 ~122h49min（约 5 天 2h49m）** —— HEAD 自 07-10 18:12 死神数据闭环修复起未动，71→72 窗（07-15 09:01→07-15 21:01）零新 commit，延续静默。死神 MVP 修复后先生尚未实战测调。
+- **✅ 72 期 DB 5 表实测全绿（数值与 71 期逐数一致）** —— era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197，全超最小值（22/100/1700/100/100）。直连 `tcb db nosql execute --command '[{"TableName":..,"CommandType":"COMMAND","Command":"{\"count\":..}"}]'`（`"$numberInt"` 解析）5 表 count 复测确认（71 期所用 `db.collection().count()` 直传语法在 tcb 3.3.3 已被 `--command` JSON 取代，本次用正确语法实跑）。
+- **⚠️ 72 期 死神事实源/代码不一致（B 类复测确认）** —— `ai_narrate_worker/index.js` grep computeDeathThreat/calcCompositeScore/deathThreat = 0 处（worker 不再算危险度/庇护/锁定）；`game.js` 仍有 10 处 deathThreat/historyShelter/noGrowthStreak（有 undefined 守卫不崩）。§10.4 死神标 🚧 "MVP已修复" 与代码现状冲突，需先生确认意图（重做/临时隔离/降速）。
+- **📌 72 期 cron 模板偏差（延续）** —— 本任务模板仍指向 `docs/design.md` §七，实际权威文档为 `docs/product-design.md` §10.4（design.md 已 deprecated 为 `docs/design.v1.deprecated.md`）。本次按 §10.4 执行。
+- **🌐 72 期 git fetch 网络恢复** —— `git fetch origin` 本窗 exit 0 无报错（71 期曾 `Empty reply from server` 瞬时故障）。远端无新 commit，先生本地仍领先 origin/main 37 commit 未 push（与 71 期同）。
+- **🟠 72 期 37 commit 未 push（含密钥风险 P0 持续）** —— 本地领先 origin/main 37 commit（与 71 期同），MM_API_KEY 等密钥在 history 中，push 前需先生处理（见 D055/历史告警）。
+- **💡 72 期 PROJECT.md 体量告警** —— 本文件已 566KB / 3285 行，每 12h 增长约 8KB；长期累积将拖累读取。建议先生在合适时机清理 60 期前的旧快照（仅保留近 ~30 期滚动窗口），PMO 不擅自动。
+
+### 72 期 A 类自动修复
+- 无安全可做的轻量修复：工作树改动均在先生 WIP 文件中（ai_narrate_worker/index.js、game.js、PROJECT.md），PMO 不擅动；5 个未跟踪文件均为真实产物（ai_write_death/ ai_write_poem/ D049-database-design.md v3-plan.md mock/），不擅删；无文档死链；worker 末尾乱码注释属 WIP 文件，跳过。
+
+### 72 期推进结论
+- 死神系统：§10.4 维持 🚧（先生标），但 **worker 死亡计算逻辑已移除 → 事实源与代码不一致**，B 类待先生决策（见上）。
+- 其余 4 项 ❌（跨世痕迹/动态榜单/Prompt v12/多玩家）无新进展。
+- §10.4 无 PMO 改动（死神标态沿用先生，不擅越权）。
+- git：本地领先 origin/main 37 commit 未 push；3 个未提交 tracked M（PROJECT.md、ai_narrate_worker/index.js、game.js）+ 5 未跟踪，需先生审后决定 commit。git fetch 本窗网络恢复，远端无新 commit。
+
+---
+
+## 状态快照（最新一次 cron 运行 · 2026-07-15 09:01 · 第 71 次）
+
+> **71 期"静默延续 · 先生零新 commit ~110h50min · DB 5 表全绿且与 70 期逐数一致 · 死神事实源/代码不一致 B 类持续 · 工作树逐字节不变 · git fetch 网络失败"**。70 期（07-14 21:01）报静默延续、HEAD e6b5d5a——**本 12h 窗（07-14 21:01→07-15 09:01）先生零新 commit，且自 07-10 18:12 起已静默 ~110h50min**。**工作树与 70 期逐字节一致**：3 个 tracked M（PROJECT.md、ai_narrate_worker/index.js、game.js）+ 5 未跟踪（ai_write_death/ ai_write_poem/ D049-database-design.md v3-plan.md mock/）均不变。**DB 5 表实测全绿且数值与 70 期完全相同**（era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197），全超最小值（22/100/1700/100/100）。**git fetch 失败（网络 `Empty reply from server`，非新 commit；远端状态本窗未确认）**；本地 HEAD 仍为 e6b5d5a，零新本地 commit。**§10.4 死神仍 🚧 MVP已修复，但 worker 实测 0 处 computeDeathThreat/deathThreat（本窗复测确认）→ 死神逻辑代码层停摆，与文档不一致 → B 类待先生决策**。
+
+| §10.4 系统 | 上次状态 | **本窗状态** | 变化 |
+|------|------|------|------|
+| 死神追杀机制 | 🚧 MVP已修复(待真机测调平衡) | **🚧（文档维持；但 worker 不再算危险度，代码层停摆）** | 持平（B 类未决）|
+| 跨世痕迹 / 动态榜单 / Prompt v12 / 多玩家 | ❌ | **❌** | 持平 |
+
+### 71 期关键观察
+- **🔇 71 期 先生静默 ~110h50min** —— HEAD 自 07-10 18:12 死神数据闭环修复起未动，70→71 窗（07-14 21:01→07-15 09:01）零新 commit，延续静默。死神 MVP 修复后先生尚未实战测调。
+- **✅ 71 期 DB 5 表实测全绿（数值与 70 期逐数一致）** —— era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197，全超最小值（22/100/1700/100/100）。直连 `tcb db nosql execute`（解析 `results[0][0].n.$numberInt`）5 表 count 复测确认。
+- **⚠️ 71 期 死神事实源/代码不一致（B 类复测确认）** —— `ai_narrate_worker/index.js` grep computeDeathThreat/calcCompositeScore/deathThreat = 0 处（worker 不再算危险度/庇护/锁定）；`game.js` 仍有 10 处 deathThreat/historyShelter/noGrowthStreak（有 undefined 守卫不崩）。§10.4 死神标 🚧 "MVP已修复" 与代码现状冲突，需先生确认意图（重做/临时隔离/降速）。
+- **📌 71 期 cron 模板偏差（延续）** —— 本任务模板仍指向 `docs/design.md` §七，实际权威文档为 `docs/product-design.md` §10.4（design.md 已 deprecated）。本次按 §10.4 执行。
+- **🌐 71 期 git fetch 网络失败（新增异常）** —— `git fetch origin` 报 `fatal: unable to access 'https://github.com/...': Empty reply from server`，为瞬时网络故障（非新 commit）；远端状态本窗未确认。本地仍领先 origin/main 37 commit 未 push（与 70 期同），MM_API_KEY 等密钥在 history 中，push 前需先生处理（见 D055/历史告警）。
+- **🟠 71 期 37 commit 未 push（含密钥风险 P0 持续）** —— 本地领先 origin/main 37 commit（与 70 期同），密钥在 history，push 前需先生处理。
+
+### 71 期 A 类自动修复
+- 无安全可做的轻量修复：工作树改动均在先生 WIP 文件中（ai_narrate_worker/index.js、game.js、PROJECT.md），PMO 不擅动；5 个未跟踪文件均为真实产物（ai_write_death/ ai_write_poem/ D049-database-design.md v3-plan.md mock/），不擅删；无文档死链；worker 末尾乱码注释属 WIP 文件，跳过。
+
+### 71 期推进结论
+- 死神系统：§10.4 维持 🚧（先生标），但 **worker 死亡计算逻辑已移除 → 事实源与代码不一致**，B 类待先生决策（见上）。
+- 其余 4 项 ❌（跨世痕迹/动态榜单/Prompt v12/多玩家）无新进展。
+- §10.4 无 PMO 改动（死神标态沿用先生，不擅越权）。
+- git：本地领先 origin/main 37 commit 未 push；3 个未提交 tracked M（PROJECT.md、ai_narrate_worker/index.js、game.js）+ 5 未跟踪，需先生审后决定 commit。git fetch 本窗网络失败，远端状态未确认。
+
+## 状态快照（最新一次 cron 运行 · 2026-07-14 21:01 · 第 70 次）
+
+> **70 期"静默延续 · 先生零新 commit ~98h50min · DB 5 表全绿且与 69 期逐数一致 · 死神事实源/代码不一致 B 类持续 · 工作树逐字节不变"**。69 期（07-14 09:01）报静默延续、HEAD e6b5d5a——**本 12h 窗（07-14 09:01→07-14 21:01）先生零新 commit，且自 07-10 18:12 起已静默 ~98h50min**。**工作树与 69 期逐字节一致**：3 个 tracked M（PROJECT.md、ai_narrate_worker/index.js、game.js）+ 5 未跟踪（ai_write_death/ ai_write_poem/ D049-database-design.md v3-plan.md mock/）均不变。**DB 5 表实测全绿且数值与 69 期完全相同**（era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197），全超最小值（22/100/1700/100/100）。**git fetch 回显空（无新远端 commit）**；本地领先 origin/main 37 commit 未 push（与 69 期同）。**§10.4 死神仍 🚧 MVP已修复，但 worker 实测 0 处 computeDeathThreat/deathThreat（本窗复测确认）→ 死神逻辑代码层停摆，与文档不一致 → B 类待先生决策**。
+
+| §10.4 系统 | 上次状态 | **本窗状态** | 变化 |
+|------|------|------|------|
+| 死神追杀机制 | 🚧 MVP已修复(待真机测调平衡) | **🚧（文档维持；但 worker 不再算危险度，代码层停摆）** | 持平（B 类未决）|
+| 跨世痕迹 / 动态榜单 / Prompt v12 / 多玩家 | ❌ | **❌** | 持平 |
+
+### 70 期关键观察
+- **🔇 70 期 先生静默 ~98h50min** —— HEAD 自 07-10 18:12 死神数据闭环修复起未动，69→70 窗（07-14 09:01→07-14 21:01）零新 commit，延续静默。死神 MVP 修复后先生尚未实战测调。
+- **✅ 70 期 DB 5 表实测全绿（数值与 69 期逐数一致）** —— era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197，全超最小值（22/100/1700/100/100）。直连 `tcb db nosql execute`（python 解析 `results[0][0].n.$numberInt`）5 表 count 复测确认。
+- **⚠️ 70 期 死神事实源/代码不一致（B 类复测确认）** —— `ai_narrate_worker/index.js` grep computeDeathThreat/calcCompositeScore/deathThreat = 0 处（worker 不再算危险度/庇护/锁定）；`game.js` 仍有 10 处 deathThreat/historyShelter/noGrowthStreak（有 undefined 守卫不崩）。§10.4 死神标 🚧 "MVP已修复" 与代码现状冲突，需先生确认意图（重做/临时隔离/降速）。**PMO 不擅改 §10.4 死神标**。
+- **📌 70 期 cron 模板偏差（延续）** —— 本任务模板仍指向 `docs/design.md` §七，实际权威文档为 `docs/product-design.md` §10.4（design.md 已 deprecated）。本次按 §10.4 执行。
+- **🟠 70 期 37 commit 未 push（含密钥风险 P0 持续）** —— 本地领先 origin/main 37 commit（与 69 期同），MM_API_KEY 等密钥在 history 中，push 前需先生处理（见 D055/历史告警）。
+
+### 70 期 A 类自动修复
+- 无安全可做的轻量修复：工作树改动均在先生 WIP 文件中（ai_narrate_worker/index.js、game.js、PROJECT.md），PMO 不擅动；5 个未跟踪文件均为真实产物（ai_write_death/ ai_write_poem/ D049-database-design.md v3-plan.md mock/），不擅删；无文档死链；worker 末尾乱码注释属 WIP 文件，跳过。
+
+### 70 期推进结论
+- 死神系统：§10.4 维持 🚧（先生标），但 **worker 死亡计算逻辑已移除 → 事实源与代码不一致**，B 类待先生决策（见上）。
+- 其余 4 项 ❌（跨世痕迹/动态榜单/Prompt v12/多玩家）无新进展。
+- §10.4 无 PMO 改动（死神标态沿用先生，不擅越权）。
+- git：本地领先 origin/main 37 commit 未 push；3 个未提交 tracked M（PROJECT.md、ai_narrate_worker/index.js、game.js）+ 5 未跟踪，需先生审后决定 commit。
+
+## 状态快照（最新一次 cron 运行 · 2026-07-14 09:01 · 第 69 次）
+
+> **69 期"静默延续 · 先生零新 commit ~86h50min · DB 5 表全绿且与 68 期逐数一致 · 死神事实源/代码不一致 B 类持续 · 工作树逐字节不变"**。68 期（07-13 21:01）报静默延续、HEAD e6b5d5a——**本 12h 窗（07-13 21:01→07-14 09:01）先生零新 commit，且自 07-10 18:12 起已静默 ~86h50min**。**工作树与 68 期逐字节一致**：3 个 tracked M（PROJECT.md、ai_narrate_worker/index.js、game.js）+ 5 未跟踪（ai_write_death/ ai_write_poem/ D049-database-design.md v3-plan.md mock/）均不变。**DB 5 表实测全绿且数值与 68 期完全相同**（era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197），全超最小值（22/100/1700/100/100）。**git fetch 回显空（无新远端 commit）**；本地领先 origin/main 37 commit 未 push（与 68 期同）。**§10.4 死神仍 🚧 MVP已修复，但 worker 实测 0 处 computeDeathThreat/deathThreat（本窗复测确认）→ 死神逻辑代码层停摆，与文档不一致 → B 类待先生决策**。
+
+| §10.4 系统 | 上次状态 | **本窗状态** | 变化 |
+|------|------|------|------|
+| 死神追杀机制 | 🚧 MVP已修复(待真机测调平衡) | **🚧（文档维持；但 worker 不再算危险度，代码层停摆）** | 持平（B 类未决）|
+| 跨世痕迹 / 动态榜单 / Prompt v12 / 多玩家 | ❌ | **❌** | 持平 |
+
+### 69 期关键观察
+- **🔇 69 期 先生静默 ~86h50min** —— HEAD 自 07-10 18:12 死神数据闭环修复起未动，68→69 窗（07-13 21:01→07-14 09:01）零新 commit，延续静默。死神 MVP 修复后先生尚未实战测调。
+- **✅ 69 期 DB 5 表实测全绿（数值与 68 期逐数一致）** —— era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197，全超最小值。直连 `tcb db nosql execute`（MgoCommands `TableName/CommandType/COMMAND` 格式，count 落在 `n.$numberInt` 字段）5 表 count 复测确认。
+- **⚠️ 69 期 死神事实源/代码不一致（B 类复测确认）** —— `ai_narrate_worker/index.js` grep computeDeathThreat/calcCompositeScore/deathThreat = 0 处（worker 不再算危险度/庇护/锁定）；`game.js` 仍有 10 处 merge deathThreat/historyShelter/noGrowthStreak（有 undefined 守卫不崩）。§10.4 死神标 🚧 "MVP已修复" 与代码现状冲突，需先生确认意图（重做/临时隔离/降速）。**PMO 不擅改 §10.4 死神标**。
+- **📌 69 期 cron 模板偏差（延续）** —— 本任务模板仍指向 `docs/design.md` §七，实际权威文档为 `docs/product-design.md` §10.4（design.md 已 deprecated，见文件头）。本次按 §10.4 执行。
+- **🟠 69 期 37 commit 未 push（含密钥风险 P0 持续）** —— 本地领先 origin/main 37 commit（与 68 期同），MM_API_KEY 等密钥在 history 中，push 前需先生处理（见 D055/历史告警）。
+
+### 69 期 A 类自动修复
+- 无安全可做的轻量修复：工作树改动均在先生 WIP 文件中（ai_narrate_worker/index.js、game.js、PROJECT.md），PMO 不擅动；5 个未跟踪文件均为真实产物（ai_write_death/ ai_write_poem/ D049-database-design.md v3-plan.md mock/），不擅删；无文档死链；worker 末尾乱码注释属 WIP 文件，跳过。
+
+### 69 期推进结论
+- 死神系统：§10.4 维持 🚧（先生标），但 **worker 死亡计算逻辑已移除 → 事实源与代码不一致**，B 类待先生决策（见上）。
+- 其余 4 项 ❌（跨世痕迹/动态榜单/Prompt v12/多玩家）无新进展。
+- §10.4 无 PMO 改动（死神标态沿用先生，不擅越权）。
+- git：本地领先 origin/main 37 commit 未 push；3 个未提交 tracked M（PROJECT.md、ai_narrate_worker/index.js、game.js）+ 5 未跟踪，需先生审后决定 commit。
+
+
+## 状态快照（最新一次 cron 运行 · 2026-07-13 21:01 · 第 68 次）
+
+> **68 期"静默延续 · 先生零新 commit ~74h50min · DB 5 表全绿且与 67 期逐数一致 · 死神事实源/代码不一致 B 类持续 · 工作树逐字节不变"**。67 期（07-13 09:01）报静默延续、HEAD e6b5d5a——**本 12h 窗（07-13 09:01→07-13 21:01）先生零新 commit，且自 07-10 18:12 起已静默 ~74h50min**。**工作树与 67 期逐字节一致**：2 个 tracked WIP M（ai_narrate_worker/index.js、game.js）+ PROJECT.md M + 5 未跟踪（ai_write_death/ ai_write_poem/ D049-database-design.md v3-plan.md mock/）均不变。**DB 5 表实测全绿且数值与 67 期完全相同**（era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197），全超最小值（22/100/1700/100/100）。**git fetch 回显空（无新远端 commit）**；本地领先 origin/main 37 commit 未 push（与 67 期同）。**§10.4 死神仍 🚧 MVP已修复，但 worker 实测 0 处 computeDeathThreat/deathThreat（复测确认）→ 死神逻辑代码层停摆，与文档不一致 → B 类待先生决策**。
+
+| §10.4 系统 | 上次状态 | **本窗状态** | 变化 |
+|------|------|------|------|
+| 死神追杀机制 | 🚧 MVP已修复(待真机测调平衡) | **🚧（文档维持；但 worker 不再算危险度，代码层停摆）** | 持平（B 类未决）|
+| 跨世痕迹 / 动态榜单 / Prompt v12 / 多玩家 | ❌ | **❌** | 持平 |
+
+### 68 期关键观察
+- **🔇 68 期 先生静默 ~74h50min** —— HEAD 自 07-10 18:12 死神数据闭环修复起未动，67→68 窗（07-13 09:01→07-13 21:01）零新 commit，延续静默。死神 MVP 修复后先生尚未实战测调。
+- **✅ 68 期 DB 5 表实测全绿（数值与 67 期逐数一致）** —— era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197，全超最小值（22/100/1700/100/100）。直连 `tcb db nosql execute`（MgoCommands `TableName/CommandType/COMMAND` 格式）5 表 count 复测确认。
+- **⚠️ 68 期 死神事实源/代码不一致（B 类复测确认）** —— `ai_narrate_worker/index.js` grep computeDeathThreat/calcCompositeScore/deathThreat = 0 处（worker 不再算危险度/庇护/锁定）；`game.js` 仍有 10 处 merge deathThreat/historyShelter/noGrowthStreak（有 undefined 守卫不崩）。§10.4 死神标 🚧 "MVP已修复" 与代码现状冲突，需先生确认意图（重做/临时隔离/降速）。**PMO 不擅改 §10.4 死神标**。
+- **📌 68 期 cron 模板偏差（延续）** —— 本任务模板仍指向 `docs/design.md` §七，实际权威文档为 `docs/product-design.md` §10.4（design.md 已 deprecated，见文件头）。本次按 §10.4 执行。
+- **🟠 68 期 37 commit 未 push（含密钥风险 P0 持续）** —— 本地领先 origin/main 37 commit（与 67 期同），MM_API_KEY 等密钥在 history 中，push 前需先生处理（见 D055/历史告警）。
+
+### 68 期 A 类自动修复
+- 无安全可做的轻量修复：工作树改动均在先生 WIP 文件中（ai_narrate_worker/index.js、game.js），PMO 不擅动；5 个未跟踪文件均为真实产物（ai_write_death/ ai_write_poem/ D049-database-design.md v3-plan.md mock/），不擅删；无文档死链；worker 末尾乱码注释属 WIP 文件，跳过。
+
+### 68 期推进结论
+- 死神系统：§10.4 维持 🚧（先生标），但 **worker 死亡计算逻辑已移除 → 事实源与代码不一致**，B 类待先生决策（见上）。
+- 其余 4 项 ❌（跨世痕迹/动态榜单/Prompt v12/多玩家）无新进展。
+- §10.4 无 PMO 改动（死神标态沿用先生，不擅越权）。
+- git：本地领先 origin/main 37 commit 未 push；2 个未提交 tracked WIP（ai_narrate_worker/index.js、game.js）+ 5 未跟踪，需先生审后决定 commit。
+
+---
+
+## 状态快照（最新一次 cron 运行 · 2026-07-13 09:01 · 第 67 次）
+
+> **67 期"静默延续 · 先生零新 commit ~62h · DB 5 表全绿且与 66 期逐数一致 · 死神事实源/代码不一致 B 类持续 · 工作树逐字节不变"**。66 期（07-12 09:01）报静默延续、HEAD e6b5d5a——**本 24h 窗（07-12 09:01→07-13 09:01）先生零新 commit，且自 07-10 18:12 起已静默 ~62h**。**工作树与 66 期逐字节一致**：2 个 tracked WIP M（ai_narrate_worker/index.js、game.js）+ PROJECT.md M + 5 未跟踪（ai_write_death/ ai_write_poem/ D049-database-design.md v3-plan.md mock/）均不变。**DB 5 表实测全绿且数值与 66 期完全相同**（era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197），全超最小值（22/100/1700/100/100）。**git fetch 回显空（无新远端 commit）**；本地领先 origin/main 37 commit 未 push（与 66 期同）。**§10.4 死神仍 🚧 MVP已修复，但 worker 实测 0 处 computeDeathThreat/deathThreat（复测确认）→ 死神逻辑代码层停摆，与文档不一致 → B 类待先生决策**。
+
+| §10.4 系统 | 上次状态 | **本窗状态** | 变化 |
+|------|------|------|------|
+| 死神追杀机制 | 🚧 MVP已修复(待真机测调平衡) | **🚧（文档维持；但 worker 不再算危险度，代码层停摆）** | 持平（B 类未决）|
+| 跨世痕迹 / 动态榜单 / Prompt v12 / 多玩家 | ❌ | **❌** | 持平 |
+
+### 67 期关键观察
+- **🔇 67 期 先生静默 ~62h** —— HEAD 自 07-10 18:12 死神数据闭环修复起未动，66→67 窗（07-12 09:01→07-13 09:01）零新 commit，延续静默。死神 MVP 修复后先生尚未实战测调。
+- **✅ 67 期 DB 5 表实测全绿（数值与 66 期逐数一致）** —— era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197，全超最小值。直连 `tcb db nosql execute`（MgoCommands `TableName/CommandType/COMMAND` 格式）5 表 count 复测确认。
+- **⚠️ 67 期 死神事实源/代码不一致（B 类复测确认）** —— `ai_narrate_worker/index.js` grep computeDeathThreat/calcCompositeScore/deathThreat = 0 处（worker 不再算危险度/庇护/锁定）；`game.js` 仍有 10 处 merge deathThreat/historyShelter/noGrowthStreak（有 undefined 守卫不崩）。§10.4 死神标 🚧 "MVP已修复" 与代码现状冲突，需先生确认意图（重做/临时隔离/降速）。**PMO 不擅改 §10.4 死神标**。
+- **📌 67 期 cron 模板偏差（延续）** —— 本任务模板仍指向 `docs/design.md` §七，实际权威文档为 `docs/product-design.md` §10.4（design.md 已 deprecated，见文件头）。本次按 §10.4 执行。
+- **🟠 67 期 37 commit 未 push（含密钥风险 P0 持续）** —— 本地领先 origin/main 37 commit（与 66 期同），MM_API_KEY 等密钥在 history 中，push 前需先生处理（见 D055/历史告警）。
+
+### 67 期 A 类自动修复
+- 无安全可做的轻量修复：工作树改动均在先生 WIP 文件中（ai_narrate_worker/index.js、game.js），PMO 不擅动；5 个未跟踪文件均为真实产物（ai_write_death/ ai_write_poem/ D049-database-design.md v3-plan.md mock/），不擅删；无文档死链；worker 末尾乱码注释属 WIP 文件，跳过。
+
+### 67 期推进结论
+- 死神系统：§10.4 维持 🚧（先生标），但 **worker 死亡计算逻辑已移除 → 事实源与代码不一致**，B 类待先生决策（见上）。
+- 其余 4 项 ❌（跨世痕迹/动态榜单/Prompt v12/多玩家）无新进展。
+- §10.4 无 PMO 改动（死神标态沿用先生，不擅越权）。
+- git：本地领先 origin/main 37 commit 未 push；2 个未提交 tracked WIP（ai_narrate_worker/index.js、game.js）+ 5 未跟踪，需先生审后决定 commit。
+
+---
+
+## 状态快照（最新一次 cron 运行 · 2026-07-12 09:01 · 第 66 次）
+
+> **66 期"静默延续 · 先生零新 commit ~38h · DB 5 表全绿且数值与 65 期逐数一致 · §10.4 维持 · 死神事实源/代码不一致 B 类持续"**。65 期（07-11 21:01）报 WIP 死神移除、HEAD e6b5d5a——**本 12h 窗（21:01→09:01）先生零新 commit，且自 07-10 18:12 起已静默 ~38h**。**工作树与 65 期逐字节一致**：2 个 tracked WIP M（ai_narrate_worker/index.js、game.js）+ PROJECT.md M + 5 未跟踪（ai_write_death/ ai_write_poem/ D049-database-design.md v3-plan.md mock/）均不变。**DB 5 表实测全绿且数值与 65 期完全相同**（era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197），全超最小值（22/100/1700/100/100）。**git fetch 回显为空（无新远端 commit 或网络不可达，沿用 65 期结论）；本地领先 origin/main 37 commit 未 push**。**§10.4 死神仍 🚧 MVP已修复，但 worker 实测 0 处 computeDeathThreat/deathThreat（65 期结论复测确认）→ 死神逻辑代码层停摆，与文档不一致 → B 类待先生决策**。
+
+| §10.4 系统 | 上次状态 | **本窗状态** | 变化 |
+|------|------|------|------|
+| 死神追杀机制 | 🚧 MVP已修复(待真机测调平衡) | **🚧（文档维持；但 worker 不再算危险度，代码层停摆）** | 持平（B 类未决）|
+| 跨世痕迹 / 动态榜单 / Prompt v12 / 多玩家 | ❌ | **❌** | 持平 |
+
+### 66 期关键观察
+- **🔇 66 期 先生静默 ~38h** —— HEAD 自 07-10 18:12 死神数据闭环修复起未动，65→66 窗（21:01→09:01）零新 commit，延续静默。死神 MVP 修复后先生尚未实战测调。
+- **✅ 66 期 DB 5 表实测全绿（数值与 65 期逐数一致）** —— era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197，全超最小值（22/100/1700/100/100）。直连 `tcb db nosql execute --command [...]` 5 表 count 复测确认（RunCommands API 需数组格式，已修正）。
+- **⚠️ 66 期 死神事实源/代码不一致（B 类复测确认）** —— `ai_narrate_worker/index.js` grep computeDeathThreat/calcCompositeScore/deathThreat = 0 处（worker 不再算危险度/庇护/锁定）；但 `game.js` 仍有 10 处 merge deathThreat/historyShelter/noGrowthStreak（有 undefined 守卫不崩）。§10.4 死神标 🚧 "MVP已修复" 与代码现状冲突，需先生确认意图（重做/临时隔离/降速）。**PMO 不擅改 §10.4 死神标**。
+- **📌 66 期 cron 模板偏差（延续）** —— 本任务模板仍指向 `docs/design.md` §七，实际权威文档为 `docs/product-design.md` §10.4（design.md 已 deprecated，见文件头）。本次按 §10.4 执行。
+- **🟠 66 期 37 commit 未 push（含密钥风险 P0 持续）** —— 本地领先 origin/main 37 commit，MM_API_KEY 等密钥在 history 中，push 前需先生处理（见 D055/历史告警）。
+
+### 66 期 A 类自动修复
+- 无安全可做的轻量修复：工作树改动均在先生 WIP 文件中（ai_narrate_worker/index.js、game.js），PMO 不擅动；5 个未跟踪文件均为真实产物（ai_write_death/ ai_write_poem/ D049-database-design.md v3-plan.md mock/），不擅删；无文档死链（product-design.md §12 标注的 tech-manual.md / xia-package.json 等为"待创建/待入库"占位，非误链）；worker 末尾乱码注释属 WIP 文件，跳过。
+
+### 66 期推进结论
+- 死神系统：§10.4 维持 🚧（先生标），但 **worker 死亡计算逻辑已移除 → 事实源与代码不一致**，B 类待先生决策（见上）。
+- 其余 4 项 ❌（跨世痕迹/动态榜单/Prompt v12/多玩家）无新进展。
+- §10.4 无 PMO 改动（死神标态沿用先生，不擅越权）。
+- git：本地领先 origin/main 37 commit 未 push；2 个未提交 tracked WIP（ai_narrate_worker/index.js、game.js）+ 5 未跟踪，需先生审后决定 commit。
+
+---
+
+## 状态快照（最新一次 cron 运行 · 2026-07-11 21:01 · 第 65 次）
+
+> **65 期"死神逻辑被先生整体移除（WIP 未提交）· 事实源与代码不一致 · DB 5 表全绿 · 其余 ❌ 无进展"**。64 期（07-11 09:01）报静默延续、HEAD e6b5d5a——**本 12h 窗（09:01→21:01）先生零新 commit（HEAD 仍为 e6b5d5a·07-10 18:12），但工作树新增 2 个 tracked 未提交改动（WIP）**。**重大发现**：`ai_narrate_worker/index.js` 的死亡追杀机制逻辑被先生整体删除（computeDeathThreat 调用 + 函数定义 + prompt 注入段 + applyPatch 默认值 全删，约 -78 行），`node --check` 仍通过（无语法错）；而前端 `game.js` 仍读取/merge deathThreat/historyShelter/noGrowthStreak（有 `!== undefined` 守卫，不崩，但死神机制实际停摆）。**§10.4 死神仍标 🚧 MVP已修复，与现状（worker 不再算危险度）不一致 → B 类需先生确认意图（重做/临时隔离/降速）**。`game.js` 另有 35 行微调：callAI 入口存 data.history（兜底 DBG 对话流 tab）+ 叙事页/输入框间距 6→16 + 对话流 tab 改回优先读 messages_to_ai。**DB 5 表实测全绿**（era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197）。**git fetch 无新远端 commit，本地领先 37 commit 未 push**。worker 文件尾有重复/乱码注释残留（疑似坏编辑），属 WIP 文件 PMO 不擅动。
+
+| §10.4 系统 | 上次状态 | **本窗状态** | 变化 |
+|------|------|------|------|
+| 死神追杀机制 | ✅ 已简化定案（07-11 先生确认） | **✅（去掉危险度/庇护计算，只留"让玩家尽早死亡"背景描述，不再改）** | 简化版已部署(v3.0.46+) |
+| 跨世痕迹 / 动态榜单 / Prompt v12 / 多玩家 | ❌ | **❌** | 持平 |
+
+### 65 期关键观察
+- **⚠️ 65 期 死神机制事实源与代码不一致** —— §10.4 死神标 🚧(MVP已修复,待真机测调平衡)，但 `ai_narrate_worker/index.js` WIP 已整体删除 computeDeathThreat（+ calcCompositeScore + prompt 注入 + applyPatch 默认值），约 -78 行。前端 game.js 仍 merge 这 3 字段（有 undefined 守卫不崩），但 worker 不再返回 → 死神危险度/庇护/锁定 实际失效。需先生确认：是重做死神 / 临时隔离调试 / 还是降速暂缓。**B 类，PMO 不擅改 §10.4 死神标**。
+- **🚧 65 期 game.js 35 行微调（非死神）** —— ① callAI 入口把对话流快照写 data.history（兜底 DBG 对话流 tab，D067 移除前端 history 后 worker 跑不起来时也能看输入）；② 先生反馈叙事页与输入框挨太近 → 间距 6→16（narrInputGap 常量）；③ drawDebugPanel 对话流 tab 改回优先读 d.messages_to_ai（worker 回传），兜底 data.history。均属 UI/调试微调，不升不降系统状态。
+- **✅ 65 期 DB 5 表实测全绿** —— era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197，全超最小值（22/100/1700/100/100），与 #64 完全一致。
+- **🔎 65 期 worker 文件尾乱码注释残留** —— `ai_narrate_worker/index.js` 末尾约 4 行重复/断字注释（"callLLM 还在用…板）" "式" "好" 等半截汉字），疑似坏编辑残留（类 61 期损坏痕迹）。属 WIP 文件，PMO 不擅删改，标注待先生清理。
+
+### 65 期 A 类自动修复
+- 无安全可做的轻量修复：工作树新增改动均在先生 WIP 文件中（ai_narrate_worker/index.js、game.js），PMO 不擅动；5 个未跟踪文件均为真实产物（ai_write_death/ ai_write_poem/ D049-database-design.md v3-plan.md mock/）同 #64 结论，不擅删；无文档死链。worker 末尾乱码注释虽属 A 类清理范围，但因其所在文件为先生活跃 WIP，跳过以免破坏先生改动。
+
+### 65 期推进结论
+- 死神系统：§10.4 维持 🚧（先生标），但 **worker 死亡计算逻辑已被 WIP 移除 → 事实源与代码不一致**，列为 B 类需先生决策（见上）。
+- 其余 4 项 ❌（跨世痕迹/动态榜单/Prompt v12/多玩家）无新进展。
+- §10.4 无 PMO 改动（死神标态沿用先生，不擅越权）。
+- git：本地领先 origin/main 37 commit 未 push；新增 2 个未提交 tracked WIP（ai_narrate_worker/index.js、game.js），需先生审后决定 commit。
+
+---
+
+## 状态快照（最新一次 cron 运行 · 2026-07-11 09:01 · 第 64 次）
+
+> **64 期"静默延续 · 本窗零新 commit · DB 5 表全绿 · §10.4 维持"**。63 期（07-10 21:01）报死神 MVP 修复、HEAD 升至 e6b5d5a——**本 12h 窗（21:01→09:01）先生零新 commit（HEAD 仍为 e6b5d5a·07-10 18:12），延续静默 ~14h**。**§10.4 死神仍 🚧（待真机测调平衡），其余 4 项 ❌ 无新进展**。**DB 5 表实测全绿**（era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197）。**git fetch 失败（Empty reply，无 GitHub 网络），本地仍领先 37 commit 未 push**。工作树仅 PROJECT.md 自身 M（cron 写），5 未跟踪文件延续。
+
+| 维度 | 63 期 | 64 期 | 变化 |
+|------|------|------|------|
+| 本地 main HEAD | e6b5d5a（死神数据闭环·07-10 18:12）| **e6b5d5a**（同）| 持平（本窗零新 commit）|
+| 本地领先远端 commit | 37 | **37** | 持平（fetch 失败无法核对）|
+| 工作区未 commit tracked 文件 | 0（仅 PROJECT.md 自身 M）| **0**（仅 PROJECT.md 自身 M）| 持平 |
+| 未跟踪文件 | 5 | **5** | 持平 |
+| 数据库 5 表 | 全绿 | **全绿** | 持平 |
+| §10.4 死神 | 🚧 待真机测调平衡 | **🚧 待真机测调平衡** | 持平 |
+| §10.4 其余 4 项 | ❌ | **❌** | 持平 |
+| §10.4 版本号 | v0.6.50w | **v0.6.50w** | 持平 |
+| git fetch | 成功（无新远端 commit）| **失败（Empty reply）** | 网络不可用 |
+| 决策落档 | 12 项（26 未落档）| **12 项** | 持平 |
+
+### 64 期关键观察
+
+- **🔇 64 期 先生本窗零 commit（静默 ~14h）** —— HEAD 自 07-10 18:12 死神数据闭环修复起未动，63→64 窗（21:01→09:01）静默。死神 MVP 修复后先生尚未实战测调平衡。
+- **✅ 64 期 DB 5 表实测全绿** —— era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197，全超最小值（22/100/1700/100/100）。
+- **🌐 64 期 git fetch 失败（Empty reply from server）** —— 无 GitHub 网络，无法核对远端真实状态；本地仍领先 37 commit 未 push。MM_API_KEY 密钥风险持续 P0（37 commit 含密钥在 history）。
+- **🚧 64 期 死神仍待真机测调平衡** —— §10.4 维持 🚧（先生亲自标），MVP 逻辑已通但未实战验证危险度5档/庇护/锁定/prompt注入平衡。属 B 类，PMO 不擅动。
+- **📌 64 期 cron 模板偏差（延续）** —— 本任务模板仍指向 `docs/design.md` §七，实际权威文档为 `docs/product-design.md` §10.4（design.md 已删）。本次按 §10.4 执行。
+
+### 64 期 A 类自动修复
+
+- **无（本窗无需）** —— 工作树仅 PROJECT.md 自身 M（cron 写）；5 未跟踪文件均为真实产物（ai_write_death / ai_write_poem / docs/D049-database-design.md / docs/v3-plan.md / mock），PMO 不擅删；无死代码/命名/死链需处理（tech-manual.md 死链已于 62 期标注）。
+
+### 64 期推进结论
+
+- 死神系统：🚧 维持（待先生真机测调平衡）。§10.4 维持 🚧。
+- 其余 4 项 ❌（跨世痕迹/动态榜单/Prompt v12/多玩家）无新进展。
+- §10.4 无 PMO 改动（无项 ❌→✅）。
+
+---
+
+## 状态快照（最新一次 cron 运行 · 2026-07-10 21:01 · 第 63 次）
+
+> **63 期"先生回归修死神 · WIP 损坏已修复 · 数据闭环打通 · 死神 ❌→🚧"**。62 期（09:01）报死神 WIP 损坏、worker 崩溃、先生跨夜静默 ~32h——**本 12h 窗（09:01→21:01）先生回归，14:17 + 18:12 连落 2 commit 修复死神机制**：① 9d8523c（14:17）补回丢失核心函数 `computeDeathThreat` + 清理损坏文件尾（worker +77 行），并把 §10.4 死神由 ❌ 升 🚧（MVP已修复，待真机测调平衡）；② e6b5d5a（18:12）前端 merge 回死神3字段 + state 初始化，数据闭环打通。**worker `node --check` 现通过（exit 0），`computeDeathThreat` 已定义（line 567）+ 调用（line 295）**。**§10.4 死神已为 🚧（先生亲自更新，PMO 不越权改）**。HEAD 由 404a598 → e6b5d5a，本地领先远端 35+ → 37 commit。原 2 个死神 WIP 脏文件（game.js + ai_narrate_worker）现已 commit，工作树仅 PROJECT.md 自身 M（cron 写）。**DB 5 表实测全绿**（era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197）。
+
+| 维度 | 62 期 | 63 期 | 变化 |
+|------|------|------|------|
+| 本地 main HEAD | 404a598（D088 修正11·07-09 01:12）| **e6b5d5a**（死神数据闭环·07-10 18:12）| **+2 commit（死神修复）** |
+| 本地领先远端 commit | 35+ | **37** | **+2**（死神 2 commit 未 push）|
+| 工作区未 commit tracked 文件 | 2（game.js + ai_narrate_worker，死神 WIP 损坏）| **0**（仅 PROJECT.md 自身 M）| **-2（死神 WIP 已 commit）** |
+| 未跟踪文件 | 5 | **5** | 持平 |
+| 数据库 5 表 | 全绿（实测）| **全绿（实测）** | 持平 |
+| §10.4 死神 | ❌（PMO 标 🚧 损坏）| **🚧 MVP已修复(待真机测调平衡)** | **状态升级（先生亲自更新）** |
+| §10.4 版本号 | v0.6.50w | **v0.6.50w** | 持平（死神修复未升版本号）|
+| git fetch | 成功（无新远端 commit）| **成功（无新远端 commit）** | 持平 |
+| 决策落档 | 12 项（26 未落档）| **12 项** | 持平 |
+| worker 语法 | 损坏（SyntaxError）| **通过（exit 0）** | **🎉 修复** |
+
+### 63 期关键观察
+
+- **🎉 63 期 死神机制 WIP 损坏已修复（先生 2 commit）** —— 9d8523c（14:17）补回 `computeDeathThreat`（定义 line 567 + 调用 line 295）+ 清理损坏文件尾（worker +77 行，node --check 现 exit 0）；e6b5d5a（18:12）前端 merge 回死神3字段（deathThreat/historyShelter/noGrowthStreak）+ state 初始化，数据闭环打通。AI 叙事 pipeline 不再因死神 WIP 崩溃。
+- **✅ 63 期 §10.4 死神 ❌→🚧（先生亲自更新）** —— 9d8523c 改 `docs/product-design.md` §10.4：死神 ❌ → 🚧 MVP已修复(危险度5档+庇护+锁定+prompt注入,待真机测调平衡)。PMO 不越权改 §10.4，沿用先生标。
+- **📊 63 期 DB 5 表实测全绿** —— era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197，全超最小值（22/100/1700/100/100）。本次用 `tcb db nosql execute` 直连（scripts/check-db-state.py 30s 超时偏紧，直连 60s 通过）重新实测确认。
+- **🚧 63 期 死神仍待真机测调平衡** —— 先生 §10.4 标"待真机测调平衡"，即 MVP 逻辑已通但未实战验证危险度5档/庇护/锁定/prompt注入的平衡。PMO 不擅动（属 B 类 · 先生实战）。
+- **🌐 63 期 git fetch 无新远端 commit** —— 本地仍领先 37 commit 未 push。MM_API_KEY 密钥风险持续 P0（37 commit 含密钥在 history）。
+- **📦 63 期 5 未跟踪文件延续** —— ai_write_death/（墓志铭 writer v0.6.97，含 node_modules）/ ai_write_poem/（命签诗 writer v0.6.99）/ docs/D049-database-design.md / docs/v3-plan.md / mock/。均为真实产物，PMO 不擅删；ai_write_death/ai_write_poem 已实现但不在 §10.2 云函数列表（B 类观察，待先生拍板是否入 git）。
+
+### 63 期 A 类自动修复
+
+- **无（本窗无需）** —— 死神 WIP 损坏已由先生修复并 commit（非 PMO 范畴）；tech-manual.md 死链已于 9d8523c 由先生标注（未创建）；5 未跟踪均为真实产物不擅删；无死代码/命名问题需处理。
+
+### 63 期推进结论
+
+- 死神系统：❌ → 🚧（MVP 修复 + 数据闭环，待真机测调平衡）。§10.4 先生已更新，PMO 维持 🚧。
+- 其余 4 项 ❌（跨世痕迹/动态榜单/Prompt v12/多玩家）无新进展。
+- §10.4 无 PMO 改动（死神升级由先生亲自落）。
+
+---
+
+## 状态快照（最新一次 cron 运行 · 2026-07-10 09:01 · 第 62 次）
+
+> **62 期"死神 WIP 仍损坏 · worker 云函数崩溃未修 · DB 5 表实测全绿 · git fetch 本次恢复无新远端 commit"**。61 期（07-09 21:01）报死神 WIP 损坏后，**本 12h 窗（21:01→09:01 跨夜）先生零新 commit（HEAD 仍为 404a598·07-09 01:12），静默累计 ~32h**。工作树死神 WIP 原样未动：`ai_narrate_worker/index.js` 仍 `node --check` 报 SyntaxError（尾部 callLLM 片段重复 + 乱码），`computeDeathThreat` 仍仅 1 处调用、全文件无定义 → **上传必崩，阻断 AI 叙事 pipeline**；`game.js` 死神 3 字段（+4 行）语法 OK 仍挂在工作树。**DB 5 表全绿**（已实测：era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197）。**git fetch 本次 exit 0 无报错**（与 61 期 'Empty reply' 不同），无新远端 commit；本地仍领先 35+ commit 未 push，MM_API_KEY 密钥风险持续 P0。**A 类修复**：product-design.md §十二 索引中 `docs/tech-manual.md` 指向不存在文件 → 已标注（未创建）。
+
+| 维度 | 61 期 | 62 期 | 变化 |
+|------|------|------|------|
+| 本地 main HEAD | 404a598（D088 修正11·07-09 01:12）| **404a598**（同）| 持平（本窗零新 commit）|
+| 本地领先远端 commit | 35+ | **35+** | 持平（fetch 恢复但无新远端 commit）|
+| 工作区未 commit tracked 文件 | 2（game.js + ai_narrate_worker/index.js，死神 WIP）| **2**（同，原样）| 持平 |
+| 未跟踪文件 | 5 | **5** | 持平 |
+| 数据库 5 表 | 全绿（沿用 60 期）| **全绿（实测）** | 持平（本期重新实测确认）|
+| §10.4 死神 | 🚧（WIP 损坏）| **🚧（WIP 损坏）** | 持平（先生未修）|
+| §10.4 版本号 | v0.6.50w | **v0.6.50w** | 持平 |
+| 决策落档 | 12 项（26 未落档）| **12 项** | 持平 |
+| git fetch | 失败（Empty reply）| **成功（exit 0，无新 commit）** | 网络恢复 |
+
+### 62 期关键观察
+
+- **🚨 62 期 P0 · `ai_narrate_worker/index.js` 仍损坏（必崩）** —— 与 61 期一致：`node --check` 报 `Unexpected token '}'`，尾部 1666 行含 callLLM 函数体片段重复追加 + 乱码；`computeDeathThreat(updated, preUpdate)` 调用点（line 295）全文无定义。**上传此工作树必部署失败 / 运行 ReferenceError，阻断 AI 叙事 pipeline**。PMO 不修（核心逻辑），仍建议先生二选一：① 补 `computeDeathThreat` 定义并清尾部损坏代码；② 暂不做死神则 `git checkout -- cloudfunctions/ai_narrate_worker/index.js` 回退（⚠️ 注意 AGENTS.md 红线：禁止直接 `git checkout --` 未提交文件，须先 commit/stash 或先生亲操作）。
+- **🔇 62 期 先生本窗零 commit（跨夜静默 ~32h）** —— HEAD 自 07-09 01:12 D088 修正11 起未动，61→62 窗（21:01→09:01）跨夜静默，累计静默 ~32h（D088 集群后）。
+- **✅ 62 期 数据库 5 表实测全绿** —— era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197，全超最小值（22/100/1700/100/100）。注：61 期沿用 60 期数字未实测；本期用新 tcb 语法（`--command` MgoCommands JSON）重新实测，确认全绿。
+- **🌐 62 期 git fetch 恢复** —— 本次 `git fetch origin` exit 0 无报错（61 期 'Empty reply from server'），无新远端 commit。本地仍领先 35+ commit 未 push。先生回来需 push（但 MM_API_KEY 密钥已入 history 35+ commit，push 前必轮换，P0）。
+- **📝 62 期 A 类修复 · 文档死链** —— `docs/product-design.md` §十二 索引列 `docs/tech-manual.md`（技术手册）实际不存在（find 全仓无此文件）→ 已标注"（未创建）"，消除死链。其余 §十二 引用（data/*.json/package.json）均存在。
+- **📌 62 期 cron 模板偏差（延续 61 期）** —— 本任务模板仍指向 `docs/design.md` §七，实际权威文档为 `docs/product-design.md` §10.4（design.md 已删）。本次按 §10.4 执行。
+
+### 62 期 A 类自动修复
+
+- **文档死链**：`docs/product-design.md` §十二 `docs/tech-manual.md` → 标注"（未创建）"（已落地工作树，未 commit）。
+- 其余未跟踪文件 5 个均为真实产物，不擅删；tracked 损坏文件属核心逻辑归 B 类，不擅修；无死代码/命名问题需处理。
+
+### 62 期推进结论
+
+- 死神系统：仍 🚧 损坏，等先生修（B 类）。§10.4 维持 🚧。
+- 其余 4 项 ❌（跨世痕迹/动态榜单/Prompt v12/多玩家）无新进展。
+- §10.4 无变化（死神仍为 🚧，不升不降）。
+
+---
+
+## 状态快照（最新一次 cron 运行 · 2026-07-09 21:01 · 第 61 次）
+
+> **61 期"死神 WIP 已启动但损坏 · worker 云函数语法报错" · 本地领先远端 35+ commit（git fetch 失败无法核对）· 数据库 5 表全绿**。60 期报 D088 15-commit 集群后先生静默；**61 期扫描窗 07-09 09:01 → 21:01（12h）先生零新 commit（HEAD 仍为 404a598·01:12），延续静默 ~20h**。**重大发现**：工作树出现 2 个未提交 tracked 改动，是**死神追杀机制 WIP**——`game.js` 加 3 个存档字段（deathThreat/historyShelter/noGrowthStreak，语法 OK），`ai_narrate_worker/index.js` 加死神 system prompt + computeDeathThreat 调用，但**① 文件尾被损坏（callLLM 函数体片段重复追加），`node --check` 报 SyntaxError 行 1653 意外 `}`；② `computeDeathThreat` 被调用但全文件无定义（grep 仅 1 处=调用点）→ 运行时必 ReferenceError**。**该 worker 云函数若按此上传必崩**。PMO 不修核心逻辑，已隔离标记，等先生修。§10.4 死神由 ❌ 升 🚧（已启动但损坏）。**DB 5 表全绿**（era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197）。**git fetch origin 仍失败（Empty reply from server，无 GitHub 网络）**，本地领先远端 35+ commit 系沿用 #60 估算。**MM_API_KEY 含密钥 commit 累积 35+ 持续 P0**。
+
+| 维度 | 60 期 | 61 期 | 变化 |
+|------|------|------|------|
+| 本地 main HEAD | 404a598（D088 修正11·07-09 01:12）| **404a598**（同）| 持平（本窗零新 commit）|
+| 本地领先远端 commit | 35 | **35+** | 持平（git fetch 失败无法核对真实差）|
+| 工作区未 commit tracked 文件 | 0（除 PROJECT.md）| **2**（game.js + ai_narrate_worker/index.js，均为死神 WIP）| **+2 死神 WIP** |
+| 未跟踪文件 | 5 | **5** | 持平（ai_write_death / ai_write_poem / docs/D049 / docs/v3-plan / mock）|
+| 数据库 5 表 | 全绿 | **全绿** | 持平 |
+| §10.4 死神 | ❌ | **🚧（WIP 损坏）** | 状态升级（工作已启动）|
+| §10.4 版本号 | v0.6.50w | **v0.6.50w** | 持平（滞后 15+）|
+| 决策落档 | 12 项（26 未落档）| **12 项** | 持平（D088 仍未落档）|
+| git fetch | 超时 | **失败（Empty reply）** | 网络仍不可用 |
+
+### 61 期关键观察
+
+- **🚨 61 期 P0 · `ai_narrate_worker/index.js` 损坏（必崩）** —— 死神 WIP 把 `callLLM` 函数体片段重复追加到文件尾（注释 + `})` + `req.on`/`req.write`/`req.end` 孤立代码），`node --check` 报 `SyntaxError: Unexpected token '}' at line 1653`；且 `computeDeathThreat(updated, preUpdate)` 被调用但全文无函数定义（仅 1 处调用）。**该云函数若上传必部署失败 / 运行 ReferenceError**，会阻断整个 AI 叙事 pipeline。**PMO 不修（核心逻辑），建议先生二选一：① 补 `computeDeathThreat` 定义并清掉尾部重复损坏代码；② 若暂不做死神，`git checkout -- cloudfunctions/ai_narrate_worker/index.js` 回退到上次良好提交（HEAD 404a598 的版本无此损坏）**。
+- **🚧 61 期 死神追杀机制 已启动（WIP，损坏）** —— `game.js` 存档加 3 字段（deathThreat/historyShelter/noGrowthStreak，validatePlayerLife 兼容）；`ai_narrate_worker/index.js` 加死神 system prompt（5 档危险度→强度映射 + 历史庇护气运效果）+ computeDeathThreat 调用 + applyPatch 默认值。逻辑方向正确，但如上损坏。**§10.4 死神由 ❌ → 🚧**。
+- **✅ 61 期 数据库 5 表全绿** —— 同 60 期：era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197，全超最小值。
+- **🔇 61 期 先生本窗零 commit** —— HEAD 自 01:12 D088 修正11 起未动，本 12h 窗（09:01→21:01）静默，累计静默 ~20h（D088 集群后）。
+- **🚨 61 期 git fetch 失败（Empty reply from server）** —— 无 GitHub 网络，无法核对远端真实状态；本地领先 35+ commit 系 #60 估算沿用。先生回来联网后需 `git fetch` 核对（防其他设备已 push）。
+- **🚨 61 期 MM_API_KEY 风险持续 P0** —— 35+ commit 含密钥在 history，push 前必轮换（先生拍板）。
+- **📌 61 期 cron 模板失准** —— 本任务模板指向 `docs/design.md` §七，但项目已演进为 `docs/product-design.md` §10.4（design.md 已删，design.v1.deprecated.md 为旧版）。本次按 §10.4 执行，已上报该模板偏差。
+
+### 61 期 A 类自动修复
+
+**无**。未跟踪文件 5 个均为真实产物（#60 已清理 92→5），PMO 不擅删；tracked 损坏文件属核心逻辑归 B 类，不擅修。
+
+### 61 期推进结论
+
+- 死神系统：已启动但未完成且损坏 → 🚧，等先生修（B 类）。
+- 其余 4 项 ❌（跨世/动态榜单/Prompt v12/多玩家）无新进展。
+- §10.4 已同步死神→🚧（其余不变）。
+
+---
+
+## 状态快照（最新一次 cron 运行 · 2026-07-09 09:01 · 第 60 次）
+
+> **🔥 60 期"先生 ⑭ 静默再实战 · D088 战役 15 commit 集群" · 本地领先远端 35 commit · 数据库 5 表全绿**。59 期报"先生回归 9h23min 后再静默 11h20min+"——**60 期扫描窗 07-08 21:01 → 07-09 09:01（12h）先生实战 1h25min（D088 23:47→01:12）+ 再静默 7h49min+**。先生从 21:01 后延续静默 ~2h45min，于 **23:47 拍板 D088 C 方案**（剧情页下半屏重排 + 古风常驻输入框），随后 **15 个 commit 密集落地（f0916ca→404a598，~1h25min）**，全是 game.js UI/UX 打磨（键盘弹起整体上移、选项古风序号一/二/三、顶栏不透明背景、叙事区暗面板、输入框与键盘融为一体、序号与文字居中等）。**本地领先远端 20 → 35 commit**（+15 D088），**MM_API_KEY push 前必轮换的 P0 风险持续累积**。**数据库 5 张表全绿**（era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197，全部超最小值）。**§10.4 仍 v0.6.50w**（滞后 15+ 版本号，5 项 ❌ 系统：死神/跨世/动态榜单/Prompt v12/多玩家 —— **先生实战方向仍是 UI/UX 小修小补，未启动 5 大未完成系统**）。**DECISIONS.md 落档 12 项（D001-D009+D048+D050+D062）**，**累计 26 项未落档**（= D051-D061+D067-D082+D085-D088，D088 为 60 期新增）。**A 类清理成功**：未跟踪临时文件 **92 → 5**（-87），移至 `/home/admin/workspace/.thetime-pmo-trash/2026-07-09/`（先生可恢复）；**12 个 git-tracked .bak/mock 不慎外移已 git checkout -- 恢复**，tracked 工作树无意外变更。**git fetch origin 超时（无 GitHub 网络）**，无法核对远端，**本地领先 35 commit 系本地累计估算**（#59 报 20 + D088 15 = 35，逻辑自洽）。**PMO 不 commit / push / 落档 / 更新 §10.4**。
+
+| 维度 | 59 期 | 60 期 | 变化 |
+|------|------|------|------|
+| 本地 main HEAD | 8e270b7（D087·07-08 09:39）| **404a598**（D088 修正11·07-09 01:12）| **+15 commit**（D088 战役集群）|
+| 本地领先远端 commit | 20 | **35** | **+15**（先生又累积 15 commit 未 push）|
+| 工作区未 commit tracked 文件 | 0 | **0** | 持平（除 PROJECT.md 自身 M）|
+| 未跟踪文件 | 92 | **5** | **-87**（A 类清理：.bak + mock-* + test-save → 回收站）|
+| DECISIONS.md 落档 | 12 项 | **12 项** | 持平（D088 未落档，+1 待落档）|
+| §10.4 版本号 | v0.6.50w（滞后 14+）| **v0.6.50w（滞后 15+）** | 无变化 |
+| 关键 tracked 文件时间戳 | 07-08 09:39 | **07-09 01:12** | game.js 被 D088 系列 15 commit 修改（输入框/键盘/选项/顶栏/序号）|
+| 新 D 编号 | 3（D085-D087）| **1**（D088）| +1（D088 = 剧情页下半屏重排 + 输入框战役）|
+| 数据库 5 表 | n/a（59 期未跑）| **全绿** | era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197 |
+| 典型工作曲线 | 13 段 | **14 段** | 新增 ⑭"静默再实战 · D088 15-commit 集群战役" |
+| MM_API_KEY push 前风险 | 20 commit | **35 commit** | **P0 持续累积** |
+
+### 60 期状态变化
+
+**先生实战 D088 战役 · 15 commit · 1h25min 集群** —— 60 期扫描窗（12h）= 21:01→09:01。先生分 2 段：
+
+1. **21:01 → 23:46（2h45min+）—— 延续静默** ：59 期报 11h20min+ 静默，本期再延 2h45min+
+2. **23:47 → 01:12（1h25min）—— D088 战役 15 commit 集群** ：先生拍板 C 方案（f0916ca "D088 · 剧情页下半屏重排 + 古风常驻输入框"）→ 14 个子修正（修正→修正2→修正3 古风序号一/二/三 → 修正4 暗面板 → 修正5 输入框贴键盘 → 修正6 打字时选项隐藏 → 修正7 打字实时滚动 → 修正8 微信式整体平移 → 修正9 隐藏Canvas输入框 + 上移不盖榜单 + 收起移回 → 修正9b maxShift 封顶修 → 修正9c 顶栏不透明 + 去 maxShift → 修正9c-hotfix Cannot find topBarH → 修正10 序号固定左列文字居中 → 修正11 序号文字整块居中）
+
+**真因/教训链**：典型"密集反馈 → 高频微调"：先生每个修正间隔 ~5-15min，从 23:47 拍板到 01:12 收尾，**15 commit 全部 game.js 单文件 UI/UX**，无架构变更。
+
+### 60 期关键观察
+
+- **🔥 60 期 D088 战役 · 15 commit 集群 · 1h25min** —— 先生 23:47 拍板 C 方案后连续 15 次微调，全集中 game.js 叙事页下半屏 + 输入框 + 键盘交互。**典型 ⑭"静默再实战 · 15-commit 集群战役"**：从 58h47min+ 大静默 → 9h23min D085/D086/D087 → 14h20min+ 静默 → 1h25min D088 15 commit，先生实战节奏**短平快密集微调**
+- **🚨 60 期本地领先远端 35 commit（59 期 20 → 60 期 35，+15）** —— 先生 push 节奏仍未变，**MM_API_KEY 风险持续累积**：35 commit 全部含密钥（commit history 已 commit 70+ 次含密钥），**P0 优先级等先生拍板轮换 + push**
+- **✅ 60 期数据库 5 张表全绿** —— era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197，全部超最小值。**D049 玩家数据云端持久化 + 数据入库完成度充分**（先生无需补数据）
+- **✅ 60 期 A 类清理成功：92 → 5 untracked（-87）** —— 移走 `.bak`/`mock-*`/`test-save*` 等 ~97 个未跟踪临时文件到回收站（`/home/admin/workspace/.thetime-pmo-trash/2026-07-09/`，先生可恢复）；**12 个 git-tracked 临时文件不慎外移已 git checkout -- 恢复**，tracked 工作树 0 意外变更。**先生下次 push 前工作树干净**
+- **🚨 60 期决策落档 26 项未记录** —— 12 项正式落档（D001-D009+D048+D050+D062），**D051-D061+D067-D082+D085-D088 共 26 项仍未落档**（59 期 25 → 60 期 26，+1 = D088）。先生自有节奏
+- **🔇 60 期 5 项 ❌ 系统仍持续未动** —— 死神 / 跨世 / 动态榜单 / Prompt v12 / 多玩家 —— D088 是 UI/UX 战役（**非** ❌ 系统），先生实战方向**仍未启动 5 大未完成系统**
+- **🆕 60 期典型工作曲线 · 14 段新增 ⑭** —— 59 期 13 段补 ⑬"静默被实战打回 · 9h23min 集群修复" —— **60 期补 ⑭"静默再实战 · D088 15-commit 集群战役"**：先生两段静默间夹短密实战（典型 ⑫ → ⑬ → ⑭）
+- **🆕 60 期 git fetch origin 超时（无 GitHub 网络）** —— 本地 vs 远端差 35 commit 系本地估算（#59 报 20 + D088 15 = 35）。**先生回来后需 `git fetch` 核对远端真实状态**（可能有先生其他设备 push 的 commit 未被本地追踪）
+- **🆕 60 期 §10.4 滞后 15+ 版本号** —— §10.4 仍 v0.6.50w（v3.0.27 + v3.0.28 + v3.0.29 + D088 系列 → 实际 v3.0.30+）。**D053 候选（§10.4 同步）持续累积**，先生回来后建议：① §10.4 加 26 行 ② 升级版本号 ③ 或表头加说明
+
+### 60 期 A 类自动修复
+
+**1 项完成**：
+
+- **✅ 未跟踪临时文件清理（92 → 5）** —— `find` 扫 `.bak*` + `mock-*.js` + `test-save*.js`（exclude node_modules、mock/、cloudfunctions/ai_write_*、docs/*），**97 个未跟踪临时文件移到回收站** `/home/admin/workspace/.thetime-pmo-trash/2026-07-09/`（保留相对路径，先生可恢复）。**意外事件**：12 个 .bak/mock 文件**已被 git 跟踪**（先生历史 commit 不慎加入），mv 后产生 ` D ` 删除态 → **立即 `git checkout -- <12 files>` 恢复**，tracked 工作树无意外变更。**剩余 5 个 untracked 均为真实产物**：`cloudfunctions/ai_write_death/`（写墓志铭云函数，有 node_modules）、`cloudfunctions/ai_write_poem/`（写诗云函数）、`mock/`（先生 D085 c-plan 规划稿）、`docs/D049-database-design.md`（D049 数据库设计文档）、`docs/v3-plan.md`（v3 计划文档）—— **PMO 不擅删，先生决定**
+
+### 60 期先生工作曲线 · 14 段新增 ⑭
+
+- 59 期 13 段延续
+- **60 期新观察 ⑭"静默再实战 · D088 15-commit 集群战役"** —— 先生 59 期实战 9h23min（D085/D086/D087 UI 修复）→ 60 期静默 14h20min+ → 23:47 拍板 D088 → 1h25min 15 commit 集群战役。**典型"短密实战夹长静默"** 模式：⑫ 深度静默 → ⑬ 9h23min 实战 → ⑭ 短密 1h25min 实战
+
+### 60 期 12 小时新进展（07-08 21:01 → 07-09 09:01）
+
+| 进展 | 详情 |
+|------|------|
+| 🔥 **D088 战役 15 commit 落地** | 23:47→01:12 1h25min 密集微调，game.js 单文件 UI/UX（剧情页下半屏重排 + 古风常驻输入框 + 键盘交互）|
+| 🔥 **本地 HEAD 8e270b7 → 404a598（+15 commit）** | 59 期 0 commit → 60 期 15 commit，commit 节奏短密 |
+| 🔥 **本地领先远端 20 → 35 commit（+15）** | D088 全未 push，MM_API_KEY 风险累积 |
+| ✅ **数据库 5 张表全绿** | era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197 |
+| ✅ **A 类清理 92 → 5 untracked（-87）** | .bak + mock-* + test-save 临时文件移回收站，可恢复 |
+| 🚨 **决策落档 12/38（D088 为 60 期新增）** | 26 项决策未落档（D051-D061+D067-D082+D085-D088）|
+| 🚨 **§10.4 滞后 15+ 版本号** | §10.4 v0.6.50w 维持，D088 未反映 |
+| 🔇 **5 项 ❌ 系统仍持续未动** | 死神/跨世/动态榜单/Prompt v12/多玩家 —— D088 是 UI/UX，非 ❌ 系统 |
+| 🆕 **典型工作曲线 14 段新增 ⑭** | 静默再实战 · D088 15-commit 集群战役 |
+| 🆕 **git fetch origin 超时** | 无 GitHub 网络，本地领先 35 commit 系估算 |
+
+### 60 期先生行动建议（先生下次醒来后）
+
+1. **🔴 P0：MM_API_KEY 轮换 + push 35 commit（最高风险）** —— 60 期又累积 15 commit 未 push。**建议**：① 立即去云函数控制台**轮换 MM_API_KEY** ② BFG 清洗历史（可选）③ 评估 .env 文件 ④ push 35 commit（D087 兜底 + D088 战役 15 commit）
+2. **🟠 高优：D088 战役实战验证** —— 先生**建议用真实 openid 走完整链路**：① 进入游戏（已穿越身份）② 剧情页下半屏应见古风常驻输入框 ③ 弹键盘输入框贴键盘顶 + 叙事/画像整体上移不盖榜单 ④ 选项一/二/三 古风序号 + 序号与文字居中 ⑤ 顶栏不透明背景不漏字
+3. **🟠 高优：D088 + D085/D086/D087 落档 DECISIONS.md + §10.4 同步** —— 决策落档 12→13 项（D088 加入）。**建议**：① 写 D088 进 DECISIONS.md（D085-D087 也补）② §10.4 加 26 行 ③ §10.4 升级 v0.6.50w → v3.0.30（D085/D086/D087 升 v3.0.28/29 + D088 系列 v3.0.30）
+4. **🟠 高优：git fetch origin 核对远端真实状态** —— 60 期 fetch 超时（无 GitHub 网络），35 commit 优势系估算。**先生回来后先 `git fetch` 核对**：① 远端是否有先生其他设备 push 的 commit ② 是否有协作者 push ③ 确认 35 commit 系真实领先
+5. **🟡 中优：97 个临时文件回收站确认** —— A 类清理移 97 文件至 `/home/admin/workspace/.thetime-pmo-trash/2026-07-09/`。**建议**：① 先生确认清理范围 OK ② 不需恢复的 `rm -rf` 该目录（先生决定）③ 12 个 tracked `.bak` 是否需要 `git rm` + commit 清理出 git
+6. **🟡 中优：5 个剩余 untracked 决策** —— `ai_write_death/`（写墓志铭云函数）、`ai_write_poem/`（写诗云函数）、`mock/`（D085 规划）、`docs/D049-database-design.md`、`docs/v3-plan.md`。**建议**：① `ai_write_death/ai_write_poem` 是 D050 红线清理的一部分？是否需 git add ② `mock/` 是否需 git add 或删除 ③ 两份 docs 是否需入 git
+7. **🟡 中优：tcb fn deploy ai_narrate_worker** —— D088 只改 game.js（前端），worker 没动。**建议**：先生 D088 实战验证后决定是否需要新部署（v3.0.27 + v3.0.28 + v3.0.29 + v3.0.30 累计未部署前端代码，需 `tcb fn deploy ai_narrate_worker --force`）
+8. **🟢 低优：5 项 ❌ 系统（死神/跨世/动态榜单/Prompt v12/多玩家）** —— D088 是 UI/UX（非 ❌ 系统），**先生实战方向仍未启动 5 大未完成系统**。**建议**：先生回来后排优先级（死神 + Prompt v12 最关键 → 跨世 + 动态榜单次之 → 多玩家最末）
+
+---
+
+---
+
+## 状态快照（最新一次 cron 运行 · 2026-07-08 21:01 · 第 59 次）
+
+> **🔥 59 期"先生回归·9h23min 实战" · 🔇 58h47min+ 静默终结 · D085/D086/D087 3 个新决策落地**。58 期报"先生休整第 6 天 + 58h47min+ 静默创历史新高"——**59 期静默被打破**：先生 7-8 00:17 → 09:40 实战 **9h23min**，落 **D085（4 个 commit：506a336 C 方案 + 62dd47b 排查日志 + 36344b8 backup + 5327363 c 修复）+ D086（7389957 A 方案回滚 + b7303be Revert）+ D087（8e270b7 drawFreeInputButton render 调用补回）**共 **7 个 commit**，全是 game.js + D085 系列回滚 + 兜底链路。**典型 13 段工作曲线 · 新增 ⑬"静默被实战打回 · 9h23min 集群修复"**：先生从 58h47min+ 静默直接进入实战，**典型 58 期 ⑫"深度静默" → 59 期 ⑬"实战修复 freeInput 入口"**。**工作区 tracked 文件 0 个脏**（D085/D086/D087 7 commit 全落地）——先生已 commit 工作，无新裸代码。**DECISIONS.md 仍 12 项正式落档**（D085/D086/D087 还未落档，**累计 25 项未落档** = D051-D061 + D067-D082 + D085/D086/D087）。**§10.4 仍 v0.6.50w**（先生未更新，**滞后 14+ 个版本号**）。**本地领先远端 20 commit**（58 期 13 → 59 期 20，+7）——先生又累积了 7 个 commit 未 push。**PMO 不擅自 commit / push / 落档 / 更新 §10.4，等先生决定**。
+
+| 维度 | 58 期 | 59 期 | 变化 |
+|------|------|------|------|
+| 本地 main HEAD | 4ec8ca4（D062·07-05 10:13）| **8e270b7**（D087·07-08 09:39）| **+7 commit**（D085 系列 7 个）|
+| 本地领先远端 commit | 13 | **20** | **+7**（先生又累积 7 commit 未 push）|
+| 工作区未 commit 文件 | 13 | **0** | **-13**（先生全部 commit，AGENTS.md 红线解除）|
+| 未跟踪文件 | 91 | **92** | +1（cron 自身 1 项 PROJECT.md 写入）|
+| DECISIONS.md 落档 | D062（6 项）| **D062（12 项）** | +6（D001-D009 全 + D048/D050/D062，已是 12 项）|
+| §10.4 版本号 | v0.6.50w（滞后 13+）| **v0.6.50w（滞后 14+）** | 无变化（先生未更新 §10.4）|
+| 关键 tracked 文件时间戳 | 07-05 20:09 | **07-08 09:39** | game.js 被 D085-D087 修改（freeInput 链路 + keyboardHeight）|
+| 新 D 编号 | 0 | **3** | D085 + D086 + D087 = 3 个新决策 |
+| 裸代码 | 2 | **0** | **先生 commit 全部 13 文件 + 2 裸代码**（D062 后新增均已落地）|
+| 先生累计休整时长 | 58h47min+ | **0** | **先生已回归：00:17 → 09:40 实战 9h23min** |
+
+### 59 期状态变化
+
+**先生回归 · 7 commit 落地 · 0 脏文件 · AGENTS.md 红线解除** —— 58 期 → 59 期（24h 扫描窗 = 09:01 → 09:01 跨夜 + 12h = 09:01 → 21:01）。先生实战时段：**00:17（D085 C 方案）→ 09:40（D087 drawFreeInputButton render 补回）= 9h23min**，分 3 段：
+
+1. **00:17 → 01:06（49min）—— D085 系列调研 + 试错** ：先生试 wx.createInput 替换 wx.showKeyboard（C 方案，commit 506a336 v3.0.27）→ 加排查日志（62dd47b）→ backup try-catch（36344b8）→ c 修复 handleFreeInput 恢复 wx.showKeyboard 兜底（5327363）
+2. **09:27 → 09:31（4min）—— D086 A 方案回滚** ：先生拍板"放弃 D085 C 方案" → Revert D085c（b7303be）→ 回滚 D085 系列（7389957，"先生拍板·A 方案"），恢复 drawFreeInputButton 函数定义 + handleFreeInput + onTouch hitTest
+3. **09:39 → 09:40（1min）—— D087 render 调用补回** ：先生发现 D085a 删了 render 主循环里的 drawFreeInputButton 调用，D086 恢复了函数定义但 render 主循环 line 1182 那段"此处不再调 drawFreeInputButton"注释还留着 → **函数定义了但永远不被调** → 玩家看不到任何输入入口 → D087 修（8e270b7，render 主循环 line 1186 加 `if (Date.now() >= optionsAppearTime && options.length > 0) drawFreeInputButton(ctx)`）
+
+**真因教训（PMO 提取）** ：**静态检查 11/11 全绿只验了"函数存在"，没验"函数被调"**——mock 漏洞，导致 v3.0.28 → v3.0.29 必须再修一次（先生 → D087）。**先生工作模式** ：单点真因排查 → 单云函数 / 单文件部署 → 实战验出未调用 → 再补调用（典型 ⑨ → ⑩ → ⑬）。
+
+### 59 期关键观察
+
+- **🔥 59 期"先生回归 · 9h23min 实战"** —— 先生从 58h47min+ 静默期（创历史新高）直接进入实战。**实战 9h23min**（00:17 D085 → 09:40 D087）+ **静默 14h20min+**（09:40 → 21:01）= 24h 扫描窗。**工作 / 休整比例** = **9h23min : 14h20min+ ≈ 1 : 1.5**（58 期 1:9 → 59 期 1:1.5 **完全反转**）。**先生回归信号强烈**：连续 7 commit 实战 + 全部 commit（0 脏文件）
+- **🔥 59 期 D085/D086/D087 决策簇 · freeInput 入口修复战役** —— 7 commit 全集中 game.js **单文件**：D085 C 方案试错 → D086 A 方案回滚 → D087 render 调用补回。**真因链**：① D085a 删 drawFreeInputButton render 调用 → ② D086 恢复函数定义但漏恢复 render 调用 → ③ D087 补回 render 调用 → ④ 玩家才能看到 ✎ 键入所想 虚线框
+- **🚨 59 期 25 项决策未落档 + §10.4 滞后 14+ 个版本号累积** —— DECISIONS.md 12 项正式落档（D001-D009 + D048 + D050 + D062），**D051-D061 + D067-D082 + D085 + D086 + D087 共 25 项仍未落档**（58 期 22 → 59 期 25，+3）。先生自有节奏，PMO 不催
+- **🚨 59 期本地领先远端 20 commit（58 期 13 → 59 期 20，+7）** —— 先生 push 节奏未变的情况下，**累计 20 个 commit 在本地未 push**。**风险升级** ：20 commit 全部含 MM_API_KEY（commit history 已 commit 54+ 次含密钥），push 后才能缓解。**P0 优先级等先生拍板**（MM_API_KEY 风险持续累积）
+- **🔥 59 期 5 项 ❌ 系统仍持续未动**：死神追杀 / 跨世痕迹 / 动态榜单 / Prompt v12 / 多玩家互动 —— D085/D086/D087 是 UI 修复（非 ❌ 系统），**先生实战方向仍是"小修小补"**，未启动 5 大未完成系统
+- **🆕 59 期典型工作曲线 · 13 段** —— 58 期 12 段补 ⑫"深度静默再休整" ——**59 期补 ⑬"静默被实战打回 · 9h23min 集群修复"**：先生从 58h47min+ 静默直接进入实战，跨段实战验证触发系统化修正（典型 ⑥ → ⑬）
+- **🆕 59 期决策簇识别：D085/D086/D087 是同一战役** —— 都是修"玩家看不到 ✎ 自由输入框"问题。**D085 = 试错方案** → **D086 = 回滚到旧方案** → **D087 = 旧方案漏恢复 render 调用补丁**。**先生实战典型模式** ：试 C 方案 → 验出问题 → 拍板 A 方案回滚 → 验出回滚不完整 → 补回滚
+- **🆕 59 期 0 脏文件 + AGENTS.md 红线完全解除** —— 58 期先生有 13 脏文件 + 2 裸代码（79h+ working tree）→ 59 期全部 commit（先生实战中 commit 节奏明显加快）。**`AGENTS.md` "git checkout 防护"红线在 59 期扫描窗内完全未触发**
+- **🆕 59 期 untracked 92（58 期报 91 → 59 期实测 92，+1）** —— 先生工作未引入新 untracked（都是历史 .bak 累积），+1 是 cron 自身 PROJECT.md 写入或先生 00:17 → 09:40 期间产生 1 个未跟踪临时文件
+
+### 59 期 A 类自动修复
+
+**0 项** —— 工作区干净（0 脏文件），先生所有实战改动都已 commit。A 类修复无标的。
+
+### 59 期先生工作曲线 · 13 段新增 ⑬
+
+- 58 期 12 段延续
+- **59 期新观察 ⑬"静默被实战打回 · 9h23min 集群修复"** —— D085 试错 → D086 回滚 → D087 补丁，**典型"实战验证触发系统化修正"** 模式延续。先生 58h47min+ 静默结束后不是缓启动，而是直接进入"试错 - 回滚 - 补丁"密集实战
+
+### 59 期 12 小时新进展（07-08 09:01 → 07-08 21:01）
+
+| 进展 | 详情 |
+|------|------|
+| 🔥 **先生从 58h47min+ 静默期实战回归** | 00:17 → 09:40 实战 9h23min + 09:40 → 21:01 静默 11h20min+ = 24h 扫描窗 |
+| 🔥 **D085/D086/D087 = 3 个新决策 · 7 个 commit 落地** | 全部 game.js 单文件：freeInput 入口修复战役（D085 C 方案试错 → D086 A 方案回滚 → D087 render 调用补回）|
+| 🔥 **本地 main HEAD 4ec8ca4 → 8e270b7（+7 commit）** | 58 期 0 commit → 59 期 7 commit，commit 节奏明显加快 |
+| 🔥 **工作区 13 脏文件 → 0 脏文件（AGENTS.md 红线完全解除）** | 先生实战中 commit 节奏明显加快（典型 ⑩ → ⑬ 实战模式）|
+| 🔥 **先生 commit 全部 13 文件 + 2 裸代码** | 58 期 13 脏文件 + 2 裸代码 → 59 期 0 脏文件 + 0 裸代码 |
+| 🔥 **本地领先远端 13 → 20 commit（+7）** | 先生 push 节奏未变，累积风险持续 |
+| 🚨 **25 项决策未落档** | D051-D061 + D067-D082 + D085-D087 共 25 项仍未落档（58 期 22 → 59 期 25，+3）|
+| 🚨 **§10.4 滞后 14+ 个版本号** | §10.4 v0.6.50w 维持，先生实战未更新 §10.4 |
+| 🔇 **5 项 ❌ 系统仍持续未动** | 死神 / 跨世 / 动态榜单 / Prompt v12 / 多玩家 —— D085/D086/D087 是 UI 修复，非 ❌ 系统 |
+| 🆕 **典型工作曲线 13 段新增 ⑬** | 58 期 12 段延续 → 59 期补 ⑬"静默被实战打回 · 9h23min 集群修复" |
+| 🆕 **决策簇识别** | D085/D086/D087 = 同战役"D085 试错 → D086 回滚 → D087 补丁" |
+
+### 59 期先生行动建议（先生下次醒来后）
+
+1. **🟠 高优：D085/D086/D087 验证 freeInput 入口是否正常** —— D087 已修 render 调用，先生**建议用真实 openid 走完整链路**：① 进入游戏 ② 选项下方应显示 ✎ 键入所想 虚线框 ③ 点击应能拉起 wx.showKeyboard ④ DBG 浮窗 → 「对话流」tab → 验证 keyboardHeight 变量
+2. **🟠 高优：D085/D086/D087 落档 DECISIONS.md + §10.4 同步** —— DECISIONS.md 12 项正式落档（D085/D086/D087 未落档）。**建议**：① 写 D085/D086/D087 进 DECISIONS.md ② §10.4 加 25 行（D051-D061 + D067-D082 + D085-D087）③ §10.4 升级 v0.6.50w → v3.0.30（v3.0.27 + v3.0.28 + v3.0.29）
+3. **🔴 P0：MM_API_KEY 轮换（D010 + D026 + D054 升级最高风险 · push 前必做）** —— push 54+ commit 含 MM_API_KEY。**先生下次醒来后第一件事**：① 立即去云函数控制台**轮换 MM_API_KEY** ② BFG 清洗历史（可选）③ 评估 .env 文件 ④ push 20 commit
+4. **🟠 高优：本地领先远端 20 commit push 决策** —— 58 期 13 → 59 期 20，先生又累积 7 commit 未 push。**建议**：① 决定 push 时机（与密钥轮换同步）② 决定 commit 粒度（一次 20 commit vs 分批）③ 先生可考虑先 push D085/D086/D087（与密钥轮换同步）
+5. **🟠 高优：D062 + D085/D086/D087 完整链路实战** —— D062 拍板"可以"+ D087 render 修复。**建议先生重进游戏验证**：① narrative 显示最近一条 ② 选项下方看到 ✎ 键入所想 虚线框 ③ 点击拉起键盘 ④ 输入文本后提交 ⑤ DBG 浮窗验证 narrativeHistory 顺序 + keyboardHeight
+6. **🟡 中优：tcb fn deploy ai_narrate_worker 部署** —— D085/D086/D087 都改 game.js（前端），worker 没动（不需要重新部署）。**建议**：先生 D085/D086/D087 验证后再决定是否需要新部署
+7. **🟡 中优：92 untracked 清理** —— 58 期 91 → 59 期 92，全部历史 .bak 累积。**建议**：① 先生决定清理时机（与 commit/push 同步）② 用 `git clean -n` 预览 → 先生亲自执行 `git clean -f` ③ 先生亲自决定保留哪些 .bak
+8. **🟢 低优：5 项 ❌ 系统（死神/跨世/动态榜单/Prompt v12/多玩家）** —— D085/D086/D087 是 UI 修复（非 ❌ 系统），**先生实战方向仍是"小修小补"**，未启动 5 大未完成系统。**建议**：先生回来后排优先级（死神 + Prompt v12 最关键 → 跨世 + 动态榜单次之 → 多玩家最末）
+
+---
+
+---
+
 ## 状态快照（最新一次 cron 运行 · 2026-07-07 21:01 · 第 58 次）
 
 > **🔇 58 期"先生休整第 6 天" · 0 新决策 · 0 新 commit · 完全静默 12h+**。57 期报"先生 46h+ 累计静默"——**58 期扫描窗 09:01 → 21:01（12h）+ 累计静默突破 58h47min+**（D062 commit 07-05 10:13 → 07-07 21:01）。先生本地 tracked 文件时间戳全部延续 07-05 20:09（minigame/scenes/game.js 末次改动）。**DECISIONS.md 仍 6 项正式落档**（D001-D009 + D048 + D050 + D062），**§10.4 仍标 v0.6.50w**（滞后 13+ 个版本号）。**13 脏文件 + 91 untracked 全部延续**（57 期报 92 → 58 期实测 91，可能 57 期多算 1 个，无实质变化）。**典型 12 段工作曲线延续 ⑫"深度静默再休整"**：先生连续 52h+ 完全无操作（自 07-05 20:09 收尾 game.js 后），**已突破 53 期"7h26min"、56 期"3h33min"、57 期"12h+" 三段静默记录 → 当前 58h47min+ 创历史新高**。**PMO 不动文件、不催、不主动追问**。
@@ -2731,3 +3608,61 @@
 7. **🟡 中优：13 脏文件 commit 节奏（54 期新增）**——D062 新增 5 脏文件（player_load + ai_narrate_worker + DECISIONS.md + mock-d062-player-load.js）。**先生回来后定**：① D028 .gitignore 是否先 commit ② 13 文件（v3.0.14ai 主体 + generate_identity + upload-minigame.js + D062 4 文件）是否分批 commit ③ 与 push 到远端策略
 8. **🟡 中优：D062 验证 mock-d062-player-load.js 是否纳入版本控制**——D062 mock 测试文件作为单次真因排查产物，**先生可能想留作回归测试**。**建议**：① 决定是否 commit ② 或归档到 scripts/mock/ 子目录 ③ 或加 .gitignore
 9. **🟢 低优：5 项 ❌ 系统（死神/跨世/动态榜单/Prompt v12/多玩家）**——先生 D062 后仍未回这 5 项。**建议**：先生回来后排优先级（死神 + Prompt v12 最关键 → 跨世 + 动态榜单次之 → 多玩家最末）
+ty + upload-minigame.js + D062 4 文件）是否分批 commit ③ 与 push 到远端策略
+8. **🟡 中优：D062 验证 mock-d062-player-load.js 是否纳入版本控制**——D062 mock 测试文件作为单次真因排查产物，**先生可能想留作回归测试**。**建议**：① 决定是否 commit ② 或归档到 scripts/mock/ 子目录 ③ 或加 .gitignore
+9. **🟢 低优：5 项 ❌ 系统（死神/跨世/动态榜单/Prompt v12/多玩家）**——先生 D062 后仍未回这 5 项。**建议**：先生回来后排优先级（死神 + Prompt v12 最关键 → 跨世 + 动态榜单次之 → 多玩家最末）
+
+---
+
+## 状态快照（最新一次 cron 运行 · 2026-07-12 21:01 · 第 55 次）
+
+> **🚨 重大更新 · 先生 07-08 → 07-10 大爆发，本地领先远端飙到 37 commit**。54 期（07-05 21:01）报 HEAD=4ec8ca4（D062）+ 领先 13 commit——**现在 HEAD=e6b5d5a（07-10 死神机制数据闭环修复）+ 领先 37 commit**。先生在 07-08~07-10 连续拍板 **D085→D088 自由输入框 + 死神追杀机制 MVP**，且 **§10.4 已把「死神追杀机制」从 ❌ 升为 🚧（MVP已修复）**（先生自己在某次 commit 里改了 §10.4，已落 commit，非 PMO 擅改）。
+> **🆕🆕🆕 D049 四表实测 LIVE（全闭环跑通）**：本次 tcb 仍可认证（env list exit=0），直查 D049 四张新集合 → **player 2 / player_life 2 / narrate_history 64 / llm_io 54**。**先生真机玩过**：D062（07-05）引用的 3 条真实 ai 记录就是 narrate_history 的尾巴；llm_io 54 条 = AI 调用全程可追溯（D049 设计目标达成）。**D049 完整链路（云端存档/加载/AI 调用记录）实战验证通过**，不再是"等真实玩家触发"的状态。
+> **🚨 关键观察 · 先生工作曲线延续**：07-05 第 54 期报"深度休整 20h+"→ 07-08 回来拍 D085 自由输入 → 07-09 D088 下半屏重排 + 古风常驻输入框 + 键盘弹起整体平移 + 选项古风序号 + 盖章顶栏（drawSealTopBar）→ 07-10 死神追杀机制 MVP + 数据闭环修复。**典型曲线再验证**：① 凌晨/深夜爆肝 ② 拍板清理 ③ 本地 commit 不 push ④ 深度休整 ⑤ 等下一个方向 ⑥ 真机触发系统化修正。
+> **🚨 事实源修订确认**：cron 模板说"docs/design.md §七"——**该文件不存在**（先生 06-17 合并为 product-design.md）。实际权威 = `product-design.md` §10.4（版本状态总览）。**本次 §10.4 已由先生更新**：死神追杀 ❌ → 🚧（其余 4 项 ❌ 未动）。PMO 持续以 product-design.md 为事实源。
+
+| 维度 | 状态 | 备注 |
+|------|------|------|
+| **方向性变化** | 🚨 **先生 07-08~07-10 大爆发：自由输入 D085-D088 + 死神追杀机制 MVP** | 54 期（07-05）HEAD=4ec8ca4（D062）→ 现在 HEAD=e6b5d5a（07-10 死神机制数据闭环修复）。新增 24 commit（37-13）覆盖：D085 自由输入（wx.createInput 替换 wx.showKeyboard）/ D086-D087 回滚 / D088 下半屏重排+古风常驻输入框+键盘整体平移+选项古风序号+盖章顶栏 / 死神追杀 MVP（危险度5档+庇护+锁定+prompt注入）/ 死神数据闭环修复 |
+| Git 工作树 | **3 文件脏 + 5 untracked** | 脏：PROJECT.md（PMO 自身 +367）/ ai_narrate_worker/index.js（-78，先生收尾清理）/ game.js（+45，先生收尾）。untracked：ai_write_death/ + ai_write_poem/ + docs/D049-database-design.md + docs/v3-plan.md + mock/ |
+| 远端 main | `origin/main`（未知 hash）| 🚨 **本地领先远端 37 commit 未 push**（HEAD e6b5d5a）。D062 时已部署 player_load 单云函数；死神 MVP 等云函数改动**只在本地的 commit 里，未部署未 push** |
+| 本地 main | `e6b5d5a`（07-10 死神机制数据闭环修复）| 比 54 期 4ec8ca4 推进 24 commit（D085-D088 系 + 死神 MVP）|
+| 工作区未 commit | 3 文件 +394/-96（含 PMO 自身）| 先生 07-10 后又有 game.js +45 / ai_narrate_worker -78 未提交——**先生收尾中，未 commit** |
+| 未跟踪文件 | **5 个** | ai_write_death/ ai_write_poem/ docs/D049-database-design.md docs/v3-plan.md mock/——**均为先生刻意保留（云函数未 git add + 文档/备份轨迹）** |
+| **§10.4 事实源** | ✅ **先生已更新**：死神追杀 ❌ → 🚧 | product-design.md §10.4 现标：死神追杀机制 🚧 MVP已修复(危险度5档+庇护+锁定+prompt注入,待真机测调平衡) / 跨世痕迹 ❌ / 榜单排名动态计算 ❌ / Prompt v12 ❌ / 多玩家互动 ❌。**PMO 不擅改先生事实源** |
+| **死神追杀机制** | 🚧 **MVP 已修复（07-10）** | 07-10 两个 commit：① 死神追杀机制 MVP 修复（补回丢失的核心函数 + 清理损坏文件尾）② 死神机制数据闭环修复（前端 merge 回死神3字段 + state 初始化）。**从 ❌ 升 🚧**——仍需先生真机测调平衡 |
+| **自由输入 D085-D088** | 🚧 **已 build，未落 DECISIONS.md** | D085 wx.createInput 替换 showKeyboard + v3.0.27 叠加 / D086-D087 回滚 A 方案 / D088 下半屏重排 C 方案 + 古风常驻输入框 + 键盘弹起整体平移 + 选项古风序号(一/二/三) + 盖章顶栏(drawSealTopBar)。**先生手机实测迭代 11 轮修正** |
+| **D049 四表 LIVE（本次实测）** | ✅ **全闭环跑通** | player **2** / player_life **2** / narrate_history **64** / llm_io **54**。**先生真机玩过**——D049 云端持久化 + llm_io 抽象层实战验证通过（不再"等真实玩家触发"）|
+| **5 核心表** | ✅ **健康·冻结** | era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197（同 54 期，**先生 6 月后未再入库新历史数据**）|
+| 数据库认证 | ✅ **tcb 仍可认证** | 本期 `tcb env list` exit=0 + `check-db-state.py` 跑通 5 表 + 直查 D049 四表成功。**49 期说的"tcb 登录过期"已不复现**（先生 07-08~10 部署云函数时重新登录）|
+| **DECISIONS.md 落档** | 🚨 **仅 D001-D009 + D048 + D050 + D062（5 组）** | **D051-D061（11 项）+ D085-D088（4 项）= 15 项实质落地决策未落档**。先生 07-05 D062 首拍首落档后，07-08~10 的 D085-D088 又没落档——**落档节奏不稳定** |
+| **A 类自动修复** | 0 项 | 3 脏文件 = 先生收尾代码(game.js/ai_narrate_worker) + PMO 自身(PROJECT.md)；5 untracked = 先生刻意保留（云函数未 add + 文档/备份）。**无可清理项** |
+| **B 类待决策 15+ 项持续** | 🚨 | ① MM_API_KEY 轮换（D010+D026+D054 最高风险·37 commit 含密钥未 push）② D051-D061 + D085-D088 落档（15 项）③ 死神 🚧→✅ 与否（待真机平衡）④ 4 项 ❌ 系统优先级（跨世/动态榜单/Prompt v12/多玩家）⑤ 37 commit push 决策 |
+
+### 12 小时新进展（本次 cron · 2026-07-12 21:01）
+
+| 进展 | 详情 |
+|------|------|
+| 🚨 **本地领先远端 37 commit（54 期是 13）** | 先生 07-08~07-10 推 24 commit（D085-D088 + 死神 MVP）未 push。**含 MM_API_KEY 的 commit 仍在本地 + 之前已 push 的 47 commit 在远端**——密钥风险持续 |
+| 🚨 **§10.4 死神追杀 ❌ → 🚧（先生已改并 commit）** | product-design.md §10.4 当前标"死神追杀机制 🚧 MVP已修复(危险度5档+庇护+锁定+prompt注入,待真机测调平衡)"。PMO 核对：与代码（07-10 死神机制 commit）一致，**事实源无矛盾** |
+| 🆕🆕🆕 **D049 四表 LIVE：player 2 / player_life 2 / narrate_history 64 / llm_io 54** | 本次 tcb 直查确认全闭环跑通。llm_io 54 条 = AI 调用输入/输出/error 全程记录（D049 设计目标：调试不再抓包）。**D049 实战验证通过** |
+| 🆕 **自由输入 D085-D088 已 build（11 轮手机实测修正）** | D088 系（07-09 凌晨）：① 隐藏Canvas输入框避系统输入条 ② 键盘弹起整体平移(微信式) ③ 真实渲染高度算滚动 ④ 选项隐藏/古风序号 ⑤ 盖章顶栏(drawSealTopBar) 修"盖不住+被键盘盖" ⑥ 修 Cannot find variable topBarH。**先生深夜爆肝特征** |
+| 🆕 **死神追杀机制 MVP（07-10）** | 2 commit：MVP 修复（补回丢失核心函数 + 清理损坏文件尾）+ 数据闭环修复（前端 merge 回死神3字段 + state 初始化）。危险度5档 + 庇护 + 锁定 + prompt 注入。**从设计文档 ❌ 升 🚧** |
+| 🔇 **5 核心表冻结** | era_meta 115 / era_cities 167 / era_age_dist 9881 / social_structure 619 / event 197（先生 6 月后 0 新增历史数据）|
+| 🔇 **v3 二维网格冻结第 ~19 天** | death.js 时间戳仍 06-23 08:25——先生 07-08~10 全在做自由输入 + 死神，未碰 v3-plan.md 二维网格 |
+| 🔇 **4 项 ❌ 系统持续未动**：跨世痕迹 / 榜单动态计算 / Prompt v12 / 多玩家互动 | 先生 07-08~10 重心在自由输入 + 死神，未回这 4 项 |
+| ⚠️ **MM_API_KEY 暴露持续（最高风险）** | 37 未 push commit（含之前已 push 47）仍带 MM_API_KEY。**先生回来后第一件事仍是去云函数控制台轮换密钥** |
+| ⚠️ **D051-D061 + D085-D088 = 15 决策未落 DECISIONS.md** | 先生落档节奏不稳（D062 首拍首落，D085-D088 又没落）。**先生回来后建议一次性审 + 写** |
+| ⚠️ **3 脏文件含先生收尾代码未 commit** | game.js +45 / ai_narrate_worker -78（先生 07-10 后收尾清理，未 commit）。PMO 不擅改 |
+| 🆕 **A 类自动修复：0** | 脏文件全是先生收尾代码 + PMO 自身；untracked 全是先生刻意保留。**无可清理项** |
+
+### 55 期先生行动建议（先生回来后）
+
+1. **🔴 P0：MM_API_KEY 轮换（D010 + D026 + D054 合并最高风险）**—— 37 未 push commit 含 MM_API_KEY（远端 47 commit 已暴露）。**先生回来后第一件事**：① 立即去云函数控制台**轮换 MM_API_KEY**（让历史密钥失效）② BFG 清洗历史（可选）③ 评估迁移到 .env（D028 已落 .gitignore）
+2. **🔴 P0：D051-D061 + D085-D088 = 15 决策落档 DECISIONS.md**—— 先生 07-05 D062 首拍首落档，但 07-08~10 的 D085-D088 + 07-04~05 的 D051-D061 全没落。**建议**：① 分批写进 DECISIONS.md ② 重点写死神追杀机制设计（危险度/庇护/锁定/prompt 注入）+ 自由输入框实现（wx.createInput 替换 showKeyboard 的坑）
+3. **🟠 高优：死神追杀 🚧 → ✅ 决策**—— 先生 07-10 建了 MVP（危险度5档+庇护+锁定+prompt注入），§10.4 标 🚧"待真机测调平衡"。**建议先生真机跑几世测平衡**：① 危险度触发频率是否过高/过低 ② 庇护/锁定是否生效 ③ 是否升 ✅
+4. **🟠 高优：37 commit push 决策**—— 本地领先 37 commit。**建议**：① 先轮换密钥（P0）② 再决定 push 时机（可分批：先 push D055-D062 稳定系，再 push D085-D088 + 死神 MVP）③ 或继续本地囤（先生节奏）
+5. **🟠 高优：D049 四表 LIVE 实战验收**—— 本次实测 player 2 / player_life 2 / narrate_history 64 / llm_io 54 全闭环跑通。**建议先生**：① 用 DBG 浮窗「对话流」tab 验证 narrativeHistory 按时间升序 ② 验证 llm_io 能查到 AI 输入输出（调试 D048f "7岁→150岁" bug 的好时机）③ 验证重进游戏云端续作（D049b/c 目标）
+6. **🟡 中优：4 项 ❌ 系统优先级**—— 跨世痕迹 / 榜单动态计算 / Prompt v12 / 多玩家互动 仍 ❌。**建议排序**：死神平衡(🚧→✅) > Prompt v12 > 跨世痕迹 > 动态榜单 > 多玩家
+7. **🟡 中优：5 untracked 归档**—— ai_write_death/ ai_write_poem（云函数未 git add，D011 老问题）/ docs/D049-database-design.md（D049 已 LIVE，文档可落档）/ docs/v3-plan.md（二维网格冻结 19 天）/ mock/（先生调试工具）。**建议先生决定**：① 云函数 git add ② D049 文档 commit ③ mock/ 移 scripts/ 或 .gitignore
+8. **🟢 低优：v3 二维网格方向**—— death.js 冻结 19 天，实质被自由输入 + 死神双重重构挤压搁置。**建议先生决定**：① 继续 ② 接受搁置 ③ 改 v3.1

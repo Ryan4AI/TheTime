@@ -37,6 +37,13 @@ function validatePlayerLife(record) {
   if (!Array.isArray(record.current_items)) return 'invalid_current_items'
   if (typeof record.created_at !== 'number') return 'invalid_created_at'
   if (typeof record.updated_at !== 'number') return 'invalid_updated_at'
+  // D094（2026-07-22 先生拍板）：精简 player_life 字段
+  // 移除 finalize_status / last_finalize_at / death_threat / history_shelter / no_growth_streak
+  // 历史 record 中这些字段保留不动（动数据是红线），新世不再写入
+  if (record.coin !== undefined && (typeof record.coin !== 'number' || record.coin < 0 || record.coin > 100000000)) return 'invalid_coin'
+  if (record.round !== undefined && (typeof record.round !== 'number' || record.round < 0)) return 'invalid_round'
+  if (record.is_scoring !== undefined && typeof record.is_scoring !== 'boolean') return 'invalid_is_scoring'
+  if (record.historical_shelter !== undefined && (typeof record.historical_shelter !== 'number' || record.historical_shelter < 0 || record.historical_shelter > 100)) return 'invalid_historical_shelter'
   return null
 }
 

@@ -395,11 +395,8 @@ async function runPhase1({ openid, input, is_retry, narrateRequestId }) {
   const compressSummary = compressCtx.summary
   const compressLastId = compressCtx.lastId
   const compressLastSeq = compressCtx.lastSeq
-  // 无摘要记录（首次压缩前）且 history 超长 → 截断最近 COMPRESS_KEEP 条喂 AI₁，防止全量撑爆
-  if (!compressSummary && history.length > COMPRESS_TRIGGER) {
-    history = history.slice(-COMPRESS_KEEP)
-    console.warn('[COMPRESS] 无摘要降级: 截断到最近', history.length, '条')
-  }
+  // 2026-08-03 先生拍板：不截断降级——无摘要时全量喂（首次压缩在 seq=200 整百触发，最多 199 条 ≈ 9s，安全线内）
+  // 旧逻辑截断最近 100 条会丢 seq 1-99 的内容（没进摘要也没喂）→ 违背「不丢消息」原则，已删
   // 并行启动压缩（内部判断触发条件 + 5 分钟防并发；失败不影响 AI₁）
   const compressTask = compressHistoryIfNeeded(fullHistory, openid, state.life_number || 1)
     .catch(e => { console.error('[COMPRESS] 并行压缩异常:', e.message); return null })
@@ -1244,18 +1241,19 @@ async function queryMonthEvent(state) {
   } catch (e) { return null }
 }
 
-// ============ 对话压缩（2026-08-02 先生拍板） ============
-// 方案：history 原文超过 COMPRESS_TRIGGER 条后，每满 COMPRESS_STEP 条触发一次压缩：
-//   **原始对话不动**（narrate_history 全量保留，前端对话流完整），
+// ============ 对话压缩（2026-08-02 先生拍板；2026-08-03 触发规则重设计） ============
+// 方案：**原始对话不动**（narrate_history 全量保留，前端对话流完整），
 //   **压缩内容单独一张表 history_compress**（先生 2026-08-02 审核：不嵌套进 player_life）：
-//     每次压缩 append 一条 { openid, life_number, last_id, text, compressed_at }
-//     - last_id：压缩进度 = 本次覆盖到的最后一条 narrate_history 的 _id（先生拍板方案 A：不用时间戳）
+//     每次压缩 append 一条 { openid, life_number, last_seq, last_id, text, compressed_at }
+//     - last_seq：压缩进度 = 本次覆盖到的最后一条 narrate_history 的 seq（先生拍板方案 A：连续编号）
 //     - text：滚动合并摘要（旧摘要 + 新原文段 → 一条新摘要，涵盖全部前情）
-//   喂 AI 时（callAI）用「最新一条摘要 + last_id 之后的最近 COMPRESS_KEEP 条原文」代替全量。
+// 触发规则（2026-08-03 先生拍板）：**每到整百编号 n 触发压缩，压到 n-100**——
+//   保证至少 100 条完整对话不被压缩（last_seq 之后始终 ≥100 条原文全量喂 AI₁）。
+//   例：seq=200 → 压到 100（保留 101-200 共 100 条完整）；seq=300 → 压到 200（保留 201-300）
+// 喂 AI 时（callAI）用「最新一条摘要 + 进度点之后的全部原文」。
 // 背景：v0.1.84 曾拍板"全量 history 不截断"，2026-08-02 实测 309 条（5.5 万字符）全量喂
 //   MiniMax 耗时 13.97s，波动即超 15s 云函数超时线 → 卡轮。压缩后喂 AI 的 prompt 稳定。
-const COMPRESS_KEEP = 100        // 喂 AI 时保留最近 100 条原文记录（≈50 轮 user+ai，2026-08-02 18:13 先生拍板 200→100）
-const COMPRESS_TRIGGER = 100     // 原文超过 100 条触发压缩（2026-08-03 先生拍板 200→100：消除「被挤出窗口但未压缩」的信息丢失灰色地带）
+const COMPRESS_KEEP = 100        // 保留最近 100 条完整对话不压缩（先生 2026-08-03：至少 100 条完整原文）
 const COMPRESS_MIN_INTERVAL_MS = 5 * 60 * 1000  // 两次压缩最小间隔 5 分钟（防并发重复压）
 
 // 2026-08-03 先生拍板 A：narrate_history 加自增 seq（连续编号索引）——DBG 展示直观 + 进度判断 O(1) 不用全表扫
@@ -1310,17 +1308,18 @@ async function compressHistoryIfNeeded(history, openid, lifeNumber) {
   }
   const lastSeq = lastRecord && typeof lastRecord.last_seq === 'number' ? lastRecord.last_seq : null
 
-  // 起点 = last_seq 之后（无 seq 存量记录 fallback last_id）；无记录则从 0 开始
-  let startIdx = 0
-  if (lastSeq !== null) {
-    const idx = history.findIndex(m => m.seq === lastSeq)
-    startIdx = idx !== -1 ? idx + 1 : 0
-  } else if (lastRecord && lastRecord.last_id) {
-    const idx = history.findIndex(m => m._id === lastRecord.last_id)
-    startIdx = idx !== -1 ? idx + 1 : 0
+  // 2026-08-03 先生拍板：压缩触发改为「整百编号」——每到整百 n 触发，压到 n-100，
+  //   保证至少 100 条完整对话不被压缩（last_seq 之后始终 ≥100 条原文）
+  //   例：seq=200 → 压到 100（保留 101-200）；seq=300 → 压到 200（保留 201-300）
+  const newest = history[history.length - 1]
+  const newestSeq = newest && typeof newest.seq === 'number' ? newest.seq : null
+  if (newestSeq === null) {
+    console.warn('[COMPRESS] 最新记录无 seq（存量旧数据），跳过压缩，等新写入带 seq 后生效')
+    return { history, summary: lastRecord, lastId: lastRecord ? lastRecord.last_id : null, lastSeq }
   }
-  const pending = history.slice(startIdx)
-  if (pending.length <= COMPRESS_TRIGGER) {
+  const targetSeq = newestSeq - 100  // 本次压缩目标点（保留 targetSeq+1 ~ newestSeq 共 100 条）
+  if (newestSeq % 100 !== 0 || targetSeq <= (lastSeq || 0)) {
+    // 非整百 或 目标点已压过 → 不触发
     return { history, summary: lastRecord, lastId: lastRecord ? lastRecord.last_id : null, lastSeq }
   }
 
@@ -1330,9 +1329,25 @@ async function compressHistoryIfNeeded(history, openid, lifeNumber) {
     return { history, summary: lastRecord, lastId: lastRecord ? lastRecord.last_id : null, lastSeq }
   }
 
-  const keepCount = Math.min(COMPRESS_KEEP, pending.length - 1)
-  const oldPart = pending.slice(0, pending.length - keepCount)
-  console.log('[COMPRESS] 触发压缩: 待压缩原文', pending.length, '条 → 压缩', oldPart.length, '条, 保留最近', keepCount, '条原文')
+  // 压缩范围：(lastSeq, targetSeq] 之间的原文
+  let startIdx = 0
+  if (lastSeq !== null) {
+    const idx = history.findIndex(m => m.seq === lastSeq)
+    startIdx = idx !== -1 ? idx + 1 : 0
+  } else if (lastRecord && lastRecord.last_id) {
+    const idx = history.findIndex(m => m._id === lastRecord.last_id)
+    startIdx = idx !== -1 ? idx + 1 : 0
+  }
+  const endIdx = history.findIndex(m => m.seq === targetSeq)
+  if (endIdx === -1) {
+    console.warn('[COMPRESS] 找不到目标 seq=', targetSeq, '，跳过压缩')
+    return { history, summary: lastRecord, lastId: lastRecord ? lastRecord.last_id : null, lastSeq }
+  }
+  const oldPart = history.slice(startIdx, endIdx + 1)
+  if (oldPart.length === 0) {
+    return { history, summary: lastRecord, lastId: lastRecord ? lastRecord.last_id : null, lastSeq }
+  }
+  console.log('[COMPRESS] 触发压缩: 最新 seq=', newestSeq, '→ 压到', targetSeq, ', 本次压缩', oldPart.length, '条, 保留', newestSeq - targetSeq, '条完整对话')
 
   // 1) 滚动合并生成前情提要（旧摘要 + 新原文段 → 一条新摘要）
   const summary = await summarizeHistory(oldPart, lastRecord ? lastRecord.text : null)
@@ -1341,12 +1356,12 @@ async function compressHistoryIfNeeded(history, openid, lifeNumber) {
     return { history, summary: lastRecord, lastId: lastRecord ? lastRecord.last_id : null, lastSeq }
   }
 
-  // 2) 追加写入 history_compress（last_seq = 本次覆盖的最后一条原文 seq；兼容保留 last_id）
+  // 2) 追加写入 history_compress（last_seq = 本次压缩目标点）
   const newRecord = {
     openid,
     life_number: lifeNumber,
     last_id: oldPart[oldPart.length - 1]._id,
-    last_seq: typeof oldPart[oldPart.length - 1].seq === 'number' ? oldPart[oldPart.length - 1].seq : null,
+    last_seq: targetSeq,
     text: '【前情提要】' + summary,
     compressed_at: Date.now(),
   }
@@ -1408,7 +1423,9 @@ async function callAI(state, input, history, monthEvent, isRetry, compressSummar
   var formatReminderMsg = { role: 'system', content: formatReminder }
   if (history && Array.isArray(history)) {
     // 2026-08-02 先生拍板：对话压缩——原始对话不动，喂 AI 时把进度点之前的旧部分换成摘要
-    // 有压缩记录：最新摘要（history_compress 最新一条）+ 进度点之后的最近 COMPRESS_KEEP 条原文
+    // 2026-08-03 先生拍板：进度点之后全部喂（不 slice(-100)）——压缩触发「整百压到 n-100」保证
+    //   last_seq 之后始终 ≥100 条完整对话，全部喂给 AI，信息零丢失
+    // 有压缩记录：最新摘要（history_compress 最新一条）+ 进度点之后全部原文
     // 无压缩记录：全量喂（保持 v0.1.84 行为，不提前截断）
     let recent = history
     if (compressSummary && (compressLastSeq !== null || compressLastId)) {
@@ -1421,7 +1438,7 @@ async function callAI(state, input, history, monthEvent, isRetry, compressSummar
         const idx = history.findIndex(m => m._id === compressLastId)
         startIdx = idx !== -1 ? idx + 1 : 0
       }
-      recent = [{ role: 'system', content: compressSummary.text }, ...history.slice(startIdx).slice(-COMPRESS_KEEP)]
+      recent = [{ role: 'system', content: compressSummary.text }, ...history.slice(startIdx)]
     }
     for (const msg of recent) {
       // D048p（2026-06-28 20:24 拍板·先生"状态变化 message role 直接 system"）：

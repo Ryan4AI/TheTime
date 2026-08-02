@@ -182,7 +182,9 @@ function fallbackExtractBranch(rawText) {
   }
   if (!content || options.length === 0) {
     if (content) {
-      return { content, options: ['继续观察', '尝试离开', '寻找机会'], patch: {} }
+      // 2026-08-03 02:13 先生拍板：options 抽不到时不再直接固定文案，标记 optionsFallback=true
+      // 由 callAI 上层单独调一次 AI 生成 options，再失败才用固定文案
+      return { content, options: ['继续观察', '尝试离开', '寻找机会'], patch: {}, optionsFallback: true }
     }
     return null
   }

@@ -42,6 +42,11 @@ var deathConfirmPending = false  // v0.6.95: 死亡待确认（两阶段死亡�
 var monthChanged = false     // 月份变化（用于显示特殊提示）
 var newEvent = null          // 新事件
 var itemDetail = null        // 物品详情浮窗（点击物品后弹出）
+var itemListOpen = false     // 2026-08-03 先生拍板 A：物品列表浮窗（物品 >10 个时点「+N」格弹出）
+var itemListScroll = 0       // 物品列表浮窗滚动偏移
+var itemListTouchStartY = 0  // 列表浮窗触摸起始 y
+var itemListTouchStartScroll = 0  // 列表浮窗触摸起始滚动
+var itemListTouchMoved = false    // 列表浮窗本次触摸是否发生拖动
 var bgImage = null           // 当前背景图（云函数返回 URL）
 var bgImageLoading = false   // 是否在加载
 var imageRevealStart = 0     // v0.6.50g: 画像从上到下展开动画时间戳
@@ -1581,6 +1586,11 @@ function render(ctx) {
     drawItemDetail(ctx)
   }
 
+  // 11.5 物品列表浮窗（2026-08-03 先生拍板 A：物品 >10 个时点「+N」格弹出）
+  if (itemListOpen) {
+    drawItemListOverlay(ctx)
+  }
+
   // 13. v2 新增：榜单浮窗（最高层级）
   drawLeaderboard(ctx)
 
@@ -2600,6 +2610,18 @@ function drawRadarEdges(ctx, cx, cy, r, values) {
   ctx.restore()
 }
 
+// 2026-08-03 02:03 先生反馈「柴刀图标=hatchet」「布图标=文字布」
+// 真因：prompt 对 icon 无格式约束，AI 自由发挥写英文/汉字
+// 修法：前端校验 icon 必须是 emoji，否则兜底 📦（prompt 侧同步加 emoji 约束）
+function safeItemIcon(item) {
+  const ic = item && item.icon
+  if (!ic) return '\ud83d\udce6'  // 📦
+  // emoji 判断（常见 emoji 区块：1F000-1FAFF 杂项符号 2600-27BF 等）
+  const emojiRe = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{2190}-\u{21FF}\u{2B50}\u{2728}\u{2764}]/u
+  if (emojiRe.test(ic)) return ic
+  return '\ud83d\udce6'  // 非 emoji（英文/汉字/乱码）→ 📦
+}
+
 // v0.6.50u: 边雷达图+大字标签+装饰
 function drawItemBar(ctx) {
   const barY = layout.itemBarY
@@ -2775,12 +2797,37 @@ function drawItemBar(ctx) {
 
   // 物品填入格子
   if (items.length > 0) {
-    items.forEach((item, i) => {
+    // 2026-08-03 先生拍板 A：物品 > 10 个时，最后一个可见格显示「+N 件」，点击弹完整物品列表浮窗
+    // 2026-08-03 02:11 先生拍板：倒序显示——越近得到的物品越靠前（渲染层反转，不动数据层）
+    const visibleCount = cols * rows
+    const overflowN = items.length - visibleCount
+    items.slice().reverse().forEach((item, i) => {
       const r = Math.floor(i / cols)
       const c = i % cols
       if (r >= rows) return
       const bx = gridStartX + c * (slotW + slotGap)
       const by = (r === 0 ? barY + 8 : barY + 8 + slotH + slotGap)  // v0.6.57: 垂直居中
+      // 溢出格：最后一格（i === visibleCount-1）且还有更多物品 → 显示 +N
+      if (overflowN > 0 && i === visibleCount - 1) {
+        ctx.save()
+        ctx.fillStyle = 'rgba(60,42,22,0.85)'
+        roundRect(ctx, bx + 1, by + 1, slotW - 2, slotH - 2, 2)
+        ctx.fill()
+        ctx.strokeStyle = 'rgba(192,168,100,0.6)'
+        ctx.lineWidth = 0.8
+        roundRect(ctx, bx + 1, by + 1, slotW - 2, slotH - 2, 2)
+        ctx.stroke()
+        // 2026-08-03 02:00 修：单行「+N件」小字，避免两行溢出 44×17 格子
+        ctx.fillStyle = 'rgba(240,210,140,0.95)'
+        ctx.font = 'bold 9px "STKaiti", "KaiTi", "\u6977\u4F53", ' + ui.fontFamily
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText('+' + overflowN + '件', bx + slotW / 2, by + slotH / 2)
+        ctx.restore()
+        // 溢出格命中区（点击 → 物品列表浮窗）
+        item._overflowBounds = { x: bx, y: by, w: slotW, h: slotH }
+        return
+      }
       // 物品底板（拉开抽屉效果）
       ctx.save()
       ctx.fillStyle = 'rgba(50,35,20,0.75)'
@@ -2802,7 +2849,7 @@ function drawItemBar(ctx) {
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       const shortName = (item.name || '').slice(0, 4)
-      ctx.fillText((item.icon || '\ud83d\udce6') + shortName, bx + slotW / 2, by + slotH / 2)
+      ctx.fillText(safeItemIcon(item) + shortName, bx + slotW / 2, by + slotH / 2)
       // 2026-08-02（先生拍板）：耐久不直接显示数字——通过剧情叙事间接体现（AI₁ 已带耐久写暗示）
       // 耐久数字只在物品详情浮窗展示（玩家主动查看时）
       ctx.textAlign = 'left'
@@ -2815,22 +2862,20 @@ function drawItemBar(ctx) {
 // v2 新增：属性变化飘字系统
 // 每条飘字独立动画：从中部往上飘 + 渐变消失 + 略微放大
 var floaters = []  // [{ text, color, startTime, x, y, dy }]
-var _floaterIdx = 0  // D094-async：错开多个属性飘字的位置/时间，让它们不重叠
 
 function spawnFloater(text, color) {
-  // D094-async（2026-07-23 先生拍板）：多个属性飘字错开位置 + 时间，避免叠在一起
-  // 真因：先生反馈"所有属性叠在一起飘"——之前所有飘字 startTime=Date.now() 且同起点 x/y
-  // 修法：用 _floaterIdx 累加，每个飘字错开 80ms 时间 + 错开 12px x 偏移 + 错开 14px y 偏移
-  const idx = _floaterIdx++
-  if (_floaterIdx > 9) _floaterIdx = 0  // 循环（防整数溢出）
+  // 2026-08-03 02:09 先生拍板：每次只冒一个（排队出场），不做多行错开
+  // 真因：先生「每次就冒出一个不行吗」——多属性同时变化少见，错开位置反而乱
+  // 修法：全部同一位置，时间间隔 250ms 依次出场（前一个飘走下一个才出现）
+  const cur = floaters.length
   const fateCX = layout.padding + 45  // 雷达图中心 x
   const baseY = layout.itemBarY + layout.itemBarH / 2
   floaters.push({
     text: text,
     color: color || 'rgba(200,168,124,1)',
-    startTime: Date.now() + idx * 80,  // 时间错开
-    x: fateCX + (idx - Math.floor(idx / 3) * 3 - 1) * 12,  // x 错开（±12px）
-    y: baseY - Math.floor(idx / 3) * 14,  // y 错开（每 3 个错开 14px）
+    startTime: Date.now() + cur * 250,  // 排队：每 250ms 出一个
+    x: fateCX,
+    y: baseY,
     dy: 70,
   })
 }
@@ -4003,7 +4048,7 @@ function drawItemDetail(ctx) {
   ctx.font = '40px ' + ui.fontFamily
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText(item.icon || '📦', px + pw / 2, py + 50)
+  ctx.fillText(safeItemIcon(item), px + pw / 2, py + 50)
 
   // 物品名
   ctx.fillStyle = COLORS.jade
@@ -4057,6 +4102,130 @@ function drawItemDetail(ctx) {
   ctx.textAlign = 'left'
   ctx.textBaseline = 'bottom'
   ctx.fillText('轻点空白处关闭', px + 16, py + ph - 12)
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+}
+
+// ─────────────────────────────────────────────
+// 物品列表浮窗（2026-08-03 先生拍板 A）：物品 >10 个时，点物品栏「+N 件」格弹出
+// 竖排展示全部物品（图标+名称+简述），可滚动；点击某物品 → 进详情浮窗
+// ─────────────────────────────────────────────
+function drawItemListOverlay(ctx) {
+  if (!itemListOpen) return
+  const w = layout.windowW
+  const h = layout.windowH
+  const items = currentItems || []
+
+  // 半透明遮罩
+  ctx.fillStyle = 'rgba(0,0,0,0.7)'
+  ctx.fillRect(0, 0, w, h)
+
+  // 面板
+  const pw = Math.min(300, w - 32)
+  const ph = Math.min(420, h - 120)
+  const px = (w - pw) / 2
+  const py = (h - ph) / 2
+
+  ctx.save()
+  ctx.fillStyle = 'rgba(26,36,30,0.97)'
+  roundRect(ctx, px, py, pw, ph, 12)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(90,138,112,0.5)'
+  ctx.lineWidth = 1
+  roundRect(ctx, px, py, pw, ph, 12)
+  ctx.stroke()
+  ctx.restore()
+
+  // 标题 + 数量
+  ctx.fillStyle = COLORS.jade
+  ctx.font = 'bold 15px ' + ui.fontFamily
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'top'
+  ctx.fillText('物品清单 (' + items.length + ')', px + pw / 2, py + 14)
+
+  // 关闭按钮（右上角 ×）
+  const closeX = px + pw - 26
+  const closeY = py + 10
+  ctx.save()
+  ctx.fillStyle = 'rgba(200,168,124,0.4)'
+  ctx.beginPath()
+  ctx.arc(closeX + 8, closeY + 8, 9, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = '#1a241e'
+  ctx.font = 'bold 12px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('×', closeX + 8, closeY + 9)
+  ctx.restore()
+  layout._itemListCloseBtn = { x: closeX, y: closeY, w: 18, h: 18 }
+
+  // 列表区（可滚动）
+  const listX = px + 14
+  const listW = pw - 28
+  const listTop = py + 44
+  const listBottom = py + ph - 14
+  const rowH = 46
+  // 2026-08-03 02:00 修：滚动边界 clamp（防滚出视口）
+  const listMaxScroll = Math.max(0, items.length * rowH - (listBottom - listTop))
+  if (itemListScroll > 0) itemListScroll = 0
+  if (itemListScroll < -listMaxScroll) itemListScroll = -listMaxScroll
+
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(listX, listTop, listW, listBottom - listTop)
+  ctx.clip()
+
+  // 行：图标 + 名称 + 简述（点击 → 详情）；2026-08-03 02:11 先生拍板：倒序（最新在前，与物品栏一致）
+  items.slice().reverse().forEach((item, i) => {
+    const ry = listTop + i * rowH + itemListScroll
+    if (ry + rowH < listTop || ry > listBottom) return  // 视口外跳过
+    // 行分隔线
+    ctx.strokeStyle = 'rgba(90,138,112,0.2)'
+    ctx.lineWidth = 0.5
+    ctx.beginPath()
+    ctx.moveTo(listX, ry + rowH - 1)
+    ctx.lineTo(listX + listW, ry + rowH - 1)
+    ctx.stroke()
+    // 图标
+    ctx.fillStyle = 'rgba(232,200,130,0.9)'
+    ctx.font = '18px ' + ui.fontFamily
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(safeItemIcon(item), listX + 18, ry + rowH / 2)
+    // 名称
+    ctx.fillStyle = 'rgba(232,221,208,0.9)'
+    ctx.font = '12px "STKaiti", "KaiTi", "\u6977\u4F53", ' + ui.fontFamily
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(item.name || '未知物品', listX + 38, ry + 15)
+    // 简述（单行截断）
+    const desc = item.desc || ''
+    ctx.fillStyle = 'rgba(232,221,208,0.5)'
+    ctx.font = '9px ' + ui.fontFamily
+    const descOneLine = desc.split('\n')[0] || ''
+    ctx.fillText(descOneLine.length > 20 ? descOneLine.slice(0, 20) + '…' : descOneLine, listX + 38, ry + 32)
+    // 保存行命中区
+    item._listBounds = { x: listX, y: ry, w: listW, h: rowH }
+    // 耐久（若有，显示在行尾）
+    if (typeof item.durability === 'number') {
+      ctx.fillStyle = 'rgba(170,210,180,0.65)'
+      ctx.font = '9px ' + ui.fontFamily
+      ctx.textAlign = 'right'
+      ctx.textBaseline = 'middle'
+      ctx.fillText('耐久' + item.durability, listX + listW - 4, ry + 15)
+      ctx.textAlign = 'left'
+    }
+  })
+  ctx.restore()
+
+  // 滚动提示（物品多时）
+  if (items.length * rowH > (listBottom - listTop)) {
+    ctx.fillStyle = 'rgba(200,168,124,0.45)'
+    ctx.font = '9px ' + ui.fontFamily
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'bottom'
+    ctx.fillText('↑ 滑动查看全部 ↓', px + pw / 2, py + ph - 6)
+  }
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
 }
@@ -4243,8 +4412,8 @@ function handleTouch(x, y, type) {
       if (type === 'end' && layout._dbgCopyTabBtn
           && y >= _bottomBarY + 62 && y <= _bottomBarY + 62 + 18
           && x >= layout._dbgCopyTabBtn.x && x <= layout._dbgCopyTabBtn.x + layout._dbgCopyTabBtn.w) {
-        // 2026-08-02 修：debugLog 空拦截只对 tab 0-5（本局 AI 数据）；tab 6/7/8 数据来自云端，与 debugLog 无关
-        if (debugLog.length === 0 && dbgActiveTab <= 5) {
+        // 2026-08-02 修：debugLog 空拦截只对 tab 0-3/5（本局 AI 数据）；tab 4 场景 = state 渲染（与 debugLog 无关）、tab 6/7/8 数据来自云端
+        if (debugLog.length === 0 && dbgActiveTab !== 4 && dbgActiveTab <= 5) {
           if (wx.showToast) wx.showToast({ title: '本局还没跑过 AI 调用，没数据可复制', icon: 'none' })
           return null
         }
@@ -4576,7 +4745,15 @@ function handleTouch(x, y, type) {
   if (type === 'start') {
     touchStartTime = Date.now()
 
-    // 检测是否在叙事滚动区域
+    // 物品列表浮窗（2026-08-03 先生拍板 A）：打开时优先拦截全部触摸（滚动/关闭/点击行）
+    if (itemListOpen) {
+      itemListTouchStartY = y
+      itemListTouchStartScroll = itemListScroll
+      itemListTouchMoved = false
+      return null
+    }
+
+    // 检测是否在叙事滚动区域（物品列表浮窗打开时禁用，列表自己处理滚动）
     if (!itemDetail && layout._scrollArea && x >= layout._scrollArea.x && x <= layout._scrollArea.x + layout._scrollArea.w &&
         y >= layout._scrollArea.y && y <= layout._scrollArea.y + layout._scrollArea.h) {
       isScrolling = true
@@ -4587,6 +4764,13 @@ function handleTouch(x, y, type) {
   }
 
   if (type === 'move') {
+    // 物品列表浮窗滚动（优先于叙事滚动）
+    if (itemListOpen) {
+      const dy = y - itemListTouchStartY
+      if (Math.abs(dy) > 4) itemListTouchMoved = true
+      if (itemListTouchMoved) itemListScroll = itemListTouchStartScroll + dy
+      return null
+    }
     if (isScrolling) {
       const dy = y - scrollTouchStartY
       scrollOffset = scrollStartOffset + dy
@@ -4601,6 +4785,30 @@ function handleTouch(x, y, type) {
   }
 
   if (type === 'end') {
+    // 物品列表浮窗：关闭 / 点击行进详情 / 点空白关闭
+    if (itemListOpen) {
+      // 关闭按钮
+      const cb = layout._itemListCloseBtn
+      if (cb && hitTest(x, y, cb.x, cb.y, cb.w, cb.h)) {
+        itemListOpen = false
+        return null
+      }
+      // 点击行 → 进详情
+      if (!itemListTouchMoved) {
+        const items = currentItems || []
+        for (const item of items) {
+          if (item._listBounds && hitTest(x, y, item._listBounds.x, item._listBounds.y, item._listBounds.w, item._listBounds.h)) {
+            itemListOpen = false
+            itemDetail = { item: item, time: Date.now() }
+            return null
+          }
+        }
+        // 点空白 → 关闭
+        itemListOpen = false
+      }
+      return null
+    }
+
     isScrolling = false
 
     // 滑动超过阈值 → 不触发按钮点击（但错误状态下不要吞，让玩家能点重试）
@@ -4699,6 +4907,12 @@ function handleTouch(x, y, type) {
     return null
   }
   for (const item of (currentItems || [])) {
+    // 2026-08-03 先生拍板 A：溢出格（+N）优先命中 → 打开物品列表浮窗
+    if (item._overflowBounds && hitTest(x, y, item._overflowBounds.x, item._overflowBounds.y, item._overflowBounds.w, item._overflowBounds.h)) {
+      itemListScroll = 0
+      itemListOpen = true
+      return null
+    }
     if (item._bounds && hitTest(x, y, item._bounds.x, item._bounds.y, item._bounds.w, item._bounds.h)) {
       itemDetail = { item: item, time: Date.now() }
       return null

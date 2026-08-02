@@ -1445,7 +1445,8 @@ async function callAI(state, input, history, monthEvent, isRetry, compressSummar
       // D048e 当时把 history system 改成 user 喂（避免 MiniMax 2013）—— D048p 实测 MiniMax 3 system + 1 user → 200 OK
       // MiniMax 2013 限制已过效（v0.1.86 教训过时），history 里 system 角色直接 push system
       if (msg.role === 'ai') messages.push({ role: 'assistant', content: msg.content })
-      else if (msg.role === 'system') messages.push({ role: 'system', content: String(msg.content || '').substring(0, 500) })
+      // 2026-08-03 02:00 先生拍板：system 消息不截 500 字（原截断纯防御，实际 system 内容少；截断反而丢信息）
+      else if (msg.role === 'system') messages.push({ role: 'system', content: msg.content || '' })
       else messages.push({ role: 'user', content: msg.content })
     }
   }
@@ -1542,6 +1543,18 @@ async function callAI(state, input, history, monthEvent, isRetry, compressSummar
   const singleBranch = branches && !Array.isArray(branches) ? branches : (branches && branches[0])
   if (!singleBranch || !singleBranch.content) throw new Error('AI输出缺少content')
   if (!Array.isArray(singleBranch.options) || singleBranch.options.length === 0) throw new Error('AI输出缺少options')
+
+  // 2026-08-03 02:13 先生拍板：fallback 兜底出的固定 options 时，单独调一次 AI 生成真实选项
+  // 再失败才保留固定文案（'继续观察'/'尝试离开'/'寻找机会'）
+  if (singleBranch.optionsFallback) {
+    const aiOptions = await generateOptionsFallback(singleBranch.content)
+    if (aiOptions && aiOptions.length >= 2) {
+      console.log('[callAI] options 兜底补救成功: 固定文案 → AI 生成', JSON.stringify(aiOptions))
+      singleBranch.options = aiOptions
+    } else {
+      console.log('[callAI] options 兜底补救失败，保留固定文案')
+    }
+  }
 
   const finalBranches = [{
     p: 1.0,  // v3.0.9: 唯一分支·p=1.0·必然被选中
@@ -2052,6 +2065,7 @@ async function callScoringAI(content, prevState, history, playerInput) {
     `  - 补充/修复/重新装满："{物品名>: 30}"（= 耐久加 30，参考快照当前耐久算到接近 100）`,
     `  - 被夺走/丢失/损毁/彻底用完："{物品名>: -999}"（= 大负数把耐久减到 0 以下 → 物品从物品栏移除；写损耗时若快照耐久已很低、减完会归零，物品也会消失）`,
     `- 新增："{物品名>: {name, icon, desc, durability:100}}"——剧情里"拾起/被赠予/购买/任务获得"时写`,
+    `- **icon 必须是单个 emoji 图标**（如 🔪🪓🧵💰📜⛏️🍞💊），禁止用英文单词或汉字（2026-08-03 先生反馈 AI 写 hatchet/「布」→ 前端兜底显示 📦）`,
     `- **玩家主动使用物品（[使用 X]）：玩家输入已单独列出，必须结算损耗**（消耗品 -20 左右、工具 -5~-15、一次耗尽写 -999）`,
     `- 一次性最多 2 个新物品`,
     `- 物品名要"汉化、有时代感"（茶包/旧锄头/兵书/伤药/火镰/铜钱串）`,
@@ -2209,12 +2223,55 @@ async function callScoringAI(content, prevState, history, playerInput) {
   }
 }
 
-function callLLM(messages, modelOverride) {
+// 2026-08-03 02:13 先生拍板：fallback 兜底 options 时的补救——单独调一次 AI 生成 3 个选项
+// 轻量调用：小 max_tokens + 短超时（10s），失败/超时/解析不出 ≥2 个 → 返回 null（上层保留固定文案）
+async function generateOptionsFallback(narrativeContent) {
+  const t0 = Date.now()
+  try {
+    const sysMsg = '你是历史穿越人生模拟游戏的选项生成器。根据玩家当前处境，生成 3 个【贴合剧情、风格古风】的行动选项。' +
+      '只输出 JSON：{"options":["选项1","选项2","选项3"]}，不要输出其他任何内容。选项要简短（10字内），且彼此方向不同。'
+    const userMsg = '当前剧情：\n' + String(narrativeContent || '').slice(0, 800)
+    const resp = await callLLM(
+      [
+        { role: 'system', content: sysMsg },
+        { role: 'user', content: userMsg },
+      ],
+      null,
+      { maxTokens: 200, timeoutMs: 10000 }
+    )
+    const raw = resp.choices?.[0]?.message?.content || ''
+    // 解析：优先 JSON，失败用正则抽 [...] 里的字符串
+    let opts = null
+    try {
+      const parsed = JSON.parse(raw.replace(/```json\s*/gi, '').replace(/```\s*$/g, '').trim())
+      if (parsed && Array.isArray(parsed.options)) opts = parsed.options
+    } catch (e) { /* 走正则 */ }
+    if (!opts) {
+      const m = raw.match(/\[([\s\S]*?)\]/)
+      if (m) {
+        const strs = m[1].match(/"((?:\\.|[^"\\])*)"/g) || []
+        opts = strs.map(s => s.slice(1, -1).replace(/\\"/g, '"'))
+      }
+    }
+    if (!opts || opts.length < 2) {
+      console.log('[optionsFallback] 解析失败 raw=', raw.slice(0, 120))
+      return null
+    }
+    opts = opts.map(s => String(s).trim()).filter(Boolean).slice(0, 4)
+    console.log('[optionsFallback] 生成成功耗时=' + (Date.now() - t0) + 'ms, options=', JSON.stringify(opts))
+    return opts
+  } catch (e) {
+    console.log('[optionsFallback] 调用失败:', e.message, '耗时=' + (Date.now() - t0) + 'ms')
+    return null
+  }
+}
+
+function callLLM(messages, modelOverride, callOpts) {
   return new Promise((resolve, reject) => {
     const useModel = modelOverride || MM_MODEL
     const data = JSON.stringify({
       model: useModel, messages,
-      max_tokens: MAX_TOKENS, temperature: TEMPERATURE, think: false,
+      max_tokens: (callOpts && callOpts.maxTokens) || MAX_TOKENS, temperature: TEMPERATURE, think: false,
       reasoning_split: true,  // v3.0.14b: MiniMax 关 thinking（先生 13:44 拍板·reasoning_split 生效）
       stream: false,
     })
@@ -2222,7 +2279,7 @@ function callLLM(messages, modelOverride) {
     const req = https.request({
       hostname: url.hostname, path: url.pathname, method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + MM_API_KEY },
-      timeout: LLM_TIMEOUT_MS,
+      timeout: (callOpts && callOpts.timeoutMs) || LLM_TIMEOUT_MS,
     }, res => {
       let body = ''
       res.on('data', chunk => body += chunk)

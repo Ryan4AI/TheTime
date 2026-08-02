@@ -159,15 +159,16 @@ function computeClosestBoard(state) {
 // 修法：worker main 函数改成同步 await，根据 phase 跑对应阶段
 //   - phase='ai1'：跑 AI₁（生成叙事），return {content, options, state, ...}
 //   - phase='ai2'：跑 AI₂（评分结算属性），return {attrPatch, newState, ...}
+//   - phase='scene'：跑场景抽取（独立 AI 调用，2026-08-02 23:35 先生拍板），return {scene}
 //   前端分两次调 worker（先生 D089 partial 体验保留：ai1 1-3 秒先看到叙事，ai2 20-30 秒后看到属性）
 exports.main = async (event) => {
   const { phase, openid, input, is_retry } = event || {}
 
-  if (!openid) {
+  if (!openid && phase !== 'scene') {
     return { error: '缺少 openid', code: 400 }
   }
-  if (phase !== 'ai1' && phase !== 'ai2') {
-    return { error: '缺少 phase（必须是 ai1 或 ai2）', code: 400 }
+  if (phase !== 'ai1' && phase !== 'ai2' && phase !== 'scene') {
+    return { error: '缺少 phase（必须是 ai1 / ai2 / scene）', code: 400 }
   }
 
   const t0 = Date.now()
@@ -179,6 +180,11 @@ exports.main = async (event) => {
       const result = await runPhase1({ openid, input, is_retry, narrateRequestId })
       console.log('[ai_narrate_worker] ai1 完成, elapsed_ms=', Date.now() - t0)
       return { success: true, phase: 'ai1', ...result }
+    } else if (phase === 'scene') {
+      const sceneRequestId = `scene_${t0}_${Math.random().toString(36).slice(2, 8)}`
+      const result = await runPhaseScene({ openid: openid || 'scene', sceneRequestId, input })
+      console.log('[ai_narrate_worker] scene 完成, elapsed_ms=', Date.now() - t0)
+      return { success: true, phase: 'scene', ...result }
     } else {
       const scoreRequestId = `score_${t0}_${Math.random().toString(36).slice(2, 8)}`
       const result = await runPhase2({ openid, scoreRequestId, input })
@@ -188,8 +194,8 @@ exports.main = async (event) => {
   } catch (e) {
     console.error('[ai_narrate_worker] phase=', phase, ' 异常:', e.message, '\n', e.stack)
     // 写 error llm_io（精简版）
-    const errRequestId = `${phase === 'ai1' ? 'narrate' : 'score'}_${t0}_${Math.random().toString(36).slice(2, 8)}`
-    await writeLlmIo(errRequestId, openid, phase === 'ai1' ? 'narrate' : 'score', 'error', {
+    const errRequestId = `${phase === 'ai1' ? 'narrate' : phase === 'scene' ? 'scene' : 'score'}_${t0}_${Math.random().toString(36).slice(2, 8)}`
+    await writeLlmIo(errRequestId, openid || 'scene', phase === 'ai1' ? 'narrate' : phase === 'scene' ? 'scene' : 'score', 'error', {
       error: e.message,
     })
     return { success: false, phase, error: e.message, partial: phase === 'ai1' }
@@ -349,6 +355,9 @@ async function runPhase1({ openid, input, is_retry, narrateRequestId }) {
       content: realInput,
       created_at: Date.now(),
     }
+    // 2026-08-03 先生拍板 A：加自增 seq（连续编号索引）
+    const _userSeq = await nextSeq(openid, _userRecord.life_number)
+    if (_userSeq) _userRecord.seq = _userSeq
     const _userErr = validateNarrateMessage(_userRecord)
     if (_userErr) {
       console.error('[D082] user 入库校验失败:', _userErr, JSON.stringify(_userRecord))
@@ -385,6 +394,7 @@ async function runPhase1({ openid, input, is_retry, narrateRequestId }) {
   const compressCtx = await getCompressContext(history, openid, state.life_number || 1)
   const compressSummary = compressCtx.summary
   const compressLastId = compressCtx.lastId
+  const compressLastSeq = compressCtx.lastSeq
   // 无摘要记录（首次压缩前）且 history 超长 → 截断最近 COMPRESS_KEEP 条喂 AI₁，防止全量撑爆
   if (!compressSummary && history.length > COMPRESS_TRIGGER) {
     history = history.slice(-COMPRESS_KEEP)
@@ -406,7 +416,7 @@ async function runPhase1({ openid, input, is_retry, narrateRequestId }) {
   console.log('[PERF] queryMonthEvent_ms=', t1 - t0)
 
   globalThis.__PERF_LOGS__ = perfLogs
-  const aiResult = await callAI(preUpdate, realInput, history, monthEvent, is_retry, compressSummary, compressLastId)
+  const aiResult = await callAI(preUpdate, realInput, history, monthEvent, is_retry, compressSummary, compressLastId, compressLastSeq)
   branches = aiResult.branches
   systemPrompt = aiResult.systemPrompt
   userPrompt = aiResult.userPrompt
@@ -446,6 +456,9 @@ async function runPhase1({ openid, input, is_retry, narrateRequestId }) {
       options: picked.options || null,
       created_at: Date.now(),
     }
+    // 2026-08-03 先生拍板 A：加自增 seq（连续编号索引）
+    const _aiSeq = await nextSeq(openid, life_number)
+    if (_aiSeq) _aiRecord.seq = _aiSeq
     const _aiErr = validateNarrateMessage(_aiRecord)
     if (_aiErr) {
       console.error('[D082] ai 入库校验失败:', _aiErr, JSON.stringify(_aiRecord))
@@ -615,7 +628,11 @@ async function runPhase2({ openid, scoreRequestId, input }) {
       // 2026-08-02 13:38 先生反馈"对话流里系统消息显示 object"：emitSystemMessages 返回 [{role,content}] 对象数组
       // 之前直接 content: sm 把整个对象存库 → 脏数据（16 条）→ 下轮 history 原样回传前端 → 渲染 [object Object]
       // 修法：与 finalize 路径（line 833）一致，取 sm.content
-      await db.collection('narrate_history').add({ data: { openid, life_number, role: 'system', content: (sm && sm.content) || '', created_at: Date.now() } })
+      const _sysRecord = { openid, life_number, role: 'system', content: (sm && sm.content) || '', created_at: Date.now() }
+      // 2026-08-03 先生拍板 A：加自增 seq（连续编号索引）
+      const _sysSeq = await nextSeq(openid, life_number)
+      if (_sysSeq) _sysRecord.seq = _sysSeq
+      await db.collection('narrate_history').add({ data: _sysRecord })
     } catch (e) {
       console.error('[D094-async] system 入库失败:', e.message)
     }
@@ -840,6 +857,9 @@ async function finalizeTask(ctx) {
         options: picked.options || null,
         created_at: Date.now(),
       }
+      // 2026-08-03 先生拍板 A：加自增 seq（连续编号索引）
+      const _fAiSeq = await nextSeq(openid, life_number)
+      if (_fAiSeq) _aiRecord.seq = _fAiSeq
       const _aiErr = validateNarrateMessage(_aiRecord)
       if (_aiErr) {
         console.error('[D082] ai 入库校验失败:', _aiErr, JSON.stringify(_aiRecord))
@@ -856,6 +876,9 @@ async function finalizeTask(ctx) {
             content: (sm && sm.content) || '',
             created_at: Date.now(),
           }
+          // 2026-08-03 先生拍板 A：加自增 seq（连续编号索引）
+          const _fSysSeq = await nextSeq(openid, life_number)
+          if (_fSysSeq) _sysRecord.seq = _fSysSeq
           const _sysErr = validateNarrateMessage(_sysRecord)
           if (_sysErr) {
             console.error('[D082] system 入库校验失败:', _sysErr, JSON.stringify(_sysRecord))
@@ -1145,6 +1168,68 @@ function emitSystemMessages(oldState, newState) {
   return [{ role: 'system', content: lines.join('\n') }]
 }
 
+// ─────── scene 抽取（2026-08-02 23:35 先生拍板：独立 AI 调用，不寄生 AI₁/AI₂） ───────
+// 职责：读本轮叙事 → 输出一句英文场景描述（画图用）
+// 时序：前端 AI₁ 返回后并行调本 phase（2-4s），拿到 scene 发画图请求；超时/失败前端用叙事兜底
+async function runPhaseScene({ openid, sceneRequestId, input }) {
+  const narrativeText = (input || '').trim()
+  if (!narrativeText) {
+    return { success: false, error: '缺少叙事内容', scene: '' }
+  }
+  await writeLlmIo(sceneRequestId, openid, 'scene', 'pending', { input_chars: narrativeText.length })
+  const t0 = Date.now()
+  try {
+    const messages = [
+      { role: 'system', content: SCENE_SYSTEM_PROMPT },
+      { role: 'user', content: narrativeText.slice(0, 1500) },
+    ]
+    const raw = await callLLM(messages)
+    const scene = extractScene(raw)
+    await writeLlmIo(sceneRequestId, openid, 'scene', 'success', {
+      prompt_chars: narrativeText.length,
+      duration_ms: Date.now() - t0,
+      raw_response: raw,
+      parsed: { scene },
+    })
+    return { success: true, scene }
+  } catch (e) {
+    console.error('[scene] 抽取失败:', e.message)
+    await writeLlmIo(sceneRequestId, openid, 'scene', 'error', {
+      error: e.message,
+      duration_ms: Date.now() - t0,
+    })
+    return { success: false, error: e.message, scene: '' }
+  }
+}
+
+// 场景抽取 prompt（只做一件事：叙事 → 英文场景句；纯英文输出给 flux 用）
+const SCENE_SYSTEM_PROMPT = `你是古风历史游戏的场景抽取器。阅读玩家本轮剧情叙事，抽取画面中最核心的视觉场景，用一句英文描述（不超过 30 个英文单词）。
+
+要求：
+- 只描述景物与环境：地点、时间、天气、光线、建筑、自然元素（如 a dark inn room at night, moonlight through paper window）
+- 不要人物动作细节，不要人物肖像特写，不要对话内容
+- 输出严格 JSON 格式：{"scene": "一句英文场景描述"}
+- 若叙事没有明确场景（纯对话/纯心理），输出 {"scene": ""}`
+
+function extractScene(raw) {
+  if (!raw) return ''
+  let t = String(raw)
+  // 剥离 <think> 标签
+  t = t.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+  // 尝试解析 JSON（function_calls 或纯 JSON）
+  const m = t.match(/\{[\s\S]*\}/)
+  if (m) {
+    try {
+      const j = JSON.parse(m[0])
+      if (j && typeof j.scene === 'string' && j.scene.trim()) return j.scene.trim().slice(0, 300)
+    } catch (e) { /* 降级纯文本 */ }
+  }
+  // 降级：纯文本第一行，去引号
+  const line = t.split('\n')[0].trim().replace(/^["']|["']$/g, '').trim()
+  if (!line || /^empty$/i.test(line)) return ''
+  return line.slice(0, 300)
+}
+
 async function queryMonthEvent(state) {
   try {
     let res = await db.collection('event').where({ year: state.year, month: state.month }).get()
@@ -1170,8 +1255,25 @@ async function queryMonthEvent(state) {
 // 背景：v0.1.84 曾拍板"全量 history 不截断"，2026-08-02 实测 309 条（5.5 万字符）全量喂
 //   MiniMax 耗时 13.97s，波动即超 15s 云函数超时线 → 卡轮。压缩后喂 AI 的 prompt 稳定。
 const COMPRESS_KEEP = 100        // 喂 AI 时保留最近 100 条原文记录（≈50 轮 user+ai，2026-08-02 18:13 先生拍板 200→100）
-const COMPRESS_TRIGGER = 200     // 原文超过 200 条触发压缩（100 保留 + 100 新增）
+const COMPRESS_TRIGGER = 100     // 原文超过 100 条触发压缩（2026-08-03 先生拍板 200→100：消除「被挤出窗口但未压缩」的信息丢失灰色地带）
 const COMPRESS_MIN_INTERVAL_MS = 5 * 60 * 1000  // 两次压缩最小间隔 5 分钟（防并发重复压）
+
+// 2026-08-03 先生拍板 A：narrate_history 加自增 seq（连续编号索引）——DBG 展示直观 + 进度判断 O(1) 不用全表扫
+async function nextSeq(openid, lifeNumber) {
+  try {
+    const res = await db.collection('narrate_history')
+      .where({ openid, life_number: lifeNumber })
+      .orderBy('seq', 'desc')
+      .limit(1)
+      .field({ seq: true })
+      .get()
+    const last = res.data && res.data[0]
+    return last && typeof last.seq === 'number' ? last.seq + 1 : 1
+  } catch (e) {
+    console.error('[SEQ] 查询最大 seq 失败:', e.message)
+    return null
+  }
+}
 
 async function getCompressContext(history, openid, lifeNumber) {
   // 2026-08-02 18:15 先生拍板：压缩异步化——ai1 阶段只查已有摘要（无 LLM 调用，不阻塞叙事），
@@ -1187,11 +1289,13 @@ async function getCompressContext(history, openid, lifeNumber) {
   } catch (e) {
     console.error('[COMPRESS] 查询 history_compress 失败:', e.message)
   }
-  return { summary: lastRecord, lastId: lastRecord ? lastRecord.last_id : null }
+  // 2026-08-03 先生拍板 A：优先用 last_seq（连续编号），存量旧记录无 seq 时 fallback last_id
+  const lastSeq = lastRecord && typeof lastRecord.last_seq === 'number' ? lastRecord.last_seq : null
+  return { summary: lastRecord, lastId: lastRecord ? lastRecord.last_id : null, lastSeq }
 }
 
 async function compressHistoryIfNeeded(history, openid, lifeNumber) {
-  if (!Array.isArray(history) || history.length === 0) return { history, summary: null, lastId: null }
+  if (!Array.isArray(history) || history.length === 0) return { history, summary: null, lastId: null, lastSeq: null }
   // 查 history_compress 最新一条（压缩进度 + 旧摘要）
   let lastRecord = null
   try {
@@ -1204,22 +1308,26 @@ async function compressHistoryIfNeeded(history, openid, lifeNumber) {
   } catch (e) {
     console.error('[COMPRESS] 查询 history_compress 失败:', e.message)
   }
+  const lastSeq = lastRecord && typeof lastRecord.last_seq === 'number' ? lastRecord.last_seq : null
 
-  // 起点 = last_id 之后；无记录则从 0 开始
+  // 起点 = last_seq 之后（无 seq 存量记录 fallback last_id）；无记录则从 0 开始
   let startIdx = 0
-  if (lastRecord && lastRecord.last_id) {
+  if (lastSeq !== null) {
+    const idx = history.findIndex(m => m.seq === lastSeq)
+    startIdx = idx !== -1 ? idx + 1 : 0
+  } else if (lastRecord && lastRecord.last_id) {
     const idx = history.findIndex(m => m._id === lastRecord.last_id)
     startIdx = idx !== -1 ? idx + 1 : 0
   }
   const pending = history.slice(startIdx)
   if (pending.length <= COMPRESS_TRIGGER) {
-    return { history, summary: lastRecord, lastId: lastRecord ? lastRecord.last_id : null }
+    return { history, summary: lastRecord, lastId: lastRecord ? lastRecord.last_id : null, lastSeq }
   }
 
   // 防并发：最近一次压缩距今 < 5 分钟则跳过
   if (lastRecord && Date.now() - lastRecord.compressed_at < COMPRESS_MIN_INTERVAL_MS) {
     console.log('[COMPRESS] 跳过压缩：5 分钟内已压过')
-    return { history, summary: lastRecord, lastId: lastRecord ? lastRecord.last_id : null }
+    return { history, summary: lastRecord, lastId: lastRecord ? lastRecord.last_id : null, lastSeq }
   }
 
   const keepCount = Math.min(COMPRESS_KEEP, pending.length - 1)
@@ -1230,38 +1338,39 @@ async function compressHistoryIfNeeded(history, openid, lifeNumber) {
   const summary = await summarizeHistory(oldPart, lastRecord ? lastRecord.text : null)
   if (!summary) {
     console.error('[COMPRESS] 摘要生成失败，本轮跳过压缩')
-    return { history, summary: lastRecord, lastId: lastRecord ? lastRecord.last_id : null }
+    return { history, summary: lastRecord, lastId: lastRecord ? lastRecord.last_id : null, lastSeq }
   }
 
-  // 2) 追加写入 history_compress（last_id = 本次覆盖的最后一条原文 _id）
+  // 2) 追加写入 history_compress（last_seq = 本次覆盖的最后一条原文 seq；兼容保留 last_id）
   const newRecord = {
     openid,
     life_number: lifeNumber,
     last_id: oldPart[oldPart.length - 1]._id,
+    last_seq: typeof oldPart[oldPart.length - 1].seq === 'number' ? oldPart[oldPart.length - 1].seq : null,
     text: '【前情提要】' + summary,
     compressed_at: Date.now(),
   }
   try {
     await db.collection('history_compress').add({ data: newRecord })
-    console.log('[COMPRESS] 已写入 history_compress, 摘要长度=', summary.length, ', last_id=', newRecord.last_id)
+    console.log('[COMPRESS] 已写入 history_compress, 摘要长度=', summary.length, ', last_seq=', newRecord.last_seq)
   } catch (e) {
     console.error('[COMPRESS] 摘要写入失败:', e.message)
-    return { history, summary: lastRecord, lastId: lastRecord ? lastRecord.last_id : null }
+    return { history, summary: lastRecord, lastId: lastRecord ? lastRecord.last_id : null, lastSeq }
   }
 
-  return { history, summary: newRecord, lastId: newRecord.last_id }
+  return { history, summary: newRecord, lastId: newRecord.last_id, lastSeq: newRecord.last_seq }
 }
 
 async function summarizeHistory(oldPart, prevSummaryText) {
-  // 滚动合并输入：旧摘要（如有）+ 新原文段（每条截 300 字，总长限 20000 字符）
+  // 2026-08-03 先生拍板：摘要输入不限制（窗口 200K token 远够，真正约束是云函数超时，但摘要异步跑不阻塞叙事）
   let text = ''
   if (prevSummaryText) {
-    text += `【此前的前情提要】\n${String(prevSummaryText).substring(0, 600)}\n\n`
+    text += `【此前的前情提要】\n${String(prevSummaryText)}\n\n`
   }
   text += oldPart.map(m => {
     const roleName = m.role === 'ai' ? '叙事' : (m.role === 'user' ? '玩家' : '系统')
-    return `【${roleName}】${String(m.content || '').substring(0, 300)}`
-  }).join('\n').substring(0, 20000)
+    return `【${roleName}】${String(m.content || '')}`
+  }).join('\n')
 
   const messages = [
     { role: 'system', content: '你是历史穿越人生模拟游戏《穿越日记》的剧情记录员。玩家经历了很多轮人生，你需要把对话压缩成一份前情提要，供 AI 主持人快速回顾前情。' },
@@ -1272,14 +1381,15 @@ async function summarizeHistory(oldPart, prevSummaryText) {
     let content = resp.choices?.[0]?.message?.content || ''
     content = content.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<function_calls>[\s\S]*?<\/function_calls>/g, '').trim()
     if (!content) return null
-    return content.substring(0, 500)
+    // 2026-08-03 先生拍板：摘要结果不截断，AI 写多长就存多长（prompt 已约束 300-500 字）
+    return content
   } catch (e) {
     console.error('[COMPRESS] 摘要 LLM 调用失败:', e.statusCode || '', e.message)
     return null
   }
 }
 
-async function callAI(state, input, history, monthEvent, isRetry, compressSummary, compressLastId) {
+async function callAI(state, input, history, monthEvent, isRetry, compressSummary, compressLastId, compressLastSeq) {
   const systemPrompt = buildSystemPrompt(state, monthEvent)
   const userPrompt = buildUserPrompt(input, history)
   const messages = [{ role: 'system', content: systemPrompt }]
@@ -1298,13 +1408,19 @@ async function callAI(state, input, history, monthEvent, isRetry, compressSummar
   var formatReminderMsg = { role: 'system', content: formatReminder }
   if (history && Array.isArray(history)) {
     // 2026-08-02 先生拍板：对话压缩——原始对话不动，喂 AI 时把进度点之前的旧部分换成摘要
-    // 有压缩记录：最新摘要（history_compress 最新一条）+ last_id 之后的最近 COMPRESS_KEEP 条原文
+    // 有压缩记录：最新摘要（history_compress 最新一条）+ 进度点之后的最近 COMPRESS_KEEP 条原文
     // 无压缩记录：全量喂（保持 v0.1.84 行为，不提前截断）
     let recent = history
-    if (compressSummary && compressLastId) {
+    if (compressSummary && (compressLastSeq !== null || compressLastId)) {
       let startIdx = 0
-      const idx = history.findIndex(m => m._id === compressLastId)
-      startIdx = idx !== -1 ? idx + 1 : 0
+      if (compressLastSeq !== null) {
+        // 2026-08-03 先生拍板 A：优先用 seq（连续编号，O(1) 定位）
+        const idx = history.findIndex(m => m.seq === compressLastSeq)
+        startIdx = idx !== -1 ? idx + 1 : 0
+      } else {
+        const idx = history.findIndex(m => m._id === compressLastId)
+        startIdx = idx !== -1 ? idx + 1 : 0
+      }
       recent = [{ role: 'system', content: compressSummary.text }, ...history.slice(startIdx).slice(-COMPRESS_KEEP)]
     }
     for (const msg of recent) {

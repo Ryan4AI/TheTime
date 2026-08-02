@@ -1109,6 +1109,9 @@ function handleAIResponse(result, action, userInput) {
     }
     if (newState.month) state.month = newState.month
     if (newState.year) state.year = newState.year
+    // 2026-08-03：年号实时更新——worker 跨年时已重算 eraDisplay（computeEraDisplay），
+    // 但 merge 路径漏接收，导致顶部年号永远停在初始值（补跑 ai2 路径 line 364 有，主路径漏了）
+    if (newState.eraDisplay) state.eraDisplay = newState.eraDisplay
     if (newState.round !== undefined) state.round = newState.round
     if (newState.epitaph) state.epitaph = newState.epitaph  // v0.6.89: 云函数生成的墓志铭
     if (typeof console !== 'undefined') {
@@ -1289,8 +1292,8 @@ function handleAIResponse(result, action, userInput) {
   // 5. round 计数 +1（P1.6: AI 响应后递增）
   state.round = (state.round || 0) + 1
 
-  // 5.5 异步加载背景图（不阻塞叙事显示）
-  fetchBgImage(branch.content || '')
+  // 5.5 异步加载背景图（不阻塞叙事显示；23:35 改：优先 AI 抽 scene，5s 超时兜底叙事）
+  fetchBgImageWithScene(branch.content || '')
 
   // 6. 准备显示
   // 系统状态变化不进 narrative 字符串（前端不显示 [system · XXX] 文字）
@@ -1699,12 +1702,29 @@ function adjustFluidLayout() {
 // 之前用短名（五代/宋/汉/晋/周）+ 别名表/模糊匹配全是绕开——数据源存的是完整名（五代十国/北宋/西汉…）
 // 现在 key = era_meta 实际取值集合，buildPollinationsPrompt 纯精确匹配，零映射
 
+// 2026-08-02 23:20 先生反馈 prompt 不通顺：硬截断 80 字断在句子中间（「像是在, 汴梁,...」半句中文接英文模板）
+// 修法：按句子边界截断——截断点不在句末时向后找最近的句末标点补全，保证 prompt 以完整句结尾
+function smartCutNarrative(text, maxLen) {
+  const t = (text || '').replace(/\s+/g, ' ').trim()
+  if (t.length <= maxLen) return t
+  let cut = t.slice(0, maxLen)
+  const rest = t.slice(maxLen)
+  // 向后最多找 40 字内的句末标点（。！？及引号收尾），补全成完整句
+  const m = rest.slice(0, 40).match(/^[^。！？]*[。！？」』]/)
+  if (m) return cut + m[0]
+  // 向后没有 → 向前找最后一个句末标点，截到完整句（太靠前就不截，保证有内容）
+  const lastEnd = Math.max(cut.lastIndexOf('。'), cut.lastIndexOf('！'), cut.lastIndexOf('？'))
+  if (lastEnd > Math.floor(maxLen * 0.4)) return cut.slice(0, lastEnd + 1)
+  // 整段无句末标点（超长一句）→ 硬截加省略号
+  return cut + '……'
+}
+
 function buildPollinationsPrompt(narrativeText) {
   const era = state.dynasty || 'default'
   // 2026-08-02 20:01 模板表已抽独立模块 minigame/data/dynasty-templates.js（唯一数据源，有单测）
   const cfg = getDynastyTemplate(era)
-  // 抓叙事前 80 字作为场景描述（恢复 v3.0.14aid 原逻辑）
-  const hint = (narrativeText || '').slice(0, 80).replace(/\s+/g, ' ')
+  // 抓叙事前 80 字作为场景描述（恢复 v3.0.14aid 原逻辑；23:20 改按句子边界截断，不再断半句）
+  const hint = smartCutNarrative(narrativeText, 80)
   // v3.0.14aid: 把叙事场景描述(hint+city)放最前 — flux 模型对 prompt 头部响应最强
   const city = state.city || ''
   const sceneDesc = [hint, city].filter(Boolean).join(', ')
@@ -1722,6 +1742,29 @@ function buildPollinationsPrompt(narrativeText) {
 //   ③ onerror 不清旧图 → 失败就一直显示过期图
 // 修法：去掉防重入 return，改"最新优先"——每轮都发请求，bgImageSeq 序号保证只显示最新一轮的图
 var bgImageSeq = 0
+// 2026-08-02 23:35 先生拍板：scene 独立 AI 调用（不寄生 AI₁/AI₂）
+// 时序：AI₁ 叙事返回 → 并行抽 scene（2-4s）→ 用 scene 画图；5s 超时/失败 → 叙事 80 字兜底
+function fetchBgImageWithScene(narrativeText) {
+  if (typeof wx === 'undefined') return
+  const _openid = (wx.getStorageSync && wx.getStorageSync('openid')) || ''
+  let done = false
+  const fallback = () => { if (!done) { done = true; fetchBgImage(narrativeText || '') } }
+  const timer = setTimeout(fallback, 5000)
+  wx.cloud.callFunction({
+    name: 'ai_narrate_worker',
+    data: { phase: 'scene', openid: _openid, input: narrativeText || '' },
+    success: (res) => {
+      if (done) return
+      done = true
+      clearTimeout(timer)
+      const r = (res && res.result) || {}
+      const scene = (r.success && r.scene) ? r.scene : ''
+      fetchBgImage(scene || narrativeText || '')
+    },
+    fail: () => { clearTimeout(timer); fallback() },
+  })
+}
+
 function fetchBgImage(narrativeText) {
   if (typeof wx === 'undefined') return
   const seq = ++bgImageSeq
@@ -1729,12 +1772,19 @@ function fetchBgImage(narrativeText) {
   // 从叙事/城市/事件抽 1-2 个关键词作为 scene 描述
   const era = state.dynasty || '宋'
   const city = state.city || ''
-  let sceneHint = ''
-  if (city) sceneHint += city
-  // 抓叙事前 60 字
-  const hint = (narrativeText || '').slice(0, 60)
-
-  const prompt = buildPollinationsPrompt(narrativeText)
+  // 2026-08-02 23:35 scene 模式：AI 抽的英文场景（无中文且短）→ 直接当 prompt 主体，不再拼叙事
+  const isScene = narrativeText && !/[\u4e00-\u9fa5]/.test(narrativeText) && narrativeText.length < 200
+  let hint = ''
+  let prompt = ''
+  if (isScene) {
+    hint = narrativeText
+    const cfg = getDynastyTemplate(era)
+    prompt = [narrativeText, cfg.style, cfg.elements, 'ink wash, monochrome, rice paper texture, no text, no watermark, masterpiece, --ar 3:2'].filter(Boolean).join(', ')
+  } else {
+    // 抓叙事前 60 字（23:20 改按句子边界截断）
+    hint = smartCutNarrative(narrativeText, 60)
+    prompt = buildPollinationsPrompt(narrativeText)
+  }
   // Pollinations.ai 公开 API，URL 拼装即图
   const seed = Math.floor(Math.random() * 1000000)
   const encoded = encodeURIComponent(prompt)
@@ -3686,21 +3736,33 @@ function drawDebugPanel(ctx) {
         allText += `[BG_HINT] ${d.bg_narrative_hint || ''}\n`
         allText += `[BG_URL] ${d.bg_url}\n\n`
       }
-      if (d.drawOptions_debug) allText += `[drawOptions_debug]\n${d.drawOptions_debug}\n`
-      if (d.typewriter_debug) allText += `[typewriter_debug]\n${d.typewriter_debug}\n`
-      if (d.d048f_log) allText += `[D048f 偶现 bug 埋点]\n${d.d048f_log}\n`
-      if (d.layout_debug) allText += `[layout]\n${d.layout_debug}\n\n`
-      // B: state 全字段
+      // 2026-08-02 23:06 删：drawOptions/typewriter/d048f/layout 四类调试噪音（历史排查残留）
+      // B: 角色信息（重组：state 全字段改分组展示）
       const _st = state || {}
-      const sKeys = Object.keys(_st).sort()
-      allText += `── 场景状态 ──\n[state 全字段 ${sKeys.length} 个]:\n`
-      for (const k of sKeys) {
-        const v = _st[k]
-        const vStr = typeof v === 'object' ? JSON.stringify(v) : String(v)
-        allText += `  ${k}: ${vStr.length > 100 ? vStr.slice(0, 100) + '...' : vStr}\n`
+      allText += `── 角色 ──\n`
+      allText += `姓名: ${_st.name || '?'} | 年龄: ${_st.age ?? '?'} | 性别: ${_st.gender === 'male' ? '男' : (_st.gender === 'female' ? '女' : (_st.gender || '?'))}\n`
+      allText += `身份: ${_st.occupation || '?'} | 社会: ${_st.socialClass || '?'}\n`
+      allText += `朝代: ${_st.dynasty || '?'}（${_st.eraDisplay || '?'}）| 城市: ${_st.city || '?'}\n`
+      allText += `年份: ${_st.year ?? '?'}年${_st.month ?? '?'}月 | 第${_st.life_number ?? '?'}世 | 回合: ${_st.round ?? '?'}\n`
+      allText += `存活: ${_st.alive ? '是' : '否'} | 寿限: ${_st.lifespan ?? '?'} | 金钱: ${_st.coin ?? '?'}\n\n`
+      // C: 属性（固定顺序展示，不用 Object.keys 排序）
+      const _attrs = ['声望', '财富', '学识', '颜值', '战功', '义行', '医术', '文采', '政绩']
+      const _hasAttr = _attrs.some(k => _st[k] !== undefined)
+      if (_hasAttr) {
+        allText += `── 属性 ──\n`
+        const pairs = _attrs.filter(k => _st[k] !== undefined).map(k => `${k}: ${_st[k]}`)
+        for (let i = 0; i < pairs.length; i += 4) allText += pairs.slice(i, i + 4).join(' | ') + '\n'
+        allText += '\n'
       }
-      allText += `[debugLog.length]: ${debugLog.length}\n`
-      allText += `[currentItems.length]: ${(currentItems || []).length}\n`
+      // D: 物品（数量 + 名称列表，不裸 JSON）
+      const _items = Array.isArray(_st.items) ? _st.items : []
+      allText += `── 物品 (${_items.length}) ──\n`
+      if (_items.length > 0) {
+        allText += _items.map(it => (it && it.name) || (it && it.id) || JSON.stringify(it)).join(' / ') + '\n'
+      } else {
+        allText += '（空）\n'
+      }
+      allText += `\n[debugLog.length]: ${debugLog.length} | [currentItems.length]: ${(currentItems || []).length}\n`
     } else if (dbgActiveTab === 5) {
       // D054（2026-07-03 23:44 先生拍板·①方案）：tab 5 = System Prompt（主 system prompt 8000 字单独）
       // 真因：tab 2 复制会复制 8000 字主 system prompt + 短对话 200 字 → 先生排查不方便
@@ -5396,7 +5458,7 @@ function dbgCopyLlmIoSingle(idx) {
 
 // ─────────────────────────────────────────────────────────────
 // 压缩 tab（2026-08-02 先生指示）：展示 history_compress 记录（对话压缩功能）
-// 字段：openid / life_number / last_id（压缩进度=覆盖到的最后一条原文 _id）/ text（滚动合并摘要）/ compressed_at
+// 字段：openid / life_number / last_seq（压缩进度=覆盖到的最后一条原文序号，2026-08-03 先生拍板 A）/ last_id（兼容旧记录）/ text（滚动合并摘要）/ compressed_at
 // 只读展示（不删不改），diag_query 拉取（orderBy compressed_at desc）
 // ─────────────────────────────────────────────────────────────
 function dbgLoadCloudCompress() {
@@ -5557,12 +5619,16 @@ function drawDbgCompressTab(ctx) {
     const ts = r.compressed_at ? new Date(r.compressed_at).toLocaleString() : '-'
     ctx.fillText(ts, w - 8, _curY + 4)
 
-    // 第 2 行：last_id（压缩进度）+ life_number
+    // 第 2 行：压缩进度（last_seq 序号）+ life_number
     ctx.fillStyle = '#88c0d0'
     ctx.font = '10px monospace'
     ctx.textAlign = 'left'
-    const lid = (r.last_id || '').slice(0, 16)
-    ctx.fillText(`last_id=${lid}${(r.last_id || '').length > 16 ? '..' : ''} life=${r.life_number || '-'}`, 6, _curY + 18)
+    if (typeof r.last_seq === 'number') {
+      ctx.fillText(`压缩到第 ${r.last_seq} 条 · life=${r.life_number || '-'}`, 6, _curY + 18)
+    } else {
+      const lid = (r.last_id || '').slice(0, 16)
+      ctx.fillText(`last_id=${lid}${(r.last_id || '').length > 16 ? '..' : ''} life=${r.life_number || '-'}`, 6, _curY + 18)
+    }
 
     // 第 3 行起：摘要内容（自动换行，截前 400 字防卡）
     ctx.fillStyle = '#c8c8c8'
@@ -5605,6 +5671,7 @@ function dbgCopyCompressPanel() {
     s += '\n最新一条:\n'
     const r = dbgCompressList[0]
     s += `  compressed_at: ${r.compressed_at ? new Date(r.compressed_at).toLocaleString() : '-'}\n`
+    s += `  last_seq: ${typeof r.last_seq === 'number' ? r.last_seq : '-'}\n`
     s += `  last_id: ${r.last_id || '-'}\n`
     s += `  life_number: ${r.life_number || '-'}\n`
     s += `  text: ${(r.text || '').substring(0, 300)}\n`
@@ -5620,6 +5687,7 @@ function dbgCopyCompressSingle(idx) {
   s += `compressed_at: ${r.compressed_at ? new Date(r.compressed_at).toLocaleString() : '-'}\n`
   s += `openid: ${r.openid || '-'}\n`
   s += `life_number: ${r.life_number || '-'}\n`
+  s += `last_seq: ${typeof r.last_seq === 'number' ? r.last_seq : '-'}\n`
   s += `last_id: ${r.last_id || '-'}\n`
   s += `\n--- text ---\n${r.text || '(空)'}\n`
   return s

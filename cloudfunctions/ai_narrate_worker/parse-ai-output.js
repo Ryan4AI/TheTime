@@ -117,6 +117,15 @@ function fallbackExtractBranch(rawText) {
           .replace(/\\n/g, '\n')
           .replace(/\\t/g, '\t')
           .replace(/\\\\/g, '\\')
+      } else {
+        // 2026-08-03：JSON 未闭合（AI 只写 content 没写 options，结尾停在正文后）
+        // 之前走 D090-hotfix5 把整段 JSON 原文当 content → 前端显示 {"content":"... 乱码
+        // 修法：content 值没闭合引号时，直接取 restText 全文（正文本身）
+        content = restText.trim()
+          .replace(/\\"/g, '"')
+          .replace(/\\n/g, '\n')
+          .replace(/\\t/g, '\t')
+          .replace(/\\\\/g, '\\')
       }
     }
   }
@@ -126,10 +135,38 @@ function fallbackExtractBranch(rawText) {
       content = cleaned.trim()
     }
   }
+  let options = []
+  // 2026-08-03：双重嵌套剥壳——AI 偶发把 content 值又序列化一次（content 本身是 JSON 字符串）
+  // 例：{"content":"{\"content\":\"正文\",\"options\":[...]}"} → 剥出内层 content/options
+  // 例：截断的嵌套 {"content":"{\"content\":\"正文...  → 剥出内层正文
+  // （02:53 遗留 bug，本次一并修）
+  if (content) {
+    const trimmedContent = content.trim()
+    if (trimmedContent.charAt(0) === '{' || trimmedContent.charAt(0) === '[') {
+      try {
+        const inner = JSON.parse(trimmedContent)
+        if (inner && typeof inner.content === 'string' && inner.content.trim()) {
+          if (Array.isArray(inner.options) && inner.options.length >= 2) {
+            options = inner.options.slice(0, 4)
+          }
+          content = inner.content
+        }
+      } catch (e) {
+        // 内层也解析失败（截断的嵌套）→ 递归再抽一层（内层可能又是 {"content":"... 结构）
+        if (trimmedContent.indexOf('"content"') !== -1) {
+          const inner2 = fallbackExtractBranch(trimmedContent)
+          if (inner2 && inner2.content && !inner2.content.startsWith('{"content"')) {
+            content = inner2.content
+            if (inner2.options && inner2.options.length >= 2) options = inner2.options.slice(0, 4)
+          }
+        }
+      }
+    }
+  }
   // 抽 options：找所有 [...] 数组，挑包含 ≥2 字符串的那个
   // 2026-08-02：AI 偶发二次转义（\"a\"），先还原 \" → " 再匹配
-  let options = []
-  const arrayMatches = cleaned.replace(/\\"/g, '"').matchAll(/\[([^\[\]]*)\]/g)
+  // 2026-08-03：剥壳已拿到内层 options 时跳过（避免外层把内层数组再抽一遍）
+  const arrayMatches = options.length === 0 ? cleaned.replace(/\\"/g, '"').matchAll(/\[([^\[\]]*)\]/g) : []
   for (const m of arrayMatches) {
     const inner = m[1]
     const strs = inner.match(/"((?:\\.|[^"\\])*)"/g) || []
@@ -239,6 +276,31 @@ function parseAIOutput(content) {
       }
     } catch (e) {
       parseError = e
+    }
+  }
+
+  // 2026-08-03：双重嵌套剥壳（主入口版）——JSON.parse 直接成功时，
+  // content 字段值可能仍是嵌套 JSON 字符串（AI 又序列化了一次），剥出内层 content/options
+  // 例：{"content":"{\"content\":\"正文\",\"options\":[...]}"} → content=正文, options=内层
+  if (branches) {
+    const list = Array.isArray(branches) ? branches : [branches]
+    for (const b of list) {
+      if (b && typeof b.content === 'string') {
+        const t = b.content.trim()
+        if (t.charAt(0) === '{' || t.charAt(0) === '[') {
+          try {
+            const inner = JSON.parse(t)
+            if (inner && typeof inner.content === 'string' && inner.content.trim()) {
+              if (Array.isArray(inner.options) && inner.options.length >= 2) {
+                b.options = inner.options.slice(0, 4)
+              }
+              b.content = inner.content
+            }
+          } catch (e) {
+            // 内层也解析失败 → 保留原 content（可能本身就是以 { 开头的正文）
+          }
+        }
+      }
     }
   }
 

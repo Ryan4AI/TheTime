@@ -161,6 +161,38 @@ test('纯叙事文本 fallback 兜底 options', () => {
   assert.deepStrictEqual(getOptions(branches), ['继续观察', '尝试离开', '寻找机会'])
 })
 
+console.log('\n=== 场景 14：截断 JSON——只有 content 没有闭合（2026-08-03 真实 case narrate_1785685119028_8txzez）===')
+test('截断 JSON 不再把 JSON 原文当 content', () => {
+  const raw = '{"content":"营地里一片混乱，士兵们急匆匆地往前方赶。你逆着人流往回走，远远看见王朴站在辎重车旁，正朝你使眼色。\\n\\n「出事了，」他压低声音，「先锋遭伏，陛下召各将议事。这是千载难逢的机会——趁营中空虚，你现在就走。」\\n\\n「可城门守卫——」\\n\\n「我已安排好了。」王朴塞过来一块令牌，「凭这个出营，路上有人接应。你连夜赶回汴京，潜入内库取铁器。天亮前必须离开汴京城。」\\n\\n他看着你，目光复杂：「记住，铁器到手后，直接去城南的铁匠铺。铺主是我的人，他会帮你熔毁。」\\n\\n远处号角声响，大军正在集结。你攥紧令牌，正要动身，忽然瞥见那个报信的禁军正站在人群中盯着你，眼神阴沉。'
+  const { branches, fallbackUsed } = parseAIOutput(raw)
+  assert.ok(branches, '应解析出分支')
+  assert.ok(fallbackUsed, '截断 JSON 应走 fallback')
+  const content = getContent(branches)
+  assert.ok(content, '应有 content')
+  assert.ok(content.startsWith('营地里一片混乱'), 'content 应是正文而不是 JSON 原文')
+  assert.ok(!content.startsWith('{"content"'), 'content 不应是 JSON 原文')
+  assert.deepStrictEqual(getOptions(branches), ['继续观察', '尝试离开', '寻找机会'])
+})
+
+console.log('\n=== 场景 15：双重嵌套完整 JSON（2026-08-03，AI 把 content 值又序列化一次）===')
+test('双重嵌套完整 JSON 剥出内层 content/options', () => {
+  const raw = '{"content":"{\\"content\\":\\"双重嵌套正文测试\\",\\"options\\":[\\"甲\\",\\"乙\\",\\"丙\\"]}"}'
+  const { branches } = parseAIOutput(raw)
+  assert.ok(branches, '应解析出分支')
+  assert.strictEqual(getContent(branches), '双重嵌套正文测试')
+  assert.deepStrictEqual(getOptions(branches), ['甲', '乙', '丙'])
+})
+
+console.log('\n=== 场景 16：截断的双重嵌套（内层也没闭合）===')
+test('截断双重嵌套剥壳', () => {
+  const raw = '{"content":"{\\"content\\":\\"截断的嵌套正文测试，写到一半就没了。\\"}"}'
+  const { branches, fallbackUsed } = parseAIOutput(raw)
+  assert.ok(branches, '应解析出分支')
+  const content = getContent(branches)
+  assert.ok(content.startsWith('截断的嵌套正文测试'), 'content 应是内层正文')
+  assert.ok(!content.startsWith('{"content"'), 'content 不应是 JSON 原文')
+})
+
 // ═══════════════════════════════════════════════════════
 // 汇总
 // ═══════════════════════════════════════════════════════

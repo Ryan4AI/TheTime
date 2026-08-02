@@ -38,17 +38,18 @@ exports.main = async (event) => {
   const rand = Math.random().toString(36).slice(2, 8)
   const requestId = `narrate_${ts}_${rand}`
 
-  // 1. D049a: 写 llm_io (status=pending) 替代 narrate_pending + narrate_result
+  // 1. 写 llm_io pending（精简版：只记调用参数）
   try {
     await db.collection('llm_io').add({
       data: {
         request_id: requestId,
+        openid,
         category: 'narrate',
         status: 'pending',
-        input: { openid, input: (event && event.input) || '', is_retry: !!(event && event.is_retry) },
-        output: {},
         error: '',
         created_at: ts,
+        input: { model: 'MiniMax-M2.7-highspeed', prompt_chars: 0, is_retry: !!(event && event.is_retry) },
+        output: {},
       },
     })
   } catch (e) {

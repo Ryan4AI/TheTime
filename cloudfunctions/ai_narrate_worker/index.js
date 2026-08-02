@@ -50,6 +50,9 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 const _ = db.command
 const https = require('https')
+// 2026-08-02：AI 输出解析链路独立成模块（配单测 parse-ai-output.test.js）
+// 规则：每遇解析失败加测试 case；改解析函数必须保证历史 case 全过
+const { parseAIOutput } = require('./parse-ai-output')
 
 // v0.6.9x（先生 2026-06-19 04:27 拍板）：换回 MiniMax-M2.7-highspeed
 // 之前用 DeepSeek v4 Flash（v0.6.9 切到 DS；本次反向回滚）
@@ -77,6 +80,53 @@ const BOARD_TARGET_PERSON = {
 }
 const ATTR_NAMES = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
 
+// ─────── 年号表（2026-08-02 从 generate_identity 复制，补显德；用于跨年后动态重算 eraDisplay）───────
+// 键 = '起始年|朝代'，值 = [年号名, 起始年]
+const ERA_TABLE = new Map([
+  ['-202|西汉', ['高祖', -202]], ['-180|西汉', ['文帝', -180]], ['-141|西汉', ['建元', -140]], ['-119|西汉', ['元狩', -122]], ['-87|西汉', ['后元', -88]], ['9|西汉', ['始建国', 9]],
+  ['25|东汉', ['建武', 25]], ['89|东汉', ['永元', 89]], ['184|东汉', ['中平', 184]], ['220|东汉', ['延康', 220]],
+  ['220|三国', ['黄初', 220]], ['221|三国', ['章武', 221]], ['229|三国', ['黄龙', 229]], ['263|三国', ['景元', 260]], ['280|三国', ['咸宁', 275]],
+  ['265|西晋', ['泰始', 265]], ['290|西晋', ['永熙', 290]], ['316|西晋', ['建兴', 313]],
+  ['317|东晋', ['建武', 317]], ['383|东晋', ['太元', 376]], ['420|东晋', ['元熙', 419]],
+  ['420|南北朝', ['永初', 420]], ['439|南北朝', ['太延', 435]], ['493|南北朝', ['太和', 477]], ['523|南北朝', ['正光', 520]], ['548|南北朝', ['太清', 547]], ['577|南北朝', ['建德', 572]],
+  ['589|隋', ['开皇', 581]],
+  ['618|唐', ['武德', 618]], ['626|唐', ['贞观', 627]], ['690|唐', ['天授', 690]], ['713|唐', ['开元', 713]], ['755|唐', ['天宝', 742]], ['875|唐', ['乾符', 874]], ['907|唐', ['天祐', 904]],
+  ['907|五代十国', ['开平', 907]], ['923|五代十国', ['同光', 923]], ['936|五代十国', ['天福', 936]], ['947|五代十国', ['天福', 947]], ['951|五代十国', ['广顺', 951]], ['954|五代十国', ['显德', 954]],
+  ['960|北宋', ['建隆', 960]], ['1005|北宋', ['景德', 1004]], ['1069|北宋', ['熙宁', 1068]], ['1127|北宋', ['靖康', 1126]],
+  ['1127|南宋', ['建炎', 1127]], ['1141|南宋', ['绍兴', 1131]], ['1234|南宋', ['端平', 1234]], ['1279|南宋', ['祥兴', 1278]],
+  ['1271|元', ['至元', 1264]], ['1280|元', ['至元', 1264]], ['1344|元', ['至正', 1341]], ['1368|元', ['至正', 1341]],
+  ['1368|明', ['洪武', 1368]], ['1420|明', ['永乐', 1403]], ['1449|明', ['正统', 1436]], ['1572|明', ['万历', 1573]], ['1644|明', ['崇祯', 1628]],
+  ['1644|清', ['顺治', 1644]], ['1689|清', ['康熙', 1662]], ['1759|清', ['乾隆', 1736]], ['1840|清', ['道光', 1821]], ['1898|清', ['光绪', 1875]], ['1912|清', ['宣统', 1909]],
+  ['1912|中华民国', ['民国', 1912]], ['1928|中华民国', ['民国', 1912]], ['1937|中华民国', ['民国', 1912]], ['1949|中华民国', ['民国', 1912]],
+])
+
+function _eraToCN(n) {
+  const YN = ['零','一','二','三','四','五','六','七','八','九']
+  if (n < 10) return YN[n]
+  if (n < 20) return '十' + (n > 10 ? YN[n-10] : '')
+  if (n < 100) { const t = Math.floor(n/10), u = n%10; return (t>1 ? YN[t] : '') + '十' + (u>0 ? YN[u] : '') }
+  if (n < 1000) { const h = Math.floor(n/100), r = n%100; return YN[h] + '百' + (r>0 ? _eraToCN(r) : '') }
+  return String(n)
+}
+
+// 2026-08-02：根据年份+朝代动态算年号显示（修复 eraDisplay 出生后不更新的 bug）
+// 与 generate_identity 口径一致：v[1] = 年号起始年，offset = year - v[1] + 1
+// 例：954|五代十国 → ['显德', 954]，955 年 → 显德二年
+function computeEraDisplay(year, dynasty) {
+  if (!year || !dynasty) return ''
+  if (dynasty === '中华人民共和国') return '公元' + year + '年'
+  let best = null
+  for (const [key, v] of ERA_TABLE) {
+    const [kYear, kDyn] = key.split('|')
+    if (kDyn === dynasty && Number(kYear) <= year) {
+      if (!best || Number(v[1]) > best.start) best = { name: v[0], start: Number(v[1]) }
+    }
+  }
+  if (!best) return ''
+  const offset = year - best.start + 1
+  return offset <= 1 ? best.name + '元年' : best.name + _eraToCN(offset) + '年'
+}
+
 function calcBoardScore(state, board) {
   const s = (a) => state[a] || 0
   switch(board) {
@@ -103,35 +153,47 @@ function computeClosestBoard(state) {
   return best
 }
 
-// v0.2.4 — worker main 改成"启动后立刻 return"
-// 关键变化：所有 LLM/DB 操作移到 backgroundTask()，main 只触发后立即 return
-// 这样 submit 的 await cloud.callFunction 不会等 30+ 秒（只等 1-2 秒 worker 启动）
-// 前端拿到的 submit 响应时间不变
+// D094-async（2026-07-23 先生拍板）：拆两段同步调用
+// 真因：D089 fire-and-forget 假设云函数实例存活跑完 finalizeTask，但先生云函数 Runtime=2-4ms 立即结束
+//       → finalizeTask 从来没跑过 → llm_io 永远 partial=true → 前端 state.month 永远不更新
+// 修法：worker main 函数改成同步 await，根据 phase 跑对应阶段
+//   - phase='ai1'：跑 AI₁（生成叙事），return {content, options, state, ...}
+//   - phase='ai2'：跑 AI₂（评分结算属性），return {attrPatch, newState, ...}
+//   前端分两次调 worker（先生 D089 partial 体验保留：ai1 1-3 秒先看到叙事，ai2 20-30 秒后看到属性）
 exports.main = async (event) => {
-  const { request_id, payload } = event
+  const { phase, openid, input, is_retry } = event || {}
 
-  if (!request_id) {
-    return { error: '缺少 request_id', code: 400 }
+  if (!openid) {
+    return { error: '缺少 openid', code: 400 }
   }
-  // D090（2026-07-20）：后端自治 state，不再要求 payload.state
-  // 要求 openid（submit 已从微信上下文注入）；state 由 worker 从 player_life 拉
-  if (!payload || !payload.openid) {
-    await safeWriteResult(request_id, '', 'worker缺 payload.openid')
-    return { error: '缺少 payload.openid', code: 400 }
+  if (phase !== 'ai1' && phase !== 'ai2') {
+    return { error: '缺少 phase（必须是 ai1 或 ai2）', code: 400 }
   }
 
-  console.log('[ai_narrate_worker] 启动, request_id=', request_id)
+  const t0 = Date.now()
+  console.log('[ai_narrate_worker] 启动 phase=', phase, ' openid=', openid)
 
-  // v0.2.4 关键修复：后台跑主逻辑，不 await
-  // 微信云函数支持：async main 返回后，后台 Promise 仍会继续执行直到云函数实例销毁
-  backgroundTask(request_id, payload).catch(e => {
-    console.error('[ai_narrate_worker] backgroundTask 异常:', e.message)
-    console.error('[ai_narrate_worker] stack:', e.stack)
-    safeWriteResult(request_id, '', '[backgroundTask_crash] ' + e.message + ' | stack_first_300=' + (e.stack || '').substring(0, 300))
-  })
-
-  // 立即返回（不阻塞 submit）
-  return { success: true, status: 'started', elapsed_ms: 0 }
+  try {
+    if (phase === 'ai1') {
+      const narrateRequestId = `narrate_${t0}_${Math.random().toString(36).slice(2, 8)}`
+      const result = await runPhase1({ openid, input, is_retry, narrateRequestId })
+      console.log('[ai_narrate_worker] ai1 完成, elapsed_ms=', Date.now() - t0)
+      return { success: true, phase: 'ai1', ...result }
+    } else {
+      const scoreRequestId = `score_${t0}_${Math.random().toString(36).slice(2, 8)}`
+      const result = await runPhase2({ openid, scoreRequestId, input })
+      console.log('[ai_narrate_worker] ai2 完成, elapsed_ms=', Date.now() - t0)
+      return { success: true, phase: 'ai2', ...result }
+    }
+  } catch (e) {
+    console.error('[ai_narrate_worker] phase=', phase, ' 异常:', e.message, '\n', e.stack)
+    // 写 error llm_io（精简版）
+    const errRequestId = `${phase === 'ai1' ? 'narrate' : 'score'}_${t0}_${Math.random().toString(36).slice(2, 8)}`
+    await writeLlmIo(errRequestId, openid, phase === 'ai1' ? 'narrate' : 'score', 'error', {
+      error: e.message,
+    })
+    return { success: false, phase, error: e.message, partial: phase === 'ai1' }
+  }
 }
 
 // ─────── D090（2026-07-20）：后端自治 state，player_life 是真值 ───────
@@ -158,7 +220,6 @@ async function loadLatestLife(openid) {
     year: rec.year,
     month: rec.month,
     round: rec.round || 0,
-    health: rec.health,
     coin: rec.coin != null ? rec.coin : 1000,
     '声望': rec.reputation || 0,
     '财富': rec.wealth || 0,
@@ -200,7 +261,6 @@ async function saveLife(openid, life_number, updated) {
     year: updated.year,
     month: updated.month,
     round: updated.round,
-    health: updated.health,
     coin: updated.coin != null ? updated.coin : 1000,
     reputation: updated['声望'] || 0,
     wealth: updated['财富'] || 0,
@@ -243,293 +303,384 @@ async function waitForFinalize(openid, maxWaitMs) {
 }
 
 // v0.2.4 — 主逻辑移到 backgroundTask（与 main 分离）
-async function backgroundTask(request_id, payload) {
+// D094-async（2026-07-23 先生拍板）：拆两段同步调用
+// - runPhase1：跑 AI₁（生成叙事），return {content, options, state, rawContent, systemPrompt, userPrompt, messages, perfLogs}
+// - runPhase2：跑 AI₂（评分结算属性），return {attrPatch, newState, monthChanged, systemMessages}
+// 前端分两次调 worker（先生 D089 partial 体验保留）
+async function runPhase1({ openid, input, is_retry, narrateRequestId }) {
   const startTs = Date.now()
-  // D056: 拿 openid 写 narrate_history（从前端传，fallback 云函数 ctx）
-  const openid = (payload && payload.openid) || (cloud.getWXContext && cloud.getWXContext().OPENID) || ''
-
-  // D073（2026-07-05 16:12 先生拍板）：history 提到 try 块外声明
-  // 真因：LLM 抛错时（401/400/2013 等）catch 块（line 449）要引用 history 写 fakeResult
-  //       但 history 之前在 try 块内 `const` 声明（line 176），catch 块不在那个作用域
-  //       → catch 块访问 history 抛 "history is not defined" → DBG 浮窗看不到对话流
-  // 修法：history 提到 try 块外用 let 声明（先用 null 占位），try 块里赋值后 catch 可访问
   let history = null
+  let perfLogs = []
+  let systemPrompt, userPrompt, messages, rawContent, branches
 
+  // 写 pending llm_io（精简版：只记调用参数）
+  await writeLlmIo(narrateRequestId, openid, 'narrate', 'pending', {
+    input: { model: MM_MODEL, prompt_chars: 0, is_retry: !!is_retry },
+  })
+
+  // D090：后端自治 state，从 player_life 拉最新世
+  let loaded = await loadLatestLife(openid)
+  if (!loaded) {
+    throw new Error('player_life 无记录（应不可能：能发 submit 必已有世）')
+  }
+  // 若上一轮还在算（is_scoring=true）→ 短等它完成
+  if (loaded.is_scoring) {
+    loaded = await waitForFinalize(openid)
+    if (!loaded) throw new Error('waitForFinalize 无记录')
+  }
+  const state = loaded.state
+  const life_number = loaded.life_number
+
+  // 本回合标记评分中（并发轮次看到 is_scoring=true 就会等）
   try {
-    const { input, is_retry } = payload
+    await db.collection('player_life').where({ openid, life_number }).update({ data: { is_scoring: true } })
+  } catch (e) {
+    console.error('[D094] 标记 is_scoring=true 失败:', e.message)
+  }
 
-    // D090：后端自治 state，从 player_life 拉最新世
-    let loaded = await loadLatestLife(openid)
-    if (!loaded) {
-      // 能发 submit 必已有世（generate_identity 已写 player_life），读到空是异常，直接报错返回
-      await safeWriteResult(request_id, '', 'player_life 无记录（应不可能：能发 submit 必已有世）')
-      return
+  const realInput = is_retry ? '' : (input || '')
+
+  // D070：user 先入库，再拉 history，再调 AI
+  if (realInput) {
+    const _userRecord = {
+      openid: openid,
+      life_number: state.life_number || 1,
+      role: 'user',
+      content: realInput,
+      created_at: Date.now(),
     }
-    // 若上一轮还在算（is_scoring=true）→ 短等它完成
-    if (loaded.is_scoring) {
-      loaded = await waitForFinalize(openid)
-      if (!loaded) {
-        await safeWriteResult(request_id, '', 'waitForFinalize 无记录')
-        return
-      }
+    const _userErr = validateNarrateMessage(_userRecord)
+    if (_userErr) {
+      console.error('[D082] user 入库校验失败:', _userErr, JSON.stringify(_userRecord))
+    } else {
+      await db.collection('narrate_history').add({ data: _userRecord })
+      console.log('[D070] user 先入库, content=', realInput.slice(0, 30))
     }
-    const state = loaded.state
-    const life_number = loaded.life_number
+  }
 
-    // 本回合标记评分中（并发轮次看到 is_scoring=true 就会等）
-    try {
-      await db.collection('player_life').where({ openid, life_number }).update({ data: { is_scoring: true } })
-    } catch (e) {
-      console.error('[D094] 标记 is_scoring=true 失败:', e.message)
-    }
-
-    const realInput = is_retry ? '' : (input || '')
-
-    // D070（2026-07-05 12:43 先生拍板）：user 先入库，再拉 history，再调 AI
-    // 真因：之前 user 入库在 AI 跑完后（line 360）→ AI 失败时 user 不入库
-    //       → 前端 narrativeHistory 同步不完整，先生重进看不到失败轮的 user
-    // 修法：worker 收到 input 后立刻 add user，再拉 history（先生投的 user 已在云端）→ 调 AI
-    // 好处：AI 失败/重试/玩家退出都无所谓，user 一定入库
-    if (realInput) {
-      const _userRecord = {
-        openid: openid,
-        life_number: state.life_number || 1,
-        role: 'user',
-        content: realInput,
-        created_at: Date.now(),
-      }
-      // D082：narrate_history 入库前 schema 校验
-      const _userErr = validateNarrateMessage(_userRecord)
-      if (_userErr) {
-        console.error('[D082] user 入库校验失败:', _userErr, JSON.stringify(_userRecord))
-      } else {
-        await db.collection('narrate_history').add({ data: _userRecord })
-        console.log('[D070] user 先入库, content=', realInput.slice(0, 30))
-      }
-    }
-
-    // D067（2026-07-05 11:49 先生拍板）：worker 自己从云端 narrate_history 拉 history
-    // 真因：前端拼 historyForAi 塞进 payload.history 是冗余设计
-    //   - 前端 narrativeHistory 是 session 累积，和云端 narrate_history 重复
-    //   - worker 本来就能直接查云数据库，前端没必要当传话筒
-    //   - 前端/云端不一致会引发 D049 系列 bug
-    // 修法：worker 调 player_load 同款查询（按 created_at asc）拉 history，自己拼给 LLM
-    // 注：先生 10:10 红线"不动数据库设计"——不建索引/不改字段，复用 player_load 的 orderBy
-    const nhRes = await db.collection('narrate_history')
+  // D067：worker 自己从云端 narrate_history 拉 history
+  // 2026-08-02 先生拍板：不限制上下文对话数量，全量拉取（分页循环，单次最多 1000）
+  // 之前 orderBy asc + limit(200) 正序取前 200 会丢掉最新对话（211 条时最新 11 条被截）
+  const _MAX_PAGE = 1000
+  let _allHistory = []
+  let _offset = 0
+  while (true) {
+    const _page = await db.collection('narrate_history')
       .where({ openid, life_number: state.life_number || 1 })
       .orderBy('created_at', 'asc')
-      .limit(200)  // 上限防超长（先生云端 life=1 现在 6 条，不会触发；防未来暴涨）
+      .skip(_offset)
+      .limit(_MAX_PAGE)
       .get()
-    history = nhRes.data || []
-    console.log('[D067] worker 自己拉 history, count=', history.length)
-    // v0.1.80 — round 计数仍然 +1（这是"回合"概念，不是"月"概念），但不再自动推进月
-    const preUpdate = { ...state }
-    if (!preUpdate.month) preUpdate.month = 1
-    if (!preUpdate.health) preUpdate.health = 100
-    if (!preUpdate.coin) preUpdate.coin = 1000
-    if (!preUpdate.alive) preUpdate.alive = true
-    preUpdate.round = (preUpdate.round || 0) + 1
+    _allHistory = _allHistory.concat(_page.data || [])
+    if ((_page.data || []).length < _MAX_PAGE) break
+    _offset += _MAX_PAGE
+  }
+  history = _allHistory
+  console.log('[D067] worker 自己拉 history（全量）, count=', history.length)
 
-    // v0.1.80 — 把 preUpdate 喂给 AI，让 AI 看到当前最新状态
-    const t0 = Date.now()
-    const monthEvent = await queryMonthEvent(preUpdate)
-    const t1 = Date.now()
-    console.log('[PERF] queryMonthEvent_ms=', t1 - t0)
+  // 2026-08-02 先生拍板：对话压缩——超过 200 条后每满 100 条触发，摘要存独立表 history_compress
+  // 18:18 并行化：摘要生成与 AI₁ 并行（Promise 并发，总耗时 = max 不是 sum）——
+  //   叙事不被阻塞、属性不被延迟（ai2 不再补跑）、摘要同时完成下一轮即可用
+  const fullHistory = history  // 压缩用全量（截断前保存）
+  const compressCtx = await getCompressContext(history, openid, state.life_number || 1)
+  const compressSummary = compressCtx.summary
+  const compressLastId = compressCtx.lastId
+  // 无摘要记录（首次压缩前）且 history 超长 → 截断最近 COMPRESS_KEEP 条喂 AI₁，防止全量撑爆
+  if (!compressSummary && history.length > COMPRESS_TRIGGER) {
+    history = history.slice(-COMPRESS_KEEP)
+    console.warn('[COMPRESS] 无摘要降级: 截断到最近', history.length, '条')
+  }
+  // 并行启动压缩（内部判断触发条件 + 5 分钟防并发；失败不影响 AI₁）
+  const compressTask = compressHistoryIfNeeded(fullHistory, openid, state.life_number || 1)
+    .catch(e => { console.error('[COMPRESS] 并行压缩异常:', e.message); return null })
 
-    // 收集 PERF 数据供 DBG 浮窗展示（先生手机只能看 DBG）
-    var perfLogs = []
-    globalThis.__PERF_LOGS__ = perfLogs  // 让 callAI/callScoringAI 内部能 push
+  const preUpdate = { ...state }
+  if (!preUpdate.month) preUpdate.month = 1
+  if (!preUpdate.coin) preUpdate.coin = 1000
+  if (!preUpdate.alive) preUpdate.alive = true
+  preUpdate.round = (preUpdate.round || 0) + 1
 
-    // D048c（2026-06-28 09:42 拍板）：删 partialWriter 协程 + 流式 partial_content 写库
-    // 凌晨 12 小时 9 版本的真因：保留流式根本做不好（partialWriter 500ms 触发一堆 bug）
-    // 改非流式：callAI 走 callLLM（非流式），前端拿到完整 content 后用前端假打字机
+  const t0 = Date.now()
+  const monthEvent = await queryMonthEvent(preUpdate)
+  const t1 = Date.now()
+  console.log('[PERF] queryMonthEvent_ms=', t1 - t0)
 
-    const { branches, systemPrompt, userPrompt, messages, rawContent } = await callAI(preUpdate, realInput, history, monthEvent, is_retry)
-    const t2 = Date.now()
-    console.log('[PERF] callAI_ms=', t2 - t1)
-    perfLogs.push({ stage: 'queryMonthEvent_ms', ms: t1 - t0 })
-    perfLogs.push({ stage: 'callAI_ms', ms: t2 - t1 })
-    const picked = pickBranch(branches)
-    const t3 = Date.now()
-    console.log("[PERF] pickBranch_ms=", t3 - t2)
-    perfLogs.push({ stage: "pickBranch_ms", ms: t3 - t2 })
+  globalThis.__PERF_LOGS__ = perfLogs
+  const aiResult = await callAI(preUpdate, realInput, history, monthEvent, is_retry, compressSummary, compressLastId)
+  branches = aiResult.branches
+  systemPrompt = aiResult.systemPrompt
+  userPrompt = aiResult.userPrompt
+  messages = aiResult.messages
+  rawContent = aiResult.rawContent
+  const t2 = Date.now()
+  console.log('[PERF] callAI_ms=', t2 - t1)
+  perfLogs.push({ stage: 'queryMonthEvent_ms', ms: t1 - t0 })
+  perfLogs.push({ stage: 'callAI_ms', ms: t2 - t1 })
 
-    // ╔══════════════════════════════════════════════════════════════╗
-    // ║ 两阶段改造（先生 2026-07-19 拍板）：                              ║
-    // ║ 第一次 AI 调用(callAI)出结果后 → 立刻写 partial result 返回前端   ║
-    // ║ （玩家先看到叙事文字，属性结算/入库在后台第二步完成）              ║
-    // ║ 然后再启动 finalizeTask 跑第二次 AI 调用(callScoringAI) → 入库    ║
-    // ╚══════════════════════════════════════════════════════════════╝
-    const partialResult = {
-      success: true,
-      partial: true,  // 标记：前端先渲染叙事，属性结算中
-      branch: picked,
-      branches: branches,
-      // partial 阶段 state 用旧值（属性尚未结算），前端不 merge、不存档
-      state: state,
-      month_changed: false,
-      new_month: null,
-      new_year: null,
-      history: history,
-      narrate_history_added_ids: null,
-      // D053：partial 也带 debug（system_prompt/user_prompt/messages/raw_response/perf_logs/picked_branch）
-      // 第二次 AI₂ 的 score_prompt/score_raw_response/d048f_log 在 finalize 后补
-      debug: {
-        system_prompt: systemPrompt,
-        user_prompt: userPrompt,
-        messages: messages,
-        raw_response: rawContent,
-        perf_logs: perfLogs,
-        picked_branch: picked,
-        attr_patch: null,
-        score_prompt: null,
-        score_raw_response: null,
-        d048f_log: (globalThis.__D048F_LOG__ || []).join("\n") || null,
-      },
-      event: monthEvent,
-      system_messages: [],  // finalize 后补
-      closest_board: null,  // finalize 后补（用 updated state 算）
-      is_retry: is_retry,
-      attr_patch: {},  // finalize 后补
+  // 等待并行压缩完成（已与 callAI 并行跑，通常已完成；失败已 catch 不影响主流程）
+  await compressTask
+
+  // 写 narrate llm_io 成功记录（2026-08-02 改：raw_response 存 AI 原始输出，定位问题用）
+  // 教训：之前存 JSON.stringify(branches)（解析后）→ 兜底/解析失败时看不到 AI 到底吐了什么
+  //       先生指出 llm_io 是调试工具，必须存原始输出；解析结果单独存 parsed 字段
+  let parsedBranches = ''
+  try { parsedBranches = JSON.stringify(branches) } catch (e) {}
+  await writeLlmIo(narrateRequestId, openid, 'narrate', 'success', {
+    input: { model: MM_MODEL, prompt_chars: systemPrompt.length + userPrompt.length, is_retry: !!is_retry },
+    raw_response: rawContent || '',
+    parsed: parsedBranches,
+    duration_ms: t2 - startTs,
+  })
+  const picked = pickBranch(branches)
+  const t3 = Date.now()
+  console.log("[PERF] pickBranch_ms=", t3 - t2)
+  perfLogs.push({ stage: "pickBranch_ms", ms: t3 - t2 })
+
+  // 写 ai 消息到 narrate_history（D056 实时 add）
+  try {
+    const _aiRecord = {
+      openid: openid,
+      life_number: life_number,
+      role: 'ai',
+      content: picked.content || '',
+      options: picked.options || null,
+      created_at: Date.now(),
     }
-
-    // 立即写 llm_io：status="success" + partial:true → 前端马上能渲染叙事
-    try {
-      await db.collection("llm_io").where({ request_id }).update({
-        data: {
-          status: "success",
-          output: {
-            raw_response: rawContent,
-            parsed: picked,
-            result: partialResult,
-          },
-        },
-      })
-      console.log("[ai_narrate_worker] partial result 已写, request_id=", request_id, ", callAI_ms=", t3 - t1, ", 等待前端拉取后启动 finalize")
-    } catch (e) {
-      console.error("[ai_narrate_worker] 写 partial llm_io 失败:", e.message)
+    const _aiErr = validateNarrateMessage(_aiRecord)
+    if (_aiErr) {
+      console.error('[D082] ai 入库校验失败:', _aiErr, JSON.stringify(_aiRecord))
+    } else {
+      await db.collection('narrate_history').add({ data: _aiRecord })
     }
-
-    // 启动后台 finalize（不 await，让 backgroundTask 结束、云函数实例继续存活）
-    // finalizeTask 内部自己跑 callScoringAI → applyPatch → 死亡判定 → 写 narrate_history → 更新 llm_io 为完整版
-    finalizeTask({
-      request_id, payload, preUpdate, picked, branches,
-      systemPrompt, userPrompt, messages, rawContent,
-      history, openid, monthEvent, perfLogs, is_retry, startTs, t0,
-      state, life_number,
-    }).catch(e => {
-      console.error("[ai_narrate_worker] finalizeTask 异常:", e.message)
-      console.error("[ai_narrate_worker] finalize stack:", e.stack)
-      // finalize 崩溃：把 partial 标记失效 + 写 error，前端轮询到后走错误路径
-      safeWriteResult(request_id, "[finalizeTask_crash] " + e.message + " | stack_first_300=" + (e.stack || "").substring(0, 300), {
-        success: false,
-        error: "属性结算失败: " + e.message,
-        branch: picked,
-        partial: true,
-        debug: { raw_response: rawContent, system_prompt: systemPrompt, user_prompt: userPrompt, messages, perf_logs: (typeof perfLogs !== 'undefined') ? perfLogs : null },
-      })
-    })
-
-    // backgroundTask 在此结束（finalize 在后台继续）
-    console.log("[ai_narrate_worker] callAI 完成已返回 partial, request_id=", request_id, ", elapsed_ms=", Date.now() - startTs)
   } catch (e) {
-    console.error('[ai_narrate_worker] backgroundTask 失败:', e.message)
+    console.error('[D056] narrate_history add 失败:', e.message)
+  }
 
-    // v0.2.5-H（先生 2026-06-13 拍板）：JSON 解析失败时，把原始 content 写进 result_str
-    // 这样前端 status='done' 走正常渲染路径，DBG 浮窗能显示 AI 原始输出
-    // 同时 error_str 也保留错误信息（前端拿不到也不影响，因为 status=done 走 handleAIResponse）
-    if (e.parseFailed && e.debugInfo) {
-      const fakeResult = {
-        success: false,
-        error: 'AI输出无法解析为JSON对象: ' + e.debugInfo.parse_error,
-        branch: null,
-        branches: null,
-        state: null,
-        history: history,  // D067：失败也带 history，前端 DBG「对话流」tab 不依赖 AI 返回
-        debug: {
-          raw_response: e.debugInfo.raw_response,
-          system_prompt: e.debugInfo.system_prompt,
-          user_prompt: e.debugInfo.user_prompt,
-          messages: e.debugInfo.messages,
-          parse_error: e.debugInfo.parse_error,
-        },
-      }
-      // 写 result_str + error_str 双重保险
-      // 但前端 status=error 会忽略 result_str —— 所以同步改 narrate_get_result 优先返回 done + result
-      // D050 修复 v2：把 fakeResult 整个存进 output.result，前端能看到完整 debug（含 raw_response / system_prompt / messages）
-      await safeWriteResult(request_id, 'AI输出无法解析为JSON对象: ' + e.debugInfo.parse_error + ' | raw[:1500]=' + e.debugInfo.raw_response.substring(0, 1500), fakeResult)
-      console.log('[ai_narrate_worker] JSON解析失败已写 fake result, raw_response 长度=', e.debugInfo.raw_response.length)
-      return
-    }
+  console.log('[ai_narrate_worker] runPhase1 完成, elapsed_ms=', Date.now() - startTs)
 
-    // v0.2.5-debug: 把 LLM 真实 body 一并写进 error_str（v0.1.83 注释想做但没做）
-    // 前端 DBG 浮窗的 pollResult.error 就能看到完整响应体，定位 400 真因
-    const errBody = e.body ? ` | body: ${String(e.body).substring(0, 500)}` : ''
-    const fullError = (e.message || 'AI服务暂不可用') + errBody
-
-    // D048e（2026-06-28 11:50 拍板·修 DBG [AI₁ 原始返回] 无数据 bug）：
-    // LLM 抛错时（不是 parseFailed）也构造 fakeResult 写进 result_str
-    // 这样前端 status=done 走正常渲染路径（虽然分支会是空），DBG 浮窗能显示错误 + 请求详情
-    // 之前：只写 error_str 到 narrate_result，raw_response 整段没存 → DBG "无数据"
-    const errFakeResult = {
-      success: false,
-      error: fullError,
-      branch: null,
-      branches: null,
-      state: null,
-      history: history,  // D067：失败也带 history
-      debug: {
-        raw_response: '',  // LLM 抛错时没有 raw（要么是 400/2013 等 API 层错）
-        system_prompt: (typeof systemPrompt !== 'undefined') ? systemPrompt : null,
-        user_prompt: (typeof userPrompt !== 'undefined') ? userPrompt : null,
-        messages: (typeof messages !== 'undefined') ? messages : null,
-        parse_error: e.message,
-        llm_error: true,  // 标记是 LLM 调用层错（不是 JSON 解析错）
-        err_status: e.statusCode || 0,
-      },
-    }
-
-    // v0.2.4: 主异常时也要写 llm_io（之前是有 try/catch 但如果 add 失败会被吞掉）
-    // D049a 阶段 2：改写 llm_io 替代 narrate_result
-    // D050 修复 v2（2026-07-03 21:33）：errFakeResult（含 debug.raw_response 等）也存进 output.result
-    // 修复前：主 catch 只写 status=error + error_str 字符串，DBG 看不到 AI 请求详情
-    // 修复后：前端能拿到完整 fakeResult 进 [RESPONSE_ERROR] 路径，DBG 看到 system_prompt / messages
-    try {
-      await db.collection('llm_io').where({ request_id }).update({
-        data: {
-          status: 'error',
-          error: fullError,
-          output: { result: errFakeResult },  // D050 v2: 把 errFakeResult 整个存进 output
-        },
-      })
-    } catch (e) {
-      console.error('[ai_narrate_worker] 写 llm_io error 失败:', e.message)
-    }
+  // 返回 phase1 结果（前端拿到后立即显示叙事 + 选项）
+  return {
+    narrateRequestId,
+    content: picked.content,
+    options: picked.options,
+    state: state,
+    preUpdate: preUpdate,
+    branches: branches,
+    picked: picked,
+    history: history,
+    monthEvent: monthEvent,
+    is_retry: is_retry,
+    debug: {
+      system_prompt: systemPrompt,
+      user_prompt: userPrompt,
+      messages: messages,
+      raw_response: rawContent,
+      perf_logs: perfLogs,
+      picked_branch: picked,
+      d048f_log: (globalThis.__D048F_LOG__ || []).join("\n") || null,
+    },
   }
 }
 
-// v0.2.4: 安全写 llm_io（任何错误都不抛，外层有兜底）
-// D049a 阶段 2 改：替代 safeWriteResult 的 narrate_result 写入
-// D050 修复 v2（2026-07-03 21:33 先生拍板·A 方案）：加 result 参数透传 fakeResult
-// 真因：safeWriteResult 只写 status=error + error_str 字符串，fakeResult 里的 debug.raw_response 整段没存
-//       → narrate_get_result 错误分支没 result 字段 → 前端 error 分支不调 handleAIResponse
-//       → DBG 浮窗看不到 raw_response，先生排查不到 JSON 解析失败真因
-// 修复：safeWriteResult 第三个参数 result 可选，传了就序列化存进 output.result
-async function safeWriteResult(request_id, error_str, result) {
+async function runPhase2({ openid, scoreRequestId, input }) {
+  const startTs = Date.now()
+
+  // 写 pending score llm_io
+  await writeLlmIo(scoreRequestId, openid, 'score', 'pending', {
+    input: { model: MM_MODEL },
+  })
+
+  // D090：从 player_life 拉最新世 state
+  let loaded = await loadLatestLife(openid)
+  if (!loaded) throw new Error('player_life 无记录')
+  // ai2 进来时 ai1 应该已写 is_scoring=true（前端两次调用顺序保证）
+  // 如果 is_scoring=false（极端情况：ai1 崩了没标），跳过等，立刻进入
+  if (loaded.is_scoring) {
+    console.log('[D094-async] ai2 进来时 is_scoring=true，ai1 应该已标，开始跑 AI₂')
+  } else {
+    console.warn('[D094-async] ai2 进来时 is_scoring=false（异常），强制标 true 防止并发锁死')
+    try {
+      await db.collection('player_life').where({ openid, life_number: loaded.life_number }).update({ data: { is_scoring: true } })
+    } catch (e) {}
+  }
+  const state = loaded.state
+  const life_number = loaded.life_number
+
+  // 拉 narrate_history（从云端取 AI₁ 的 content 作为 AI₂ 评分输入）
+  // 2026-08-02 先生拍板：不限制上下文对话数量，全量拉取（分页循环，单次最多 1000）
+  const _MAX_PAGE = 1000
+  let _allHistory = []
+  let _offset = 0
+  while (true) {
+    const _page = await db.collection('narrate_history')
+      .where({ openid, life_number })
+      .orderBy('created_at', 'asc')
+      .skip(_offset)
+      .limit(_MAX_PAGE)
+      .get()
+    _allHistory = _allHistory.concat(_page.data || [])
+    if ((_page.data || []).length < _MAX_PAGE) break
+    _offset += _MAX_PAGE
+  }
+  const history = _allHistory
+
+  // 取最近一条 ai 消息的 content 作为 AI₂ 输入
+  const lastAi = [...history].reverse().find(m => m.role === 'ai')
+  if (!lastAi || !lastAi.content) {
+    throw new Error('AI₁ 没生成内容（narrate_history 没 ai 消息）')
+  }
+  const aiContent = lastAi.content
+
+  // 调 AI₂（callScoringAI）
+  const t0 = Date.now()
+  const { attrPatch, scorePrompt, scoreRawResponse } = await callScoringAI(aiContent, state, history, input)
+  const t1 = Date.now()
+  console.log('[PERF] callScoringAI_ms=', t1 - t0)
+
+  // 写 score llm_io 成功记录（精简版：只记评分AI原始返回+耗时）
+  await writeLlmIo(scoreRequestId, openid, 'score', 'success', {
+    input: { model: MM_MODEL, prompt_chars: scorePrompt.length },
+    raw_response: scoreRawResponse || '',
+    duration_ms: t1 - startTs,
+  })
+
+  // applyPatch：推进月份 + 属性
+  const updated = applyPatch(state, state, attrPatch)
+  const monthChanged = updated.month !== state.month || updated.year !== state.year
+
+  // ─────────── 死亡判定（2026-08-02 重构：3 条直接判定，删除 health 中间值）───────────
+  // 1) AI₂ 剧情判死（E 类输出 death）——意外/剧情必死，优先于其他判定
+  if (attrPatch.death && typeof attrPatch.death === 'object') {
+    updated.alive = false
+    updated.deathReason = attrPatch.death.reason || ('死亡：' + attrPatch.death.type)
+    console.log('[ai_narrate_worker] AI₂ 剧情判死:', JSON.stringify(attrPatch.death))
+  }
+  // 2) 寿限判定（v0.6.50j 原走 health=0，现直接 alive=false）
+  if (!updated.alive && updated.lifespan && updated.age >= updated.lifespan && !updated.deathReason) {
+    updated.deathReason = '寿终正寝'
+  }
+  if (updated.alive && updated.lifespan && updated.age >= updated.lifespan) {
+    updated.alive = false
+    updated.deathReason = '寿终正寝'
+    // D009: 寿限兜底 epitaph（AI 没写时补）
+    if (!updated.epitaph) {
+      var lfAge = updated.age || 20
+      var lfNobility = ['世家', '皇族', '官宦', '士族', '贵族'].indexOf(updated.socialClass) >= 0
+      if (lfAge < 15) updated.epitaph = '未及弱冠，便已消散于人海。'
+      else if (lfAge < 30) updated.epitaph = lfNobility ? '锦衣玉食，终化南柯一梦。' : '青春未展，已无踪迹可寻。'
+      else if (lfAge < 50) updated.epitaph = lfNobility ? '风云一世，史书半行。' : '碌碌半生，终归尘土。'
+      else updated.epitaph = lfNobility ? '功过自有后人评。' : '一生如梦，来去无痕。'
+    }
+    console.log('[ai_narrate_worker] 寿限已至触发死亡')
+  }
+  // 3) 社会性死亡（v0.6.61 从 finalizeTask 死代码搬来；v0.6.85 未成年人豁免）
+  if (updated.alive) {
+    const DEATH_ATTRS = ['声望', '财富', '学识', '医术', '战功', '文采', '政绩', '义行']
+    var allZero = (updated.age || 0) >= 15  // 未成年人豁免：<15 不判
+    if (allZero) {
+      for (var a = 0; a < DEATH_ATTRS.length; a++) {
+        if ((updated[DEATH_ATTRS[a]] || 0) > 0) { allZero = false; break }
+      }
+    }
+    if (allZero) {
+      updated.alive = false
+      updated.deathReason = '全部社会属性'
+      if (!updated.epitaph) {
+        var sAge = updated.age || 20
+        var sNobility = ['世家', '皇族', '官宦', '士族', '贵族'].indexOf(updated.socialClass) >= 0
+        if (sAge < 15) updated.epitaph = '未及弱冠，便已消散于人海。'
+        else if (sAge < 30) updated.epitaph = sNobility ? '锦衣玉食，终化南柯一梦。' : '青春未展，已无踪迹可寻。'
+        else if (sAge < 50) updated.epitaph = sNobility ? '风云一世，史书半行。' : '碌碌半生，终归尘土。'
+        else updated.epitaph = sNobility ? '功过自有后人评。' : '一生如梦，来去无痕。'
+      }
+      console.log('[ai_narrate_worker] 全部社会属性归零触发死亡')
+    }
+  }
+
+  // 系统消息（属性变化时触发）
+  let systemMessages = []
+  try {
+    const V2_ATTRS = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
+    const changedAttrs = V2_ATTRS.filter(a => typeof updated[a] === 'number' && updated[a] !== (state[a] || 0))
+    if (monthChanged || changedAttrs.length > 0) {
+      systemMessages = emitSystemMessages(state, updated)
+    }
+  } catch (e) {
+    console.error('[D094-async] 系统消息生成失败:', e.message)
+  }
+
+  // 写 system 消息到 narrate_history
+  for (const sm of systemMessages) {
+    try {
+      // 2026-08-02 13:38 先生反馈"对话流里系统消息显示 object"：emitSystemMessages 返回 [{role,content}] 对象数组
+      // 之前直接 content: sm 把整个对象存库 → 脏数据（16 条）→ 下轮 history 原样回传前端 → 渲染 [object Object]
+      // 修法：与 finalize 路径（line 833）一致，取 sm.content
+      await db.collection('narrate_history').add({ data: { openid, life_number, role: 'system', content: (sm && sm.content) || '', created_at: Date.now() } })
+    } catch (e) {
+      console.error('[D094-async] system 入库失败:', e.message)
+    }
+  }
+
+  // 写 player_life（业务字段更新）
+  try {
+    await saveLife(openid, life_number, updated)
+  } catch (e) {
+    console.error('[D094-async] saveLife 失败:', e.message)
+  }
+
+  console.log('[ai_narrate_worker] runPhase2 完成, elapsed_ms=', Date.now() - startTs)
+
+  // 计算 closest_board（前端需要）
+  let closestBoardInfo = null
+  try {
+    closestBoardInfo = computeClosestBoard(updated)
+  } catch (e) {
+    console.error('[D094-async] closestBoard 计算失败:', e.message)
+  }
+
+  return {
+    scoreRequestId,
+    attrPatch: attrPatch,
+    newState: updated,
+    monthChanged: monthChanged,
+    newMonth: monthChanged ? updated.month : null,
+    newYear: monthChanged ? updated.year : null,
+    systemMessages: systemMessages,
+    closestBoard: closestBoardInfo,
+    debug: {
+      score_prompt: scorePrompt,
+      score_raw_response: scoreRawResponse,
+    },
+  }
+}
+
+// 写 llm_io 记录（精简版：只记 AI 接口调用的输入输出）
+// request_id: 调用标识 / openid: 调用者 / category: narrate|score / status: pending|success|error
+// opts: { input, raw_response, duration_ms, error, score_raw_response }
+async function writeLlmIo(request_id, openid, category, status, opts) {
   try {
     const data = {
-      status: 'error',
-      error: error_str || '',
+      request_id,
+      openid,
+      category,
+      status,
+      error: (opts.error || '').slice(0, 500),
+      created_at: Date.now(),
+      input: opts.input || {},
+      output: {
+        raw_response: opts.raw_response || '',
+        parsed: opts.parsed || undefined,
+        duration_ms: opts.duration_ms || 0,
+        score_raw_response: opts.score_raw_response || undefined,
+      },
     }
-    if (result) {
-      // 把 fakeResult 序列化存进 output.result，前端 narrate_get_result 错误分支能透传
-      data.output = { result: result }
+    if (status === 'pending') {
+      await db.collection('llm_io').add({ data })
+    } else {
+      await db.collection('llm_io').where({ request_id }).update({ data })
     }
-    await db.collection('llm_io').where({ request_id }).update({
-      data: data,
-    })
   } catch (e) {
-    console.error('[safeWriteResult] 写 llm_io error 失败:', e.message, 'request_id=', request_id)
+    console.error('[writeLlm_io] 失败:', e.message, 'request_id=', request_id)
   }
 }
 
@@ -558,22 +709,22 @@ async function finalizeTask(ctx) {
     console.log('[PERF] total_so_far_ms=', t5 - t0)
     perfLogs.push({ stage: 'total_so_far_ms', ms: t5 - t0 })
     // D036（先生 2026-06-28 01:07 拍板）：applyPatch 输入从叙事 AI 的 picked.patch 改为 AI₂ 输出的 attrPatch
+    // 2026-08-02：透传 location/city/occupation（AI₂ 新增 D 类输出，之前只透传 month_delta+items 导致地点变更丢失）
     const synthPatch = {
       month_delta: typeof attrPatch.month_delta === 'number' ? attrPatch.month_delta : 0,
       items: attrPatch.items || {},
     }
+    if (typeof attrPatch.location === 'string') synthPatch.location = attrPatch.location
+    if (typeof attrPatch.city === 'string') synthPatch.city = attrPatch.city
+    if (typeof attrPatch.occupation === 'string') synthPatch.occupation = attrPatch.occupation
     // D048f（先生 2026-06-28 12:09 拍板·偶现 bug 排查）：applyPatch 前打印 attrPatch 全文 + state 关键字段
     console.log('[D048f-debug] applyPatch input: attrPatch=', JSON.stringify(attrPatch), ' state.age=', state.age, ' state.year=', state.year, ' state.month=', state.month, ' preUpdate.age=', preUpdate.age)
     // D048o（先生 2026-06-28 16:38 拍板·"我看不到后端"）：埋点也推给前端 DBG（先生手机直接看到）
     globalThis.__D048F_LOG__ = (globalThis.__D048F_LOG__ || []).concat([`applyPatch input: attrPatch=${JSON.stringify(attrPatch)} state.age=${state.age} state.year=${state.year} state.month=${state.month} preUpdate.age=${preUpdate.age}`])
     const baseUpdated = applyPatch(state, preUpdate, synthPatch)
-    // 合并属性变化到 state
+    // 2026-08-02：属性合并已搬进 applyPatch（本函数为 D089 前遗留死代码，不再被调用）
+    // 保留 baseUpdated 变量名兼容下方引用；直接使用 applyPatch 返回
     const updated = { ...baseUpdated }
-    for (const attr of ATTR_NAMES) {
-      if (typeof attrPatch[attr] === 'number' && Number.isFinite(attrPatch[attr])) {
-        updated[attr] = Math.max(0, Math.min(10000, (baseUpdated[attr] || 0) + attrPatch[attr]))
-      }
-    }
     // v0.6.61: 全部社会属性归零→社会性死亡（颜值归零只是丑，不会死）
     // v0.6.85: 未成年人（<15岁）不触发社会性死亡——幼儿/少年自然没有社会属性，不应开局即死
     const DEATH_ATTRS = ['声望', '财富', '学识', '医术', '战功', '文采', '政绩', '义行'];
@@ -587,7 +738,6 @@ async function finalizeTask(ctx) {
     }
     if (allZero) {
       updated.alive = false;
-      updated.health = 0;
       updated.deathReason = '全部社会属性';
       var age = updated.age || 20;
       var isNobility = ['世家', '皇族', '官宦', '士族', '贵族'].indexOf(updated.socialClass) >= 0;
@@ -776,7 +926,6 @@ async function finalizeTask(ctx) {
 function applyPatch(oldState, preUpdate, patch) {
   let s = { ...oldState }
   if (!s.month) s.month = 1
-  if (!s.health) s.health = 100
   if (!s.coin) s.coin = 1000
   if (!s.alive) s.alive = true
   s.round = preUpdate.round  // 沿用 preUpdate 的 round+1
@@ -789,7 +938,7 @@ function applyPatch(oldState, preUpdate, patch) {
   if (delta > 60) delta = 60
   s.month_delta = delta
 
-  // 推进月（处理跨年 + age + health 衰减）
+  // 推进月（处理跨年 + age + 死亡）
   let totalMonth = (s.year || 0) * 12 + (s.month || 1) - 1 + delta
   if (totalMonth < 0) totalMonth = 0
   s.year = Math.floor(totalMonth / 12)
@@ -802,45 +951,78 @@ function applyPatch(oldState, preUpdate, patch) {
     s.age = (oldState.age || s.age || 0) + yearsPassed
     // v0.6.99: 防止月推进过大导致 age 暴涨（先生截图 314 岁 bug 根因兜底）
     s.age = Math.max(0, Math.min(150, s.age))
+    // 2026-08-02：跨年重算年号显示（修复 955 年还显示"广顺四年"的 bug；显德 954 改元）
+    s.eraDisplay = computeEraDisplay(s.year, s.dynasty)
     console.log('[D048f-debug] applyPatch 跨年: old.age=', oldState.age, ' old.year=', oldState.year, ' old.month=', oldState.month, ' patch.month_delta=', patch.month_delta, ' totalMonth=', (s.year || 0) * 12 + (s.month || 1) - 1, ' s.year=', s.year, ' s.month=', s.month, ' yearsPassed=', yearsPassed, ' new.age=', s.age)
     // D048o：跨年埋点也推给前端 DBG
     globalThis.__D048F_LOG__ = (globalThis.__D048F_LOG__ || []).concat([`applyPatch 跨年: old.age=${oldState.age} old.year=${oldState.year} old.month=${oldState.month} patch.month_delta=${patch.month_delta} yearsPassed=${yearsPassed} new.age=${s.age}`])
-    // 健康按年龄段衰减（累积）
-    let totalDecay = 0
-    for (let i = 0; i < yearsPassed; i++) {
-      const ageAtYear = (oldState.age || 0) + i
-      if (ageAtYear < 30) totalDecay += 2
-      else if (ageAtYear < 50) totalDecay += 5
-      else if (ageAtYear < 65) totalDecay += 10
-      else totalDecay += 15
-    }
-    s.health = Math.max(0, (s.health || 100) - totalDecay)
+    // 2026-08-02：删除跨年 health 衰减——health 字段已废除（先生拍板：死亡判定改为 AI₂ 判死/寿限/社会性 3 条直接判定，不再走 health 中间值）
   }
 
   // D031（先生 2026-06-27 23:13 拍板）：删 patch.health / patch.coin 字段
+  // 2026-08-02 先生拍板：health 字段整体废除——前端从不显示，且死亡判定已改为 3 条直接判定（AI₂ 剧情判死 / 寿限 age≥lifespan / 社会性 8 属性归零），无需 health 中间值
   // - 铜钱就是"财富"属性, 同一个东西不该两个字段名
-  // - 前端没显示 health, patch 没意义
-  // - AI 改用 patch.财富 / patch.声望 等 9 属性中文名
 
-  // 2) items 损耗 + 新增（v0.6.88 扩展 patch.items 协议）
-  //   - 数字 = 减耐久（旧）
+  // 3) 9 属性合并（2026-08-02 重大修复）
+  // 根因：D089 两阶段化后 runPhase2 直接调 applyPatch，但属性合并循环只写在 finalizeTask（死代码）里
+  //       → AI₂ 输出的属性变化全部丢失 → 玩家属性从 7/29 冻结至今（声望799/财富1474/学识189 一字未变）
+  // 修法：合并逻辑搬进 applyPatch，runPhase2/finalizeTask 两处统一生效
+  for (const attr of ATTR_NAMES) {
+    if (typeof patch[attr] === 'number' && Number.isFinite(patch[attr])) {
+      s[attr] = Math.max(0, Math.min(10000, (s[attr] || 0) + patch[attr]))
+    }
+  }
+
+  // 4) items 损耗 + 新增（v0.6.88 扩展 patch.items 协议）
+  //   - 数字 = 减耐久（旧；0 = 移除）
   //   - 对象 = 新增物品（新）{ id?, name, icon?, desc?, durability? }
   if (patch.items && typeof patch.items === 'object' && Array.isArray(s.items)) {
+    // 2026-08-02 12:23 先生实测 bug：AI₂ 偶发把 items 写成数组 [{物品名:{...}}]，
+    //   Object.entries 遍历数组 → key=索引"0" → 新增垃圾物品 name=0（真实案例 new_1785644618485_lk0y）
+    // 防御：数组展开成对象（{生锈柴刀:{...}} → 正确新增）
+    let patchItems = patch.items
+    if (Array.isArray(patchItems)) {
+      patchItems = Object.assign({}, ...patchItems)
+      console.log('[applyPatch] items 数组→对象展开:', JSON.stringify(patchItems))
+    }
     const newItems = []
-    for (const [key, change] of Object.entries(patch.items)) {
+    for (const [key, change] of Object.entries(patchItems)) {
       if (typeof change === 'number') {
-        // 旧：减耐久
+        // 2026-08-02（先生拍板：全系统统一增量语义）：数字 = 变化量（正加负减），与属性一致
+        //  - 负数 = 减耐久（-20 = 耐久减 20），≤0 自动移除
+        //  - 正数 = 加耐久（+30 = 补充/修复加 30）
+        //  - 0 = 无变化（不写即可）
         s.items = s.items.map(it => {
           const name = it.name || it.id
           if (name === key) {
             const newDur = (it.durability || 100) + change
             if (newDur <= 0) return null
-            return { ...it, durability: newDur }
+            return { ...it, durability: Math.min(100, newDur) }
           }
           return it
         }).filter(Boolean)
       } else if (change && typeof change === 'object') {
         // 新：新增物品
+        // 2026-08-02：加去重（与前端 D094-async 一致）——AI 连续两轮写同物品名/id 时不重复 push
+        // 真因：02:50 AI₂ 加「第五只铁匣」、02:51 又加「第五只铁器」，若同名会重复
+        const itemName = change.name || key
+        const itemId = change.id
+        const dup = s.items.find(it =>
+          (itemId && it.id === itemId) || (itemName && (it.name === itemName || it.id === itemName))
+        )
+        if (dup) {
+          // 2026-08-02（先生拍板）：同名物品已存在 → 更新耐久/描述（补充/修复通道），不再跳过
+          // 真因：去重挡死了「补充干粮/修复物品」——AI₂ 写 {干粮包, durability:100} 想补充，被跳过 → 消耗品用完永久消失
+          if (typeof change.durability === 'number') {
+            dup.durability = change.durability
+            if (change.desc) dup.desc = change.desc
+            if (change.icon) dup.icon = change.icon
+            console.log('[applyPatch] 物品已存在，更新耐久:', itemName, '→', dup.durability)
+          } else {
+            console.log('[applyPatch] 物品已存在，跳过新增:', itemName)
+          }
+          continue
+        }
         const newItem = {
           id: change.id || ('new_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
           name: change.name || key,
@@ -864,8 +1046,9 @@ function applyPatch(oldState, preUpdate, patch) {
   // 5.5) epitaph（墓志铭）
   if (typeof patch.epitaph === 'string') s.epitaph = patch.epitaph
 
-  // 6) alive 判定
-  s.alive = s.health > 0
+  // 6) alive 判定——2026-08-02 废除 health 后：alive 不再由 health 推导
+  // 死亡判定收敛到 runPhase2 的 3 条直接判定（AI₂ 剧情判死 / 寿限 / 社会性）
+  // 这里保持 alive 原值（AI 不直接写 alive）
 
   // v0.6.99: 全局 age 兜底（防止 AI 月推进过大导致年龄暴涨，314 岁 bug 修复）
   if (typeof s.age === 'number') {
@@ -882,7 +1065,6 @@ function applyPatch(oldState, preUpdate, patch) {
  *   - [system · 时间] 月份变化
  *   - [system · 地点] 城池/区域变更
  *   - [system · 身份] 身份/职业变更
- *   - [system · 健康] 重大健康变化（>= 10）
  *   - [system · 财富] 重大财富变化（>= 总值 30%）
  *
  * 返回 system message 列表，角色 system，前端识别后特殊样式
@@ -927,11 +1109,7 @@ function emitSystemMessages(oldState, newState) {
     lines.push(`身份: ${oldState.occupation} → ${newState.occupation}`)
   }
 
-  // 4) 气血（D008：变化 ≥10 才提示）
-  const healthDelta = (newState.health || 0) - (oldState.health || 0)
-  if (Math.abs(healthDelta) >= 10) {
-    lines.push(`气血: ${oldState.health || 0} → ${newState.health || 0}`)
-  }
+  // 4) 气血——2026-08-02 废除 health 字段，删除此段（死亡判定改为 AI₂/寿限/社会性 3 条直接判定）
 
   // 5) 九属性 — 任一变化时输出全部当前值
   const ATTRS = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
@@ -981,104 +1159,127 @@ async function queryMonthEvent(state) {
   } catch (e) { return null }
 }
 
-/**
- * v0.6.50: AI 输出中 content/options 的对话可能含英文双引号"破坏JSON结构
- * 用状态机找出字符串内裸引号，替换为 CJK 右引号」
- */
-function fixJSONContentQuotes(text) {
-  // 快速路径：已经合法
-  try { JSON.parse(text); return text } catch (e) {}
+// ============ 对话压缩（2026-08-02 先生拍板） ============
+// 方案：history 原文超过 COMPRESS_TRIGGER 条后，每满 COMPRESS_STEP 条触发一次压缩：
+//   **原始对话不动**（narrate_history 全量保留，前端对话流完整），
+//   **压缩内容单独一张表 history_compress**（先生 2026-08-02 审核：不嵌套进 player_life）：
+//     每次压缩 append 一条 { openid, life_number, last_id, text, compressed_at }
+//     - last_id：压缩进度 = 本次覆盖到的最后一条 narrate_history 的 _id（先生拍板方案 A：不用时间戳）
+//     - text：滚动合并摘要（旧摘要 + 新原文段 → 一条新摘要，涵盖全部前情）
+//   喂 AI 时（callAI）用「最新一条摘要 + last_id 之后的最近 COMPRESS_KEEP 条原文」代替全量。
+// 背景：v0.1.84 曾拍板"全量 history 不截断"，2026-08-02 实测 309 条（5.5 万字符）全量喂
+//   MiniMax 耗时 13.97s，波动即超 15s 云函数超时线 → 卡轮。压缩后喂 AI 的 prompt 稳定。
+const COMPRESS_KEEP = 100        // 喂 AI 时保留最近 100 条原文记录（≈50 轮 user+ai，2026-08-02 18:13 先生拍板 200→100）
+const COMPRESS_TRIGGER = 200     // 原文超过 200 条触发压缩（100 保留 + 100 新增）
+const COMPRESS_MIN_INTERVAL_MS = 5 * 60 * 1000  // 两次压缩最小间隔 5 分钟（防并发重复压）
 
-  var result = ''
-  var inStr = false
-  for (var i = 0; i < text.length; i++) {
-    var ch = text[i]
-    // 跳过转义字符
-    if (ch === '\\') {
-      result += ch
-      if (i + 1 < text.length) { result += text[++i] }
-      continue
-    }
-    if (ch === '"') {
-      if (!inStr) {
-        inStr = true  // JSON 字符串开始
-        result += ch
-      } else {
-        // 字符串内，检查这个"是结束符还是内容中的引号
-        var j = i + 1
-        while (j < text.length && text[j] === ' ') j++
-        var next = text[j] || ''
-        // 如果下一个非空格字符是 JSON 结构分隔符，则是真正的结束引号
-        if (':,}],\n'.indexOf(next) !== -1) {
-          inStr = false
-          result += ch
-        } else {
-          // 内容中的对话引号 → 替换为 CJK 右引号
-          result += '」'
-        }
-      }
-    } else {
-      result += ch
-    }
+async function getCompressContext(history, openid, lifeNumber) {
+  // 2026-08-02 18:15 先生拍板：压缩异步化——ai1 阶段只查已有摘要（无 LLM 调用，不阻塞叙事），
+  // 摘要生成由 ai2 阶段 compressHistoryIfNeeded 补跑
+  let lastRecord = null
+  try {
+    const res = await db.collection('history_compress')
+      .where({ openid, life_number: lifeNumber })
+      .orderBy('compressed_at', 'desc')
+      .limit(1)
+      .get()
+    lastRecord = (res.data && res.data[0]) || null
+  } catch (e) {
+    console.error('[COMPRESS] 查询 history_compress 失败:', e.message)
   }
-  return result
+  return { summary: lastRecord, lastId: lastRecord ? lastRecord.last_id : null }
 }
 
-// D059（2026-07-05 01:40 先生拍板·A 方案）：正则 fallback 提取 content/options
-// 用法：JSON.parse 失败时（且 fixJSONContentQuotes 也没修好），从 raw 文本里硬抽
-// 返回 { content, options } 或 null
-function fallbackExtractBranch(rawText) {
-  if (!rawText || typeof rawText !== 'string') return null
-  // 不要把真换行转字面（regex \s 匹配真换行，不匹配字面 \n）
-  // 抽 content："content"\s*:\s*"...."  （到 "options"/"patch"/"state"/"items" 前一个 "）
-  const contentMatch = rawText.match(/"content"\s*:\s*"([\s\S]*?)"\s*,\s*"(?:options|patch|state|items)"/)
-  let content = null
-  if (contentMatch) {
-    content = contentMatch[1]
-      .replace(/\\"/g, '"')
-      .replace(/\\n/g, '\n')
-      .replace(/\\t/g, '\t')
-      .replace(/\\\\/g, '\\')
+async function compressHistoryIfNeeded(history, openid, lifeNumber) {
+  if (!Array.isArray(history) || history.length === 0) return { history, summary: null, lastId: null }
+  // 查 history_compress 最新一条（压缩进度 + 旧摘要）
+  let lastRecord = null
+  try {
+    const res = await db.collection('history_compress')
+      .where({ openid, life_number: lifeNumber })
+      .orderBy('compressed_at', 'desc')
+      .limit(1)
+      .get()
+    lastRecord = (res.data && res.data[0]) || null
+  } catch (e) {
+    console.error('[COMPRESS] 查询 history_compress 失败:', e.message)
   }
-  // D090-hotfix5（先生 22:00 查"AI 偶尔返回非 JSON 崩"）：AI 偶发返回纯叙事文本（不包 JSON 结构，
-  // 如"你攥紧货郎的手腕..."），contentMatch 抽不到 → 原来返回 null → finalize 崩。
-  // 修法：抽不到 JSON content 时，把整段文本（清掉 ```json 围栏/think 标签）当 content 兜底，
-  // 让 AI 已写的有效叙事不浪费、游戏不崩（D059 A 方案精神：正则 fallback 提取 content）
-  if (!content) {
-    const cleanedText = rawText
-      .replace(/<think>[\s\S]*?<\/think>/g, '')
-      .replace(/```json\s*/gi, '')
-      .replace(/```\s*/g, '')
-      .trim()
-    if (cleanedText.length > 20) {
-      content = cleanedText
-    }
+
+  // 起点 = last_id 之后；无记录则从 0 开始
+  let startIdx = 0
+  if (lastRecord && lastRecord.last_id) {
+    const idx = history.findIndex(m => m._id === lastRecord.last_id)
+    startIdx = idx !== -1 ? idx + 1 : 0
   }
-  // 抽 options："options"\s*:\s*\[...\]
-  const optionsMatch = rawText.match(/"options"\s*:\s*\[([\s\S]*?)\]/)
-  let options = []
-  if (optionsMatch) {
-    const optStrs = optionsMatch[1].match(/"((?:\\.|[^"\\])*)"/g) || []
-    for (const s of optStrs) {
-      const opt = s.slice(1, -1)
-        .replace(/\\"/g, '"')
-        .replace(/\\n/g, '\n')
-        .replace(/\\t/g, '\t')
-        .replace(/\\\\/g, '\\')
-      if (opt) options.push(opt)
-    }
+  const pending = history.slice(startIdx)
+  if (pending.length <= COMPRESS_TRIGGER) {
+    return { history, summary: lastRecord, lastId: lastRecord ? lastRecord.last_id : null }
   }
-  if (!content || options.length === 0) {
-    if (content) {
-      return { content, options: ['继续观察', '尝试离开', '寻找机会'], patch: {} }
-    }
+
+  // 防并发：最近一次压缩距今 < 5 分钟则跳过
+  if (lastRecord && Date.now() - lastRecord.compressed_at < COMPRESS_MIN_INTERVAL_MS) {
+    console.log('[COMPRESS] 跳过压缩：5 分钟内已压过')
+    return { history, summary: lastRecord, lastId: lastRecord ? lastRecord.last_id : null }
+  }
+
+  const keepCount = Math.min(COMPRESS_KEEP, pending.length - 1)
+  const oldPart = pending.slice(0, pending.length - keepCount)
+  console.log('[COMPRESS] 触发压缩: 待压缩原文', pending.length, '条 → 压缩', oldPart.length, '条, 保留最近', keepCount, '条原文')
+
+  // 1) 滚动合并生成前情提要（旧摘要 + 新原文段 → 一条新摘要）
+  const summary = await summarizeHistory(oldPart, lastRecord ? lastRecord.text : null)
+  if (!summary) {
+    console.error('[COMPRESS] 摘要生成失败，本轮跳过压缩')
+    return { history, summary: lastRecord, lastId: lastRecord ? lastRecord.last_id : null }
+  }
+
+  // 2) 追加写入 history_compress（last_id = 本次覆盖的最后一条原文 _id）
+  const newRecord = {
+    openid,
+    life_number: lifeNumber,
+    last_id: oldPart[oldPart.length - 1]._id,
+    text: '【前情提要】' + summary,
+    compressed_at: Date.now(),
+  }
+  try {
+    await db.collection('history_compress').add({ data: newRecord })
+    console.log('[COMPRESS] 已写入 history_compress, 摘要长度=', summary.length, ', last_id=', newRecord.last_id)
+  } catch (e) {
+    console.error('[COMPRESS] 摘要写入失败:', e.message)
+    return { history, summary: lastRecord, lastId: lastRecord ? lastRecord.last_id : null }
+  }
+
+  return { history, summary: newRecord, lastId: newRecord.last_id }
+}
+
+async function summarizeHistory(oldPart, prevSummaryText) {
+  // 滚动合并输入：旧摘要（如有）+ 新原文段（每条截 300 字，总长限 20000 字符）
+  let text = ''
+  if (prevSummaryText) {
+    text += `【此前的前情提要】\n${String(prevSummaryText).substring(0, 600)}\n\n`
+  }
+  text += oldPart.map(m => {
+    const roleName = m.role === 'ai' ? '叙事' : (m.role === 'user' ? '玩家' : '系统')
+    return `【${roleName}】${String(m.content || '').substring(0, 300)}`
+  }).join('\n').substring(0, 20000)
+
+  const messages = [
+    { role: 'system', content: '你是历史穿越人生模拟游戏《穿越日记》的剧情记录员。玩家经历了很多轮人生，你需要把对话压缩成一份前情提要，供 AI 主持人快速回顾前情。' },
+    { role: 'user', content: `${prevSummaryText ? '这是之前压缩过的前情提要，请结合下面的新对话，输出一份更新后的完整前情提要（覆盖全部历史，不要只写新增部分）：\n' : ''}以下是对话记录（玩家=玩家输入，叙事=AI 剧情，系统=状态变化）：\n\n${text}\n\n请输出 300-500 字的前情提要，必须包含：主角身份与当前处境、重要人物及关系、关键事件与恩怨、持有的重要物品、当前目标。只输出提要正文，不要任何前缀或解释。` },
+  ]
+  try {
+    const resp = await callLLM(messages, MM_MODEL)
+    let content = resp.choices?.[0]?.message?.content || ''
+    content = content.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<function_calls>[\s\S]*?<\/function_calls>/g, '').trim()
+    if (!content) return null
+    return content.substring(0, 500)
+  } catch (e) {
+    console.error('[COMPRESS] 摘要 LLM 调用失败:', e.statusCode || '', e.message)
     return null
   }
-  if (options.length > 4) options = options.slice(0, 4)
-  return { content, options, patch: {} }
 }
 
-async function callAI(state, input, history, monthEvent, isRetry) {
+async function callAI(state, input, history, monthEvent, isRetry, compressSummary, compressLastId) {
   const systemPrompt = buildSystemPrompt(state, monthEvent)
   const userPrompt = buildUserPrompt(input, history)
   const messages = [{ role: 'system', content: systemPrompt }]
@@ -1096,7 +1297,16 @@ async function callAI(state, input, history, monthEvent, isRetry) {
   // ↓ 不立即 push，等下面 user 之后追加
   var formatReminderMsg = { role: 'system', content: formatReminder }
   if (history && Array.isArray(history)) {
-    const recent = history  // v0.1.84: 全量 history（不截断），prompt 长度不是瓶颈，叙事连贯性优先
+    // 2026-08-02 先生拍板：对话压缩——原始对话不动，喂 AI 时把进度点之前的旧部分换成摘要
+    // 有压缩记录：最新摘要（history_compress 最新一条）+ last_id 之后的最近 COMPRESS_KEEP 条原文
+    // 无压缩记录：全量喂（保持 v0.1.84 行为，不提前截断）
+    let recent = history
+    if (compressSummary && compressLastId) {
+      let startIdx = 0
+      const idx = history.findIndex(m => m._id === compressLastId)
+      startIdx = idx !== -1 ? idx + 1 : 0
+      recent = [{ role: 'system', content: compressSummary.text }, ...history.slice(startIdx).slice(-COMPRESS_KEEP)]
+    }
     for (const msg of recent) {
       // D048p（2026-06-28 20:24 拍板·先生"状态变化 message role 直接 system"）：
       // D048e 当时把 history system 改成 user 喂（避免 MiniMax 2013）—— D048p 实测 MiniMax 3 system + 1 user → 200 OK
@@ -1159,84 +1369,39 @@ async function callAI(state, input, history, monthEvent, isRetry) {
     globalThis.__PERF_LOGS__.push({ stage: 'callAI.llm_ms', ms: t_llm_end - t_llm_start, model: MM_MODEL, prompt_chars: systemPrompt.length + userPrompt.length })
   }
   const content = response.choices?.[0]?.message?.content || ''
-  // 流式下 think 标签可能未关闭·前端展示时再剥
-  let cleaned = content.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json\s*/gi, '').replace(/```\s*$/g, '').trim()
-  // v3.0.13: 截取逻辑——单对象用 { }·数组用 [ ]
-  // 先生 03:48 反馈 LLM 仍输出 [array] 4 分支·前端报 [RESPONSE_ERROR] 选项不渲染
-  // 解：双兼容·前端 / worker 都支持 [array] 和 {object} 两种格式
-  const firstBracket = cleaned.indexOf('[')
-  const lastBracket = cleaned.lastIndexOf(']')
-  const firstBrace = cleaned.indexOf('{')
-  const lastBrace = cleaned.lastIndexOf('}')
-  if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)
-      && lastBracket !== -1 && lastBracket > firstBracket) {
-    cleaned = cleaned.substring(firstBracket, lastBracket + 1)
-  } else if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    cleaned = cleaned.substring(firstBrace, lastBrace + 1)
-  }
+  // 2026-08-02：解析链路抽到 parse-ai-output.js（含预处理/截取/去转义/fixJSON/fallback）
+  // 单测见 parse-ai-output.test.js；每遇解析失败先加 case 再改
+  const { branches, fallbackUsed, cleaned, parseError, repaired } = parseAIOutput(content)
 
-  let branches
-  let parseError = null
-
-  // v0.6.50: AI 常用英文双引号"写叙事对话，破坏JSON结构，试一次自动修复
-  if (!cleaned) {
-    // 空字符串
-  } else try {
-    branches = JSON.parse(cleaned)
-  } catch (e) {
-    // 第一次 parse 失败：尝试自动修复 content 中的裸引号
-    const fixed = fixJSONContentQuotes(cleaned)
-    try {
-      branches = JSON.parse(fixed)
-    } catch (e2) {
-      // D059（2026-07-05 01:40 先生拍板·A 方案）：正则 fallback 提取 content/options
-      // 真因：fixJSONContentQuotes 处理英文 " 但不处理其他字符（如 < > | 等）
-      // 修法：用正则兜底提取 content 和 options，构造伪 branch 让玩家继续玩
-      const fb = fallbackExtractBranch(cleaned)
-      if (fb && fb.content) {
-        branches = fb
-        console.log('[PERF] callAI.fallback_extract=true（正则兜底提取）')
-        if (typeof globalThis.__PERF_LOGS__ !== 'undefined') {
-          globalThis.__PERF_LOGS__.push({ stage: 'callAI.fallback_extract', value: 'true' })
-        }
-      }
-    }
-    if (branches) {
-      // 修复成功，用修复后的
-      cleaned = fixed
-      console.log('[PERF] callAI.json_retry=true（自动修复引号后成功）')
-      if (typeof globalThis.__PERF_LOGS__ !== 'undefined') {
-        globalThis.__PERF_LOGS__.push({ stage: 'callAI.json_retry', value: 'true' })
-      }
-    }
-  }
-
-  if (!branches) try {
-    branches = JSON.parse(cleaned)
-    if (!Array.isArray(branches)) {
-      // v3.0.9: 兼容单对象（v3.0.9 之前是数组格式）· 如果是数组就取 [0]
-      if (branches.items && Array.isArray(branches.items)) branches = branches.items
-      else if (branches.branches && Array.isArray(branches.branches)) branches = branches.branches
-      // 如果是单对象·branches 保持原样（callAI 后面会处理）
-    }
-  } catch (e) {
+  if (parseError) {
     // v0.2.5-H（先生 2026-06-13 拍板）：即使解析失败也要让前端 DBG 看到 AI 原始输出
     // 原始思路：抛 Error 让外层 catch 走 safeWriteResult(error_str=...)
     // 问题：callAI 返回后外层会继续走 pickBranch → 写一个"假成功"的 result，覆盖掉 fake result
     // 改：构造一个含"原始内容+解析错误"的特殊 Error，附加 debug 信息
     //     外层 catch 识别这个特殊 error，构造 fake result 写 DB
-    console.error('[ai_narrate_worker] JSON解析失败:', e.message)
+    console.error('[ai_narrate_worker] JSON解析失败:', parseError.message)
     console.error('[ai_narrate_worker] 原始 content(完整):', content)
-    const specialError = new Error('AI输出无法解析为JSON对象: ' + e.message)
+    const specialError = new Error('AI输出无法解析为JSON对象: ' + parseError.message)
     specialError.parseFailed = true
     specialError.debugInfo = {
-      raw_response: content,
+      raw_response: cleaned,
       system_prompt: systemPrompt,
       user_prompt: userPrompt,
       messages: messages,
-      parse_error: e.message,
+      parse_error: parseError.message,
     }
     throw specialError
+  }
+  if (fallbackUsed) {
+    console.log('[PERF] callAI.fallback_extract=true（正则兜底提取）')
+    if (typeof globalThis.__PERF_LOGS__ !== 'undefined') {
+      globalThis.__PERF_LOGS__.push({ stage: 'callAI.fallback_extract', value: 'true' })
+    }
+  } else if (repaired) {
+    console.log('[PERF] callAI.json_retry=true（自动修复引号后成功）')
+    if (typeof globalThis.__PERF_LOGS__ !== 'undefined') {
+      globalThis.__PERF_LOGS__.push({ stage: 'callAI.json_retry', value: 'true' })
+    }
   }
 
   // v3.0.13: 砍 3/4 冗余分支——LLM 只输出 1 个 narrative + 3 options
@@ -1252,11 +1417,13 @@ async function callAI(state, input, history, monthEvent, isRetry) {
     patch: singleBranch.patch || singleBranch.state || {},
   }]
 
-  return { branches: finalBranches, systemPrompt, userPrompt, messages, rawContent: content }
+  return { branches: finalBranches, systemPrompt, userPrompt, messages, rawContent: cleaned }
 }
 
 function buildSystemPrompt(state, monthEvent) {
-  const itemsList = (state.items || []).map(i => i.name || i.id || i).join('、')
+  // 2026-08-02（先生拍板）：耐久通过剧情叙事间接体现，不直接显示数字
+  // → AI₁ 的物品列表必须带耐久，它才能在剧情里写「最后的干粮」「快没电的手电筒」
+  const itemsList = (state.items || []).map(i => `${i.name || i.id || i}${typeof i.durability === 'number' ? `(耐久${i.durability})` : ''}`).join('、')
   // v0.6.97: legacy 改成三字段 { epRecord, epitaph, deathCause }
   const legacy = state.legacy
   const legacyContext = (() => {
@@ -1293,8 +1460,11 @@ function buildSystemPrompt(state, monthEvent) {
     ``,
     `这个世界的死亡有两种：`,
     ``,
-    `**1. 物理死亡**：health（健康值）归零 → 身体死亡。`,
-    `这是最基本的死亡方式。通过意外、疾病、战乱、衰老等导致health归零。`,
+    `**1. 物理死亡（剧情死亡）**：你可以在剧情里【明文写出】玩家遭受致命伤害或陷入必死境地（一刀穿心/坠崖/瘟疫夺命/战乱殒命等）。`,
+    `计分员（AI₂）读到明确的致命结果后，会替你完成死亡判定。`,
+    `- 你可以写"重伤""命悬一线"制造紧张，但**不要直接写"你死了"**——最终判定由计分员按剧情结果决定`,
+    `- 玩家如果做出正确抉择成功脱险，就不该死——尊重玩家的选择`,
+    `- 衰老导致的寿终：玩家年龄接近寿命上限（lifespan）时，死亡会自然发生，你不需要额外安排`,
     ``,
     `**2. 社会性死亡**：8项社会属性（声望·财富·学识·医术·战功·文采·政绩·义行）全部归零 → 世界再无容身之处。`,
     `- 身败名裂、一穷二白、痴呆愚钝、医德尽失、军功尽废、江郎才尽、仕途尽毁、众叛亲离——玩家已经"活不下去"了`,
@@ -1433,6 +1603,13 @@ function buildSystemPrompt(state, monthEvent) {
     `  "options": ["选项A（有真实差异）", "选项B", "选项C（可选）"]`,
     `}`,
     ``,
+    `# 对话引号硬约束（D094 2026-07-23）`,
+    `content 里出现人物对话时，必须用中文引号 「」，禁止用英文双引号。`,
+    `原因：英文双引号会破坏 JSON 结构（如半截引号 「他说『你好』」 会让 JSON 解析器把「你好」当成新字段值）。`,
+    `正确写法：他说：「明天赶集。」她问：「明日如何？」`,
+    `错误写法：他说"明天赶集" 或 "提前做好打算","进城后先..."（半截引号必崩）。`,
+    `options 数组里的选项文本也禁止英文双引号。`,
+    ``,
     `# 质量自检`,
     ``,
     `生成完 content / options 后、输出 JSON 之前，按以下 20 条逐条自检。任何 1 条不满足，回到 content 重写。`,
@@ -1441,6 +1618,7 @@ function buildSystemPrompt(state, monthEvent) {
     `1. 声音契约：NPC 台词符合其身份（粗人不讲商业术语，7 岁孩子不懂"分包"等现代词汇，商人关心行情但不议论朝政，女人不议论丈夫）。`,
     `2. 3 个选项不能有"明显最优"——每个选项都要让玩家犹豫。不能让玩家一眼看出"哪个最安全"或"哪个最危险"。3 个选项都"有代价"（只是代价不同）——选 A 损耗物品耐久 / 选 B 错失机会 / 选 C 损耗人脉声望。玩家必须"权衡"而不是"判断对错"。关键动词不重复 >2 次。`,
     `3. 物品一致：content 中提到的物品 ⊆ state.items。丢失或损毁必须在叙事里明确写出。`,
+    `3.5. **耐久叙事暗示（2026-08-02 先生拍板）：携带物品列表带耐久（如 干粮包(耐久80)），但玩家看不到数字——耐久只能通过剧情间接体现**。耐久 ≤30 的物品要在剧情里自然暗示快用完了（"干粮只剩一小把""火镰快打不着火了""手电筒的光越来越暗"）；耐久充足时正常使用，不刻意提。玩家使用物品（[使用 X]）后，下一轮如果该物品耐久变低，也要在剧情里暗示变化。禁止在剧情里出现"耐久""耐X"等游戏术语。`,
     `4. 阶层一致：庶人进不了皇宫、考场、官署、道观；商人不能穿绸缎；7 岁不能喝酒、不能上赌桌；女人不能进考场。年龄一致：幼童（<8岁）不识字不行医不争功名，少年（<15岁）学识有限。`,
     `5. 具体细节：至少出现 1 件具体实物（物件名/菜名/地名/动作），禁止 3 个以上连续形容词堆砌。`,
     `6. 戏剧问题：本分支能回答 1 个"这一刻玩家要决定什么"的具体问题。写不出来说明本分支没意义。`,
@@ -1555,7 +1733,8 @@ function buildSystemPrompt(state, monthEvent) {
     ``,
     `- 只输出 1 个 narrative + 3 个 options，不要输出 p 字段或多分支`,
     `- content 中不要包含任何概率信息、不要写"你可以选择"`,
-    `- 如果玩家上轮有自由输入（非点击选项），本轮必须对该输入做出合理响应`,
+    `- 玩家本轮的行动（点选项或自由输入）都通过 input 字段传入，你只需对该 action 做出合理响应`,
+    `- **特殊输入格式「[使用 X]」**：「[使用 干粮包]」= 玩家主动使用物品 X（吃/喝/用/穿）。你必须围绕"使用该物品"展开剧情：写清楚使用的过程、效果、结果。玩家主动使用物品的耐久已由系统扣除，你**不需要**在剧情里写损耗数字，专注写使用后的体验与后果`,
     `- 如果当前无历史事件，1~2 轮快速推进日常剧情，不要拖沓`,
     `- 死亡判定由系统负责，你不需要写"你死了"`,
     `- 剧情里不直接说"你失去了 X 文"，而是用叙事暗示（"你摸了摸口袋，钱袋轻了"）`,
@@ -1588,23 +1767,36 @@ function pickBranch(branches) {
  *  - 接 history 参数 → 取最近 3 轮（user+ai 配对=6 条）拼接成"前情"
  *  - 叙事 AI（callAI）保持原样不动
  */
-async function callScoringAI(content, prevState, history) {
+async function callScoringAI(content, prevState, history, playerInput) {
   const prevAttrs = {}
   for (const a of ATTR_NAMES) prevAttrs[a] = prevState[a] || 0
   const currAttrsStr = ATTR_NAMES.map(a => `${a}:${prevAttrs[a]}`).join(' ')
   const age = prevState.age || 0
+  // 2026-08-02：打分函数补带物品栏（含耐久）——AI₂ 判断 items 损耗/新增需要知道玩家当前有什么
+  // 之前只有静态文案"携带物品（list of {name, durability}）"但没有实际数据，AI₂ 全靠猜
+  const itemsStr = (() => {
+    const items = prevState.items || []
+    if (items.length === 0) return '（无）'
+    return items.map(i => `${i.name || i.id || '未知物品'}${typeof i.durability === 'number' ? `(耐久${i.durability})` : ''}`).join('、')
+  })()
   // D048: 取最近 3 轮（user+ai 配对=6 条），标 system 角色为"系统"，与 user/ai 区分
+  // 2026-08-02 先生拍板：前情完整给，不截断 200 字（截断会丢关键信息导致判分偏差）
   const recentHistory = (() => {
     if (!Array.isArray(history) || history.length === 0) return '（本回合为首回合，无前情）'
+    // AI₂ 只看最近 3 轮原文（压缩摘要不在 narrate_history，天然不含）
     const slice = history.slice(-6)
-    return slice.map(m => `[${m.role === 'ai' ? 'AI' : m.role === 'user' ? '玩家' : '系统'}] ${String(m.content || '').substring(0, 200)}`).join('\n')
+    return slice.map(m => `[${m.role === 'ai' ? 'AI' : m.role === 'user' ? '玩家' : '系统'}] ${String(m.content || '')}`).join('\n')
   })()
 
   const scorePrompt = [
     `你是历史穿越游戏的计分员。`,
     ``,
-    `你的唯一工作：根据【本回合剧情】+【最近 3 轮前情】+【玩家当前属性】，判断本回合导致的状态变化。`,
+    `你的唯一工作：根据【本回合剧情】+【本回合玩家输入】+【最近 3 轮前情】+【玩家当前属性】，判断本回合导致的状态变化。`,
     `你不写剧情、不评写作、不评判对错——只输出数字。`,
+    ``,
+    `# 本回合玩家输入（最重要，优先于剧情推断）`,
+    `玩家本回合输入：${playerInput || '（无自由输入，从剧情/前情推断玩家选择）'}`,
+    `**如果玩家输入是「[使用 X]」格式（如 [使用 干粮包]）= 玩家主动使用物品 X，你【必须】在 items 里写 X 的损耗（增量语义，见 C 类）**：消耗品 -20 左右、工具 -5~-15、一次耗尽写 -999（归零移除）。不写 = 该物品无变化。`,
     ``,
     `# 你是什么`,
     ``,
@@ -1659,6 +1851,7 @@ async function callScoringAI(content, prevState, history) {
     `## 2. 玩家当前属性快照`,
     `年龄：${age}岁`,
     `属性：${currAttrsStr}`,
+    `物品：${itemsStr}`,
     `（已有属性越高，再增长越难——按下方"抑制规则"算）`,
     ``,
     `## 3. 本回合剧情（这是你主要判分依据）`,
@@ -1719,11 +1912,32 @@ async function callScoringAI(content, prevState, history) {
     `- **关键**：根据剧情里写的时间线索判断（"次日""入秋""三年后"），不是固定填 1`,
     ``,
     `## C. items（物品状态，可选字段，无变化不写）`,
+    `- **items 必须是 JSON 对象 {物品名: 变化}，禁止写成数组 [{...}]**（2026-08-02 实测：数组会导致物品解析错误）`,
     `- 识别剧情里【明文写出】的物品名（茶包/打火机/针线包/镊子/钱袋...）`,
-    `- 损耗/丢失："{物品名>: 数字 ≥ 0}"——剧情里"磨损/丢失/耗尽"时写，数字 = 损耗值，耐久到 0 时物品消失`,
+    `- **数字 = 耐久变化量（增量，与属性一致）：负数=减耐久、正数=加耐久**（2026-08-02 先生拍板统一语义）：`,
+    `  - 磨损/消耗："{物品名>: -20}"（= 耐久减 20，参考：消耗品用一次 -20 左右、工具磨损 -10 左右）`,
+    `  - 补充/修复/重新装满："{物品名>: 30}"（= 耐久加 30，参考快照当前耐久算到接近 100）`,
+    `  - 被夺走/丢失/损毁/彻底用完："{物品名>: -999}"（= 大负数把耐久减到 0 以下 → 物品从物品栏移除；写损耗时若快照耐久已很低、减完会归零，物品也会消失）`,
     `- 新增："{物品名>: {name, icon, desc, durability:100}}"——剧情里"拾起/被赠予/购买/任务获得"时写`,
+    `- **玩家主动使用物品（[使用 X]）：玩家输入已单独列出，必须结算损耗**（消耗品 -20 左右、工具 -5~-15、一次耗尽写 -999）`,
     `- 一次性最多 2 个新物品`,
     `- 物品名要"汉化、有时代感"（茶包/旧锄头/兵书/伤药/火镰/铜钱串）`,
+    ``,
+    `## D. city / location / occupation（地点/职业变更，可选字段，无变化不写）`,
+    `- city：剧情里玩家【明确】离开当前城市/到达新城市时写新城市名（如"你乘船南下，三日后到了杭州" → city:"杭州"）`,
+    `- location：剧情里玩家移动到同城内的具体场所（如"搬进城西的院子" → location:"城西院子"）`,
+    `- occupation：剧情里玩家职业【明确】变化时写新职业（如"被县令聘为幕僚"/"拜师学医"）`,
+    `- **只在剧情明文写出的变更时写**；只是路过/提及地名不算`,
+    `- 无变化不写这些字段`,
+    ``,
+    `## E. death（死亡判定，可选字段，默认不写）`,
+    `- **只有剧情【明文写出玩家遭受致命伤害/陷入必死境地】时才写**，如"一刀穿心""坠下万丈悬崖""瘟疫高热不退，三日后气绝"`,
+    `- 格式：death: {"type":"意外","reason":"被山匪一刀穿心"}`,
+    `- type 三选一：意外（非寿终非社会性的死亡）/ 寿终（年迈油尽灯枯）/ 社会性（众叛亲离活不下去）`,
+    `- reason：一句话说明死亡原因（进墓志铭，写具体、有画面感）`,
+    `- **铁律**：剧情没写致命结果，禁止判死——"身受重伤""情况危急""命悬一线"都不算，那是濒死不是死亡`,
+    `- **铁律**：玩家这轮选择"逃跑/躲避/求救"且剧情里成功脱险 → 不写 death（玩家靠选择活下来了）`,
+    `- 判死时其他属性照常结算（死亡轮的属性变化仍要写）`,
     ``,
     `# 数值幅度（核心质量提升）`,
     ``,
@@ -1760,7 +1974,9 @@ async function callScoringAI(content, prevState, history) {
     `5. 检查年龄约束：幼儿/少年能不能获得这个属性？`,
     `6. 检查 time 跨度：剧情里写了"次日/季节/年"？给出 month_delta`,
     `7. 检查物品：剧情里明文出现的物品名？新增/损耗/丢失？`,
-    `8. 输出 JSON`,
+    `8. 检查地点/职业：剧情里玩家是否明确离开/到达某地、职业是否变化？`,
+    `9. 检查死亡：剧情是否明文写出致命伤害/必死境地？玩家这轮选择是否成功脱险？——决定是否写 death 字段`,
+    `10. 输出 JSON`,
     ``,
     `# 年龄约束（必须遵守）`,
     `- ${age < 8 ? '玩家不足8岁：学识/医术/战功/文采/政绩/义行/财富只能为0, 声望最多±5（幼儿不可能获得成就类属性）' : age < 15 ? '玩家不足15岁（少年）：学识/文采最多±10；医术/战功/政绩最多±5；义行最多±10；财富最多±5' : '成年玩家无额外年龄约束'}`,
@@ -1773,7 +1989,9 @@ async function callScoringAI(content, prevState, history) {
     `- 9 项社会属性 + month_delta 全部无变化时，输出空对象 {}`,
     `- 没物品变化 = 不写 items 字段`,
     `- **不要重复算前情**：本回合剧情是"新发生"的事；上轮已结算的不要在本轮再加`,
-    `例（部分变化）：{"财富":-200,"学识":10,"义行":50,"month_delta":1}`,
+    `- **你的所有推理、判断理由必须写进 JSON 的 reason 字段**（字符串），绝对禁止写在 JSON 外面（禁止注释、禁止任何 JSON 以外的字符）`,
+    `- **输出必须且只能是一个 JSON 对象**——以 { 开头、以 } 结尾，前后不允许有任何其他字符`,
+    `例（部分变化）：{"财富":-200,"学识":10,"义行":50,"month_delta":1,"reason":"被罚钱+给了船家钱，读懂了告示，救了一命"}`,
     `例（全无变化）：{}`,
   ].join('\n')
 
@@ -1831,6 +2049,18 @@ async function callScoringAI(content, prevState, history) {
       // items 透传
       if (parsed.items && typeof parsed.items === 'object') {
         result.items = parsed.items
+      }
+      // 2026-08-02：透传地点/职业变更（AI₂ D 类输出）
+      if (typeof parsed.location === 'string' && parsed.location) result.location = parsed.location
+      if (typeof parsed.city === 'string' && parsed.city) result.city = parsed.city
+      if (typeof parsed.occupation === 'string' && parsed.occupation) result.occupation = parsed.occupation
+      // 2026-08-02：透传死亡判定（AI₂ E 类输出——AI₂ 直接判死，替代 health 通道）
+      if (parsed.death && typeof parsed.death === 'object') {
+        const dt = parsed.death.type
+        const dr = parsed.death.reason
+        if (dt === '意外' || dt === '寿终' || dt === '社会性') {
+          result.death = { type: dt, reason: typeof dr === 'string' && dr ? dr : '未知原因' }
+        }
       }
       // D043：返回完整结构(含 prompt + raw + parsed attrPatch), 前端 DBG tab 1 能展示
       return { attrPatch: result, scorePrompt, scoreRawResponse: raw }

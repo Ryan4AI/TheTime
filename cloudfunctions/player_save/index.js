@@ -20,7 +20,7 @@ function validatePlayerLife(record) {
   if (typeof record.name !== 'string' || record.name.length < 1 || record.name.length > 20) return 'invalid_name'
   if (record.gender !== 'male' && record.gender !== 'female') return 'invalid_gender'
   if (typeof record.age !== 'number' || record.age < 0 || record.age > 150) return 'invalid_age'
-  if (typeof record.health !== 'number' || record.health < 0 || record.health > 100) return 'invalid_health'
+  // 2026-08-02：health 字段已废除（先生拍板死亡判定改为 AI₂/寿限/社会性 3 条直接判定），校验同步移除
   if (typeof record.lifespan !== 'number' || record.lifespan < 55 || record.lifespan > 150) return 'invalid_lifespan'
   // D081（2026-07-05 17:17 先生拍板）：补 month/year/occupation/dynasty/city/social_class 必填
   // 真因：之前没必填这些字段 → identity.js 漏塞时 state 月份/年份/朝代/职业变成默认值 → system 消息对不上

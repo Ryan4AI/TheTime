@@ -1,0 +1,7 @@
+const cloud=require('wx-server-sdk'); cloud.init({env:cloud.DYNAMIC_CURRENT_ENV}); const db=cloud.database();
+exports.main=async(e)=>{
+  const collection = (e && e.collection) || 'player_life'
+  const limit = (e && e.limit) || 5
+  const a=await db.collection(collection).orderBy('created_at','desc').limit(limit).get();
+  return { collection, count: a.data.length, data: a.data }
+}

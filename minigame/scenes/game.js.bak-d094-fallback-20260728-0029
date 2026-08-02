@@ -8,7 +8,6 @@
 //   规则 3：即使出错，DBG也要返回AI原始输出（worker fakeResult + frontend RESPONSE_ERROR 分支填 raw_response）
 
 const ui = require('../engine/ui')
-const { getDynastyTemplate } = require('../data/dynasty-templates')
 const { COLORS, getSystemInfo, drawBackground, drawText, drawCenteredText, drawTextInRect, hitTest, roundRect } = ui
 
 // ─────── 状态 ───────
@@ -63,7 +62,7 @@ var debugLog = []            // 最近 N 轮完整 input/result
 var debugOpen = false        // 浮窗展开/折叠
 var debugScroll = 0          // 浮窗内滚动偏移
 var dbgUserScrolled = false  // Y3（2026-07-20）：用户是否手动滑动过 DBG 内容；未滑动时默认贴底，滑动后锁位置
-var dbgActiveTab = 0          // v3.0.14aiij D035: 大浮窗顶部 tab 切换(0=AI₁ / 1=AI₂ / 2=对话流 / 3=POLL / 4=场景 / 5=System / 6=数据 / 7=llm_io / 8=压缩)
+var dbgActiveTab = 0          // v3.0.14aiij D035: 大浮窗顶部 tab 切换(0=AI₁ / 1=AI₂ / 2=对话流 / 3=POLL / 4=场景 / 5=System / 6=数据 / 7=llm_io)
 var dbgSelectorOpen = false  // 折叠态点 DBG 图标弹出的"选组复制"弹层(已废, D035 改为直接展开大浮窗)
 var dbgCopyToast = ''        // 复制成功的 toast（自动消失）
 var dbgCopyToastTs = 0       // toast 时间戳
@@ -72,11 +71,7 @@ var dbgLastRenderedText = ''  // D051（2026-07-03 22:07 先生拍板·①方案
 // D058（2026-07-04 21:09 先生拍板）：第 6 tab「数据」状态
 var dbgDataList = []          // 云端拉到的全部 narrate_history（按 created_at 倒序）
 var dbgLlmIoList = []         // D094-async：DBG「llm_io」tab 拉到的最近 llm_io 记录
-var dbgDataLoading = false    // tab 6「数据」加载中
-var dbgLlmIoLoading = false   // tab 7「llm_io」加载中
-var dbgCompressList = []      // 2026-08-02：DBG「压缩」tab 拉到的 history_compress 记录（倒序）
-var dbgCompressLoading = false // tab 8「压缩」加载中
-var dbgCompressScroll = 0     // tab 8 列表滚动偏移
+var dbgDataLoading = false    // 拉取/删除中
 
 // DBG llm_io tab（先生 2026-07-23 23:49 指示加）：只读展示 dump_result 拉到的云端 llm_io 集合
 var dbgLlmIoScroll = 0        // 列表滚动偏移
@@ -84,9 +79,6 @@ var dbgDataDirtyIds = null    // dryRun 算出的脏 _id Set（null=未算）
 var dbgDataSelected = {}      // { _id: true } 勾选状态
 var dbgDataScroll = 0         // 列表滚动
 var dbgDataFilter = 'all'     // 'all' / 'dirty' / 'clean'
-var dbgDataPage = 1           // 2026-08-02：数据 tab 分页（先生拍板全部显示+分页）
-var dbgDataTotalPages = 1     // 总页数
-var dbgDataTotal = 0          // 总条数
 const DEBUG_MAX_ROUNDS = 3   // 保留最近 3 轮
 // v0.1.63: 小游戏没有 move 事件，改用 ▲▼ 箭头按钮滚动
 var bgImgEl = null           // <image> 元素缓存
@@ -216,6 +208,7 @@ module.exports = {
       year: typeof id.year === 'number' ? id.year : parseInt(id.year) || 0,  // v0.1.70 强制转数字
       month: 1,
       round: 0,
+      health: 100,
       coin: 1000,
       // v2 新增：9属性
       '声望': id['声望'] || 0,
@@ -288,6 +281,7 @@ module.exports = {
               if (typeof playerLife.month === 'number') state.month = playerLife.month
               if (typeof playerLife.year === 'number') state.year = playerLife.year
               if (typeof playerLife.round === 'number') state.round = playerLife.round
+              if (typeof playerLife.health === 'number') state.health = playerLife.health
               if (typeof playerLife.coin === 'number') state.coin = playerLife.coin
               if (typeof playerLife.age === 'number') state.age = playerLife.age
               if (typeof playerLife.lifespan === 'number') state.lifespan = playerLife.lifespan
@@ -301,11 +295,8 @@ module.exports = {
               if (typeof playerLife.political === 'number') state['政绩'] = playerLife.political
               if (typeof playerLife.righteous === 'number') state['义行'] = playerLife.righteous
               if (Array.isArray(playerLife.current_items)) {
-                // 2026-08-02 13:31 先生实测「两个司南破布」：这里 state.items 和 currentItems 赋同一数组引用
-                // → applyPatch 兜底 push 时两个变量 push 两次 → 物品栏出现重复物品
-                // 修法：slice() 拷贝成两个独立数组
-                state.items = playerLife.current_items.slice()
-                currentItems = playerLife.current_items.slice()
+                state.items = playerLife.current_items
+                currentItems = playerLife.current_items
               }
               if (typeof playerLife.alive === 'boolean') state.alive = playerLife.alive
               if (playerLife.era_display) state.eraDisplay = playerLife.era_display
@@ -322,8 +313,6 @@ module.exports = {
               if (Array.isArray(lastAi.options) && lastAi.options.length > 0) {
                 options = lastAi.options.map(label => ({ label: label, bounds: null }))
               }
-              // 2026-08-02 13:29 修：重进恢复也刷新背景图（否则一直显示上次会话的旧图）
-              fetchBgImage(lastAi.content)
             }
             // narrativeHistory 只保留 last_ai 这一条（前端不再缓存全量）
             narrativeHistory = lastAi ? [lastAi] : []
@@ -339,55 +328,6 @@ module.exports = {
               }, 100)
             } else {
               console.log('[D072] 最后一条是 ai/system/空，不调 LLM，让先生看 last_ai')
-            }
-            // 2026-08-02 12:54 先生实测：ai1 写完剧情但 ai2 没跑就重进（is_scoring=true 残留）
-            // → 剧情已到新地点（永安），但 player_life.state 还是旧的（汾州）
-            // 修复：检测到未结算轮次 → 静默补跑 ai2 结算 → merge newState 刷新界面
-            if (playerLife && playerLife.is_scoring === true) {
-              console.log('[D094-async] 检测到未结算轮次（is_scoring=true），静默补跑 ai2')
-              // 2026-08-02 13:10 先生实测没跑：game.init 作用域没有 openid 变量（只在 callAI 内局部定义）
-              // → ReferenceError → 补跑 callFunction 从未发出。修法：这里自己从 storage 取
-              const _openid = (typeof wx !== 'undefined' && wx.getStorageSync)
-                ? (wx.getStorageSync('openid') || '') : ''
-              wx.cloud.callFunction({
-                name: 'ai_narrate_worker',
-                data: { phase: 'ai2', openid: _openid, input: (r.result && r.result.last_user_input) || '' },
-                success: (r2) => {
-                  const res2 = (r2 && r2.result) || {}
-                  if (res2.success && res2.newState) {
-                    const ns = res2.newState
-                    if (typeof ns.age === 'number') state.age = ns.age
-                    if (ns.coin !== undefined) state.coin = ns.coin
-                    if (ns.month) state.month = ns.month
-                    if (ns.year) state.year = ns.year
-                    if (ns.round !== undefined) state.round = ns.round
-                    if (ns.eraDisplay) state.eraDisplay = ns.eraDisplay
-                    if (ns.city) state.city = ns.city
-                    if (ns.occupation) state.occupation = ns.occupation
-                    if (ns.alive !== undefined) state.alive = ns.alive
-                    if (ns.lifespan) state.lifespan = ns.lifespan
-                    const V2_ATTRS = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
-                    for (const attr of V2_ATTRS) {
-                      if (typeof ns[attr] === 'number') state[attr] = ns[attr]
-                    }
-                    if (Array.isArray(ns.items)) {
-                      // 同 13:31 修复：slice() 拷贝，避免与 currentItems 同引用导致重复 push
-                      state.items = ns.items.slice()
-                      currentItems = ns.items.slice()
-                    }
-                    console.log('[D094-async] 补跑 ai2 完成，state 刷新: city=', state.city, ' month=', state.month, ' year=', state.year)
-                    // 补跑发现死亡 → 走死亡流程（封笔 → 墓碑）
-                    if (ns.alive === false && !deathMode && typeof callWriteDeathAndGo === 'function') {
-                      callWriteDeathAndGo()
-                    }
-                  } else {
-                    console.warn('[D094-async] 补跑 ai2 失败:', (res2 && res2.error) || 'unknown')
-                  }
-                },
-                fail: (e2) => {
-                  console.warn('[D094-async] 补跑 ai2 网络失败:', e2 && (e2.errMsg || e2.message))
-                },
-              })
             }
           } else {
             console.log('[D072] player_load 失败，降级 callAI 初始回合:', (r && r.result && r.result.error) || 'unknown')
@@ -538,7 +478,7 @@ function callAI(userInput) {
   // D068（2026-07-05 12:20 先生拍板·清理）：narrativeHistory 不再本地累积
   // 真因：worker 入库（D067 后）前端再 push 是冗余，且前端/云端不一致是 D049 bug 根因
   // 修法：本地不再 push system / user；callAI 入口只走流程逻辑，不再更新本地数组
-  if (state.alive && state.lifespan && state.age >= state.lifespan) {
+  if (state.alive && state.lifespan && state.age >= state.lifespan && (state.health || 100) > 0) {
     console.log('[D068] 寿限已至，提示 worker 处理（前端不再本地 push system）')
   }
 
@@ -645,7 +585,7 @@ function callAI(userInput) {
         // 同步调 ai2 拿最终属性
         wx.cloud.callFunction({
           name: 'ai_narrate_worker',
-          data: { phase: 'ai2', openid, input: realInput },
+          data: { phase: 'ai2', openid },
           success: (res2) => {
             const r2 = (res2 && res2.result) || {}
             if (!r2.success) {
@@ -1103,6 +1043,7 @@ function handleAIResponse(result, action, userInput) {
       console.log('[D094-month-debug] merge 进入, newState.month=', newState.month, ' newState.year=', newState.year, ' newState.round=', newState.round, ' | 当前 state.month=', state.month, ' state.year=', state.year, ' state.round=', state.round)
     }
     if (newState.age) state.age = newState.age
+    if (newState.health !== undefined) state.health = newState.health
     if (newState.coin !== undefined) state.coin = newState.coin
     if (typeof console !== 'undefined') {
       console.log('[D094-month-debug] merge 前 month truthy=', !!newState.month, ', month 值=', newState.month)
@@ -1166,39 +1107,17 @@ function handleAIResponse(result, action, userInput) {
   // 真因：AI 在 patch.items 里连续两轮写相同的物品名 → 代码直接 push → 物品栏显示两份相同物品
   // 修法：push 前查 state.items 是否已有同 name 或同 id 的物品，有就跳过
   if (patch.items) {
-    // 2026-08-02 12:23 实测：AI₂ 偶发把 items 写成数组 → Object.entries 遍历出 name=0 垃圾物品
-    // 防御：数组展开成对象（与 worker applyPatch 一致）
-    if (Array.isArray(patch.items)) {
-      patch.items = Object.assign({}, ...patch.items)
-    }
     for (const [itemKey, change] of Object.entries(patch.items)) {
       // v0.6.88 新协议：对象 = 新增物品（先查重再 push）
       if (change && typeof change === 'object') {
         const itemName = change.name || itemKey
         const itemId = change.id
         // 去重：检查 state.items 是否有同 name 或同 id 的物品
-        // 2026-08-02：补 i.id === itemName——AI₂ 输出常无 id（key 即中文名），漏查会导致重复 push
         const exists = state.items.find(i =>
-          (itemId && i.id === itemId) || (itemName && (i.name === itemName || i.id === itemName))
+          (itemId && i.id === itemId) || (itemName && i.name === itemName)
         )
         if (exists) {
-          // 2026-08-02（先生拍板）：同名物品已存在 → 更新耐久/描述（补充/修复通道），不再跳过
-          // 真因：去重挡死了「补充干粮/修复物品」——AI₂ 写 {干粮包, durability:100} 想补充，被跳过 → 消耗品用完永久消失
-          if (typeof change.durability === 'number') {
-            exists.durability = change.durability
-            if (change.desc) exists.desc = change.desc
-            if (change.icon) exists.icon = change.icon
-            const ci = currentItems.find(x => x.id === exists.id)
-            if (ci) {
-              ci.durability = exists.durability
-              if (change.desc) ci.desc = change.desc
-            }
-            console.log('[D094-async] 物品已存在，更新耐久:', itemName, '→', exists.durability)
-            // 2026-08-02（先生拍板）：飘字不掺数字，叙事化提示
-            if (typeof spawnFloater === 'function') {
-              spawnFloater((itemName || '物品') + ' 恢复如初', 'rgba(150,210,150,1)')
-            }
-          }
+          console.log('[D094-async] 物品已存在，跳过 push:', itemName)
           continue
         }
         const newItem = {
@@ -1220,25 +1139,22 @@ function handleAIResponse(result, action, userInput) {
       const it = state.items.find(i => i.name === itemKey || i.id === itemKey)
       if (it) {
         if (typeof change === 'number') {
-          // 2026-08-02（先生拍板：全系统统一增量语义，与 worker 一致）
-          // 数字 = 变化量（正加负减，≤0 移除）；"lost" 字符串 = 移除
-          if (change === 0) {
-            // 0 = 无变化（兼容旧输出，跳过）
-            continue
-          }
-          // 数字 = 增量
+          // 数字 = 减 durability
           it.durability = (it.durability == null ? 100 : it.durability) + change
           if (it.durability <= 0) {
             // durability 减到 0 → 物品消失
             state.items = state.items.filter(x => x.id !== it.id)
             currentItems = currentItems.filter(x => x.id !== it.id)
           } else {
-            // 2026-08-02（先生拍板）：desc 不掺耐久数字——耐久通过剧情叙事间接体现
-            // 只同步 durability 字段，desc 保持叙事描述
-            it.durability = Math.min(100, it.durability)
+            // 更新 desc 显示当前 durability
+            it.desc = it.name + '（耐久 ' + it.durability + '）'
             const ci = currentItems.find(x => x.id === it.id)
-            if (ci) ci.durability = it.durability
+            if (ci) ci.desc = it.desc
           }
+        } else if (change === 'lost') {
+          // 兼容旧的"lost"字符串
+          state.items = state.items.filter(x => x.id !== it.id)
+          currentItems = currentItems.filter(x => x.id !== it.id)
         } else {
           // 字符串 = 拼接到 desc 后缀（兼容旧 desc 模式）
           it.desc = it.name + '（' + change + '）'
@@ -1249,11 +1165,15 @@ function handleAIResponse(result, action, userInput) {
     }
   }
 
-  // 3. 死亡判定（2026-08-02 废除 health 后：死亡由 worker 3 条直接判定写入 newState.alive=false）
-  // 判定：AI₂ 剧情判死 / 寿限（age≥lifespan）/ 社会性（8 属性归零）——全部在 worker 侧完成
+  // v0.6.50j 寿限覆盖：寿限已到 → health 归零触发死亡
+  if (state.lifespan && state.age >= state.lifespan && state.health > 0) {
+    state.health = 0
+  }
+
+  // 3. 死亡判定（社会性死亡由云函数判定后写入 newState）
   // 先生 2026-06-27 01:51 拍板 A：临终只走 drawDeathConfirm 覆盖层路径
   // 不再 branch.options = ['封笔']，避免双路径打架（drawOptions 画的"封笔"+ drawDeathConfirm 覆盖层按钮）
-  if (newState && newState.alive === false) {
+  if (state.health <= 0 || newState && newState.alive === false) {
     state.alive = false
     alive = false
     branch.options = []  // 清空 options：玩家只能点 drawDeathConfirm 的"封笔"按钮
@@ -1330,31 +1250,6 @@ function handleAIResponse(result, action, userInput) {
 // D049d（2026-06-29 09:31 拍板）：删 state 纯前端缓存（player_life_cache）
 // 改：失败时不再写 localStorage 兜底——先生依赖 player_load 拉云端 state
 //     没 openid 时也不写缓存（依赖 wx.login code2Session 流程后续补）
-// 2026-08-02（先生拍板"物品状态变化逻辑梳理"）：使用物品确定性扣耐久
-// 玩家点「使用」→ 扣 20 耐久（≤0 移除 + 飘字「xx 用完了」）
-// 扣后立即 autoSaveToCloud 同步，AI₂ 读快照时已是扣后值 → 不会重复扣
-function consumeItemDurability(itemObj, amount) {
-  if (!itemObj) return
-  const dur = (itemObj.durability == null ? 100 : itemObj.durability)
-  const newDur = dur - amount
-  if (newDur <= 0) {
-    // 用完消失（2026-08-02 先生拍板：飘字不掺数字，叙事化提示）
-    state.items = state.items.filter(x => x.id !== itemObj.id)
-    currentItems = currentItems.filter(x => x.id !== itemObj.id)
-    if (typeof spawnFloater === 'function') {
-      spawnFloater((itemObj.name || '物品') + ' 用完了', 'rgba(220,120,90,1)')
-    }
-  } else {
-    itemObj.durability = newDur
-    // desc 保持叙事描述，不掺耐久数字（先生拍板：耐久剧情间接体现）
-    const ci = currentItems.find(x => x.id === itemObj.id)
-    if (ci) ci.durability = newDur
-    if (typeof spawnFloater === 'function') {
-      spawnFloater('使用了 ' + (itemObj.name || '物品'), 'rgba(200,168,124,1)')
-    }
-  }
-}
-
 function autoSaveToCloud() {
   if (typeof wx === 'undefined' || !wx.cloud || !wx.cloud.callFunction) return
   let openid = null
@@ -1413,6 +1308,7 @@ function stateToPlayerLife(s) {
     // D081：补 month/year（之前默认值是 month=1 但不传，会被 validate 拒）
     year: typeof s.year === 'number' ? s.year : 1,
     month: s.month || 1,
+    health: s.health || 100,
     lifespan: s.lifespan || 70,
     reputation: s['声望'] || 0,
     wealth: s['财富'] || 0,
@@ -1692,39 +1588,44 @@ function adjustFluidLayout() {
 
 // ─────── 生图背景（v0.1.69：前端直连 Pollinations.ai，跳过云函数） ───────
 // 朝代风格表（v0.1.62 起，p1: 简洁英文 prompt；p2: 水墨质感参数）
-// 2026-08-02 18:28 修：elements 全表去人物词（scholars/hermits/palace ladies/flying apsaras/court ladies）
-//   真因：先生反馈"剧情早不是翠姑还是每轮美女图"——人物词在模板里每轮必进 prompt → flux 必画人
-//   背景图只画景：全部换成纯场景元素
-// ─────── 2026-08-02 19:58 根治：模板 key 与数据源 era_meta.dynasty 实际值完全一致 ───────
-// 之前用短名（五代/宋/汉/晋/周）+ 别名表/模糊匹配全是绕开——数据源存的是完整名（五代十国/北宋/西汉…）
-// 现在 key = era_meta 实际取值集合，buildPollinationsPrompt 纯精确匹配，零映射
+const PROMPT_BY_DYNASTY = {
+  '宋':   { style: 'Song dynasty Chinese ink wash painting',      elements: 'markets, scholars, teahouses, riverside' },
+  '元':   { style: 'Yuan dynasty Chinese ink landscape',          elements: 'grassland, horsemen, vast sky' },
+  '明':   { style: 'Ming dynasty Chinese literati ink painting',  elements: 'gardens, scholars, calligraphy' },
+  '清':   { style: 'Qing dynasty Chinese court painting',         elements: 'palace, scholars, calligraphy' },
+  '唐':   { style: 'Tang dynasty Chinese gongbi heavy color',     elements: 'palace ladies, court, horses' },
+  '汉':   { style: 'Han dynasty Chinese stone relief painting',   elements: 'carriage, banquet, warriors' },
+  '秦':   { style: 'Qin dynasty Chinese painting',                elements: 'terracotta warriors, Great Wall' },
+  '晋':   { style: 'Wei-Jin Chinese landscape',                   elements: 'bamboo forest, hermits' },
+  '南北朝':{ style: 'Dunhuang mural painting',                    elements: 'flying apsaras, Buddha' },
+  '隋':   { style: 'Early Tang gongbi',                           elements: 'palace, court ladies' },
+  '五代': { style: 'Five dynasties Chinese landscape',            elements: 'mountains, hermits' },
+  '商':   { style: 'Bronze age Chinese oracle bone art',         elements: 'ritual, sacrifice' },
+  '周':   { style: 'Spring Autumn period Chinese painting',       elements: 'warriors, ritual vessels' },
+  '春秋': { style: 'Spring Autumn period Chinese painting',       elements: 'warriors, ritual vessels' },
+  '战国': { style: 'Warring States Chinese silk painting',       elements: 'warriors, ritual vessels' },
+  '三国': { style: 'Three Kingdoms Chinese gongbi',               elements: 'battle flags, weapons' },
+  'default':{ style: 'Ancient Chinese ink wash painting',          elements: 'historical scene' },
+}
 
 function buildPollinationsPrompt(narrativeText) {
-  const era = state.dynasty || 'default'
-  // 2026-08-02 20:01 模板表已抽独立模块 minigame/data/dynasty-templates.js（唯一数据源，有单测）
-  const cfg = getDynastyTemplate(era)
-  // 抓叙事前 80 字作为场景描述（恢复 v3.0.14aid 原逻辑）
+  const era = state.dynasty || '宋'
+  const cfg = PROMPT_BY_DYNASTY[era] || PROMPT_BY_DYNASTY['default']
+  // 抓叙事前 80 字作为场景描述
   const hint = (narrativeText || '').slice(0, 80).replace(/\s+/g, ' ')
-  // v3.0.14aid: 把叙事场景描述(hint+city)放最前 — flux 模型对 prompt 头部响应最强
+  // v3.0.14aid: 把叙事场景描述(hint+city)放最前 — flux 模型对 prompt 头部响应最强, 先生 22:54 反馈"图都一样"是 p1/p2 风格标签太靠前压住了叙事
   const city = state.city || ''
   const sceneDesc = [hint, city].filter(Boolean).join(', ')
   const p1 = cfg.style
   const p2 = cfg.elements
-  // 固定水墨质感参数（2026-08-02 19:50 先生拍板：去掉 no people——场景就是人时没必要不画人，
-  //   背景图跟着叙事走：剧情有人物就画人物、有景就画景；模板人物词已去，不会再每轮强制画人）
+  // 固定水墨质感参数
   const suffix = 'ink wash, monochrome, rice paper texture, no text, no watermark, masterpiece, --ar 3:2'
   return [sceneDesc, p1, p2, suffix].filter(Boolean).join(', ')
 }
 
-// 2026-08-02 13:29 先生反馈"插画每次都是美女图"——非上下文截断，是前端换图机制 bug：
-//   ① 重进恢复路径不调 fetchBgImage → 一直显示上次会话旧图
-//   ② if (bgImageLoading) return 防重入 → Pollinations 出图几十秒，玩得快时后续轮次换图全被跳过
-//   ③ onerror 不清旧图 → 失败就一直显示过期图
-// 修法：去掉防重入 return，改"最新优先"——每轮都发请求，bgImageSeq 序号保证只显示最新一轮的图
-var bgImageSeq = 0
 function fetchBgImage(narrativeText) {
   if (typeof wx === 'undefined') return
-  const seq = ++bgImageSeq
+  if (bgImageLoading) return  // 防重入
 
   // 从叙事/城市/事件抽 1-2 个关键词作为 scene 描述
   const era = state.dynasty || '宋'
@@ -1751,10 +1652,10 @@ function fetchBgImage(narrativeText) {
     last.bg_narrative_hint = hint
   }
 
+  bgImageLoading = true
   if (bgImgEl) { try { bgImgEl.src = '' } catch(e) {} }
   bgImgEl = typeof wx.createImage === 'function' ? wx.createImage() : new Image()
   bgImgEl.onload = () => {
-    if (seq !== bgImageSeq) return  // 已有更新的请求，丢弃本次（latest-wins）
     bgImageLoading = false
     bgImage = url
     imageRevealStart = Date.now()  // v0.6.50g: 开始从上到下展开
@@ -1763,13 +1664,9 @@ function fetchBgImage(narrativeText) {
       const last = debugLog[debugLog.length - 1]
       last.bg_load = 'ok'
     }
-    console.log('[bg] 换图成功 seq=', seq, ' url=', url.slice(0, 60))
   }
   bgImgEl.onerror = () => {
-    if (seq !== bgImageSeq) return
     bgImageLoading = false
-    // 2026-08-02 13:29 修：失败时清掉旧图（否则一直显示过期图误导"图没变"）
-    bgImage = null
     console.warn('Pollinations 加载失败:', url.slice(0, 80))
     if (debugLog.length > 0) {
       const last = debugLog[debugLog.length - 1]
@@ -2753,8 +2650,6 @@ function drawItemBar(ctx) {
       ctx.textBaseline = 'middle'
       const shortName = (item.name || '').slice(0, 4)
       ctx.fillText((item.icon || '\ud83d\udce6') + shortName, bx + slotW / 2, by + slotH / 2)
-      // 2026-08-02（先生拍板）：耐久不直接显示数字——通过剧情叙事间接体现（AI₁ 已带耐久写暗示）
-      // 耐久数字只在物品详情浮窗展示（玩家主动查看时）
       ctx.textAlign = 'left'
       ctx.textBaseline = 'alphabetic'
       item._bounds = { x: bx, y: by, w: slotW, h: slotH }
@@ -3331,8 +3226,6 @@ function drawDebugPanel(ctx) {
   if (dbgActiveTab === 6) { drawDbgDataTab(ctx); return }
   // llm_io tab（2026-07-23 23:49 先生指示）：tab 7 也走单独渲染路径
   if (dbgActiveTab === 7) { drawDbgLlmIoTab(ctx); return }
-  // 压缩 tab（2026-08-02 先生指示）：tab 8 展示 history_compress 记录
-  if (dbgActiveTab === 8) { drawDbgCompressTab(ctx); return }
   // D060 hotfix3（2026-07-05 02:31）：debugLog 为空也画折叠态图标
   // 真因：先生重进游戏时 debugLog 是空的（新一局还没调过 AI），原代码直接 return
   //       → 不画 DBG 图标 + onTouch 不响应 → 先生什么都点不动
@@ -3402,7 +3295,7 @@ function drawDebugPanel(ctx) {
 // D058 hotfix3（2026-07-04 22:58）：6 → 7 项（之前漏 System，导致 TAB_LABELS[5] = undefined）
 // 真因：先生切到 System tab 后回到数据 tab，drawDebugPanel 循环 7 次但 TAB_LABELS 只有 6 项
 // → fillText(undefined, ...) → 按钮显示 "undefined"
-  const TAB_LABELS = ['AI₁', 'AI₂', '对话流', 'POLL', '场景', 'System', '数据', 'llm_io', '压缩']
+  const TAB_LABELS = ['AI₁', 'AI₂', '对话流', 'POLL', '场景', 'System', '数据', 'llm_io']
   const arrowSize = 28
   // 顶部条：只显示标题 + 关闭按钮
   ctx.fillStyle = '#f0c878'
@@ -3479,12 +3372,11 @@ function drawDebugPanel(ctx) {
   const tabBtnW2 = Math.floor((w - 12) / 3)  // 3 列：屏宽 393 → 127px 每 tab
 
   layout._dbgTabs = []
-  for (let _ti = 0; _ti < 9; _ti++) {
+  for (let _ti = 0; _ti < 8; _ti++) {
     // D058（2026-07-04 21:09 先生拍板）：tab 0-5 占 2 行 × 3 列，tab 6 单独占第 3 行第 1 列
     // D094-async（2026-07-23）：tab 7「llm_io」跟 tab 6 同占第 3 行
-    // 2026-08-02：tab 8「压缩」占第 3 行第 3 列
-    const col = (_ti === 6 || _ti === 7 || _ti === 8) ? _ti - 6 : (_ti % 3)
-    const row = (_ti === 6 || _ti === 7 || _ti === 8) ? 2 : Math.floor(_ti / 3)
+    const col = (_ti === 6 || _ti === 7) ? _ti - 6 : (_ti % 3)
+    const row = (_ti === 6 || _ti === 7) ? 2 : Math.floor(_ti / 3)
     const _curTabX = 6 + col * (tabBtnW2)
     const _curTabY = row === 0 ? tabRow1Y : (row === 1 ? tabRow2Y : tabRow3Y)
     const isActive = _ti === dbgActiveTab
@@ -3507,57 +3399,15 @@ function drawDebugPanel(ctx) {
   const copyTabBtnX = upBtnX - copyTabBtnW - tabBtnGap2
   const downBtnX = w - arrowSize - 4
 
-  // 2026-08-02：数据 tab 分页按钮（先生拍板全部显示+分页）——「◀ 上一页 / 下一页 ▶」
-  // 位置：控制行最左侧，仅在 tab 6（数据）显示；宽度 44，两个按钮 + 中间页数文字
-  if (dbgActiveTab === 6) {
-    const pageBtnW = 44
-    const pageBtnH = 18
-    const pageBtnX = 4
-    const pageInfoW = 54
-    ctx.fillStyle = 'rgba(240,200,120,0.25)'
-    ctx.fillRect(pageBtnX, ctrlRowY, pageBtnW, pageBtnH)
-    ctx.fillStyle = '#f0c878'
-    ctx.font = 'bold 11px sans-serif'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText('◀上一页', pageBtnX + pageBtnW / 2, ctrlRowY + 9)
-    layout._dbgDataPrevBtn = { x: pageBtnX, y: ctrlRowY, w: pageBtnW, h: pageBtnH }
-
-    // 页数信息（中间）
-    ctx.fillStyle = '#aaa'
-    ctx.font = '10px sans-serif'
-    ctx.textAlign = 'center'
-    ctx.fillText(`${dbgDataPage}/${dbgDataTotalPages}`, pageBtnX + pageBtnW + pageInfoW / 2 + 4, ctrlRowY + 9)
-
-    const nextBtnX = pageBtnX + pageBtnW + pageInfoW + 8
-    ctx.fillStyle = 'rgba(240,200,120,0.25)'
-    ctx.fillRect(nextBtnX, ctrlRowY, pageBtnW, pageBtnH)
-    ctx.fillStyle = '#f0c878'
-    ctx.font = 'bold 11px sans-serif'
-    ctx.fillText('下一页▶', nextBtnX + pageBtnW / 2, ctrlRowY + 9)
-    layout._dbgDataNextBtn = { x: nextBtnX, y: ctrlRowY, w: pageBtnW, h: pageBtnH }
-
-    // 复制按钮右移，避免重叠
-    const copyTabBtnX2 = nextBtnX + pageBtnW + pageInfoW + 8
-    ctx.fillStyle = 'rgba(240,200,120,0.32)'
-    ctx.fillRect(copyTabBtnX2, ctrlRowY, copyTabBtnW, 18)
-    ctx.fillStyle = '#f0c878'
-    ctx.font = 'bold 10px sans-serif'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText('复制本tab', copyTabBtnX2 + copyTabBtnW / 2, ctrlRowY + 9)
-    layout._dbgCopyTabBtn = { x: copyTabBtnX2, y: ctrlRowY, w: copyTabBtnW, h: 18 }
-  } else {
-    // "复制本 tab"按钮（在控制行 ctrlRowY = bottomBarY + 62）
-    ctx.fillStyle = 'rgba(240,200,120,0.32)'
-    ctx.fillRect(copyTabBtnX, ctrlRowY, copyTabBtnW, 18)
-    ctx.fillStyle = '#f0c878'
-    ctx.font = 'bold 10px sans-serif'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText('复制本tab', copyTabBtnX + copyTabBtnW / 2, ctrlRowY + 9)
-    layout._dbgCopyTabBtn = { x: copyTabBtnX, y: ctrlRowY, w: copyTabBtnW, h: 18 }
-  }
+  // "复制本 tab"按钮（在控制行 ctrlRowY = bottomBarY + 62）
+  ctx.fillStyle = 'rgba(240,200,120,0.32)'
+  ctx.fillRect(copyTabBtnX, ctrlRowY, copyTabBtnW, 18)
+  ctx.fillStyle = '#f0c878'
+  ctx.font = 'bold 10px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('复制本tab', copyTabBtnX + copyTabBtnW / 2, ctrlRowY + 9)
+  layout._dbgCopyTabBtn = { x: copyTabBtnX, y: ctrlRowY, w: copyTabBtnW, h: 18 }
 
   // ▲▼ 滚动箭头（控制行右侧）
   ctx.fillStyle = 'rgba(240,200,120,0.2)'
@@ -3661,7 +3511,7 @@ function drawDebugPanel(ctx) {
         if (shortMsgs.length > 0) {
           allText += `[发给 AI 的完整对话流]:\n`
           shortMsgs.forEach((m, j) => {
-            allText += `  ── msg[${j}].role="${m.role}" ──\n${(typeof m.content === 'string' ? m.content : JSON.stringify(m.content))}\n\n`
+            allText += `  ── msg[${j}].role="${m.role}" ──\n${m.content}\n\n`
           })
         } else {
           allText += '[对话流] 全部都是主 system prompt，已挪到 tab 5\n'
@@ -4181,12 +4031,11 @@ function handleTouch(x, y, type) {
       if (type === 'end' && layout._dbgCopyTabBtn
           && y >= _bottomBarY + 62 && y <= _bottomBarY + 62 + 18
           && x >= layout._dbgCopyTabBtn.x && x <= layout._dbgCopyTabBtn.x + layout._dbgCopyTabBtn.w) {
-        // 2026-08-02 修：debugLog 空拦截只对 tab 0-5（本局 AI 数据）；tab 6/7/8 数据来自云端，与 debugLog 无关
-        if (debugLog.length === 0 && dbgActiveTab <= 5) {
+        if (debugLog.length === 0) {
           if (wx.showToast) wx.showToast({ title: '本局还没跑过 AI 调用，没数据可复制', icon: 'none' })
           return null
         }
-        const COPY_FNS = [dbgCopyAIActual, dbgCopyScoringAI, dbgCopyHistory, dbgCopyPollStatus, dbgCopyScene, dbgCopySystem, dbgCopyDataPanel, dbgCopyLlmIoPanel, dbgCopyCompressPanel]
+        const COPY_FNS = [dbgCopyAIActual, dbgCopyScoringAI, dbgCopyHistory, dbgCopyPollStatus, dbgCopyScene, dbgCopySystem, dbgCopyDataPanel, dbgCopyLlmIoPanel]
         let txt
         if (dbgLastRenderedText) {
           txt = dbgSafeForClipboard(dbgLastRenderedText)
@@ -4210,25 +4059,6 @@ function handleTouch(x, y, type) {
         _doCopy(txt)
         return null
       }
-      // 2026-08-02：数据 tab 分页按钮（◀上一页 / 下一页▶），先生拍板全部显示+分页
-      if (type === 'end' && dbgActiveTab === 6) {
-        if (layout._dbgDataPrevBtn && x >= layout._dbgDataPrevBtn.x && x <= layout._dbgDataPrevBtn.x + layout._dbgDataPrevBtn.w
-            && y >= _bottomBarY + 62 && y <= _bottomBarY + 62 + 18) {
-          if (dbgDataPage > 1) {
-            dbgDataPage -= 1
-            dbgLoadCloudNh(true, undefined, undefined, dbgDataPage)
-          }
-          return null
-        }
-        if (layout._dbgDataNextBtn && x >= layout._dbgDataNextBtn.x && x <= layout._dbgDataNextBtn.x + layout._dbgDataNextBtn.w
-            && y >= _bottomBarY + 62 && y <= _bottomBarY + 62 + 18) {
-          if (dbgDataPage < dbgDataTotalPages) {
-            dbgDataPage += 1
-            dbgLoadCloudNh(true, undefined, undefined, dbgDataPage)
-          }
-          return null
-        }
-      }
       if (type === 'end' && layout._dbgTabs && y >= _bottomBarY && y < _bottomBarY + 62) {  // D058 tab 区 3 行（含 tab 6 第 3 行）
         for (let _ti = 0; _ti < layout._dbgTabs.length; _ti++) {
           const _tb = layout._dbgTabs[_ti]
@@ -4240,12 +4070,8 @@ function handleTouch(x, y, type) {
               dbgLoadCloudNh(true)
             }
             // llm_io tab（2026-07-23 先生指示）：切到时自动拉一次 dump_result
-            if (_tb.tabIdx === 7 && dbgLlmIoList.length === 0 && !dbgLlmIoLoading) {
+            if (_tb.tabIdx === 7 && dbgLlmIoList.length === 0 && !dbgDataLoading) {
               dbgLoadCloudLlmIo()
-            }
-            // 压缩 tab（2026-08-02）：切到时自动拉一次 history_compress
-            if (_tb.tabIdx === 8 && dbgCompressList.length === 0 && !dbgCompressLoading) {
-              dbgLoadCloudCompress()
             }
             return null
           }
@@ -4268,21 +4094,19 @@ function handleTouch(x, y, type) {
           debugScroll = 0
           dbgUserScrolled = false  // Y3：切 tab 重置为"未手动滑"，新 tab 默认贴底
           if (dbgActiveTab === 6 && dbgDataList.length === 0 && !dbgDataLoading) dbgLoadCloudNh(true)
-          if (dbgActiveTab === 7 && dbgLlmIoList.length === 0 && !dbgLlmIoLoading) dbgLoadCloudLlmIo()
-          if (dbgActiveTab === 8 && dbgCompressList.length === 0 && !dbgCompressLoading) dbgLoadCloudCompress()
+          if (dbgActiveTab === 7 && dbgLlmIoList.length === 0 && !dbgDataLoading) dbgLoadCloudLlmIo()
         }
         return null
       }
       if (type === 'end' && layout._dbgNextTabBtn
           && y >= layout._dbgNextTabBtn.y && y <= layout._dbgNextTabBtn.y + layout._dbgNextTabBtn.h
           && x >= layout._dbgNextTabBtn.x && x <= layout._dbgNextTabBtn.x + layout._dbgNextTabBtn.w) {
-        if (dbgActiveTab < 8) {
+        if (dbgActiveTab < 7) {
           dbgActiveTab++
           debugScroll = 0
           dbgUserScrolled = false  // Y3：切 tab 重置为"未手动滑"，新 tab 默认贴底
           if (dbgActiveTab === 6 && dbgDataList.length === 0 && !dbgDataLoading) dbgLoadCloudNh(true)
-          if (dbgActiveTab === 7 && dbgLlmIoList.length === 0 && !dbgLlmIoLoading) dbgLoadCloudLlmIo()
-          if (dbgActiveTab === 8 && dbgCompressList.length === 0 && !dbgCompressLoading) dbgLoadCloudCompress()
+          if (dbgActiveTab === 7 && dbgLlmIoList.length === 0 && !dbgDataLoading) dbgLoadCloudLlmIo()
         }
         return null
       }
@@ -4309,16 +4133,16 @@ function handleTouch(x, y, type) {
         state.__lastTouchY = y
       }
 
-      // llm_io tab（2026-07-23 先生指示）：列表滑动（动态高度）
+      // llm_io tab（2026-07-23 先生指示）：列表滑动（itemH=62，比数据 tab 大）
       if (type === 'move' && dbgActiveTab === 7 && dbgLlmIoList.length > 0) {
         const listY = (layout.safeTop || 0) + 30 + 40 + 40 + 4  // closeBarY + closeBarH + opBarH(40) + 4
         const bottomBarY = layout.windowH - 84 - (layout.safeBottom || 34)
         if (y >= listY && y <= bottomBarY) {
           if (typeof state.__lastTouchY2 === 'number') {
             const dy = y - state.__lastTouchY2
+            const itemH = 62
             const listH = bottomBarY - listY - 4
-            const totalH = layout._dbgLlmIoTotalH || (dbgLlmIoList.length * 62)
-            const maxScroll = Math.max(0, totalH - listH)
+            const maxScroll = Math.max(0, dbgLlmIoList.length * itemH - listH)
             dbgLlmIoScroll = Math.max(0, Math.min(maxScroll, dbgLlmIoScroll - dy))
           }
           state.__lastTouchY2 = y
@@ -4333,62 +4157,8 @@ function handleTouch(x, y, type) {
           && layout._dbgLlmIoRefreshBtn
           && hitTest(x, y, layout._dbgLlmIoRefreshBtn.x, layout._dbgLlmIoRefreshBtn.y,
                      layout._dbgLlmIoRefreshBtn.w, layout._dbgLlmIoRefreshBtn.h)) {
-        if (!dbgLlmIoLoading) dbgLoadCloudLlmIo()
+        if (!dbgDataLoading) dbgLoadCloudLlmIo()
         return null
-      }
-      // llm_io tab：点击记录 → 复制该条完整内容
-      if (type === 'end' && dbgActiveTab === 7 && layout._dbgLlmIoItems) {
-        for (const item of layout._dbgLlmIoItems) {
-          if (hitTest(x, y, item.x, item.y, item.w, item.h)) {
-            const txt = dbgCopyLlmIoSingle(item.idx)
-            if (txt) {
-              dbgDoCopy(txt)
-              if (wx.showToast) wx.showToast({ title: '已复制第' + (item.idx + 1) + '条', icon: 'success' })
-            }
-            return null
-          }
-        }
-      }
-
-      // 压缩 tab（2026-08-02）：列表滑动
-      if (type === 'move' && dbgActiveTab === 8 && dbgCompressList.length > 0) {
-        const listY = (layout.safeTop || 0) + 30 + 40 + 40 + 4  // closeBarY + closeBarH + opBarH(40) + 4
-        const bottomBarY = layout.windowH - 84 - (layout.safeBottom || 34)
-        if (y >= listY && y <= bottomBarY) {
-          if (typeof state.__lastTouchY3 === 'number') {
-            const dy = y - state.__lastTouchY3
-            const listH = bottomBarY - listY - 4
-            const totalH = layout._dbgCompressTotalH || (dbgCompressList.length * 64)
-            const maxScroll = Math.max(0, totalH - listH)
-            dbgCompressScroll = Math.max(0, Math.min(maxScroll, dbgCompressScroll - dy))
-          }
-          state.__lastTouchY3 = y
-          return null
-        }
-      }
-      if (type === 'start' && dbgActiveTab === 8) {
-        state.__lastTouchY3 = y
-      }
-      // 压缩 tab「刷新」按钮
-      if (type === 'end' && dbgActiveTab === 8
-          && layout._dbgCompressRefreshBtn
-          && hitTest(x, y, layout._dbgCompressRefreshBtn.x, layout._dbgCompressRefreshBtn.y,
-                     layout._dbgCompressRefreshBtn.w, layout._dbgCompressRefreshBtn.h)) {
-        if (!dbgCompressLoading) dbgLoadCloudCompress()
-        return null
-      }
-      // 压缩 tab：点击记录 → 复制该条完整内容（含摘要全文）
-      if (type === 'end' && dbgActiveTab === 8 && layout._dbgCompressItems) {
-        for (const item of layout._dbgCompressItems) {
-          if (hitTest(x, y, item.x, item.y, item.w, item.h)) {
-            const txt = dbgCopyCompressSingle(item.idx)
-            if (txt) {
-              dbgDoCopy(txt)
-              if (wx.showToast) wx.showToast({ title: '已复制第' + (item.idx + 1) + '条压缩记录', icon: 'success' })
-            }
-            return null
-          }
-        }
       }
 
       // D058（2026-07-04 21:09 先生拍板）：「数据」tab 内操作按钮 + 删除选中
@@ -4421,7 +4191,7 @@ function handleTouch(x, y, type) {
                 if (wx.showModal) {
                   wx.showModal({
                     title: '⚠️ 全删',
-                    content: `将删除您云端全部 ${dbgDataTotal || dbgDataList.length} 条对话记录（不可恢复），确认？`,
+                    content: `将删除您云端全部 ${dbgDataList.length} 条对话记录（不可恢复），确认？`,
                     success: (r) => { if (r.confirm) dbgLoadCloudNh(false, 'all') },
                   })
                 }
@@ -4625,8 +4395,6 @@ function handleTouch(x, y, type) {
       const useName = itemDetail.item && itemDetail.item.name
       itemDetail = null
       if (useName) {
-        // 2026-08-02（先生拍板）：使用物品不前端扣耐久——AI₂ 单一结算（读剧情+玩家输入判损耗）
-        // worker 有代码兜底：玩家输入 [使用 X] 但 AI₂ 漏结算 → 自动补 -20
         // 调 AI 触发使用效果（先生拍 ii：调 AI 写使用后剧情）
         callAI('[使用 ' + useName + ']')
       }
@@ -4717,18 +4485,6 @@ function handleFreeInput() {
           freeInputText = res.value || ''
         })
       }
-      // 2026-08-02：键盘被收起（未发送）时也清空，避免输入框残留
-      if (wx.onKeyboardComplete) {
-        wx.offKeyboardComplete && wx.offKeyboardComplete()
-        wx.onKeyboardComplete && wx.onKeyboardComplete(() => {
-          freeInputActive = false
-          freeInputText = ''
-          keyboardHeight = 0
-          if (wx.offKeyboardInput) wx.offKeyboardInput()
-          if (wx.offKeyboardConfirm) wx.offKeyboardConfirm()
-          if (wx.offKeyboardComplete) wx.offKeyboardComplete()
-        })
-      }
       if (wx.onKeyboardConfirm) {
         wx.offKeyboardConfirm && wx.offKeyboardConfirm()
         wx.onKeyboardConfirm && wx.onKeyboardConfirm((res) => {
@@ -4738,7 +4494,6 @@ function handleFreeInput() {
             callAI(text)
           }
           freeInputActive = false
-          freeInputText = ''  // 2026-08-02：发送后清空，否则底部输入框残留上次文字
           if (wx.hideKeyboard) wx.hideKeyboard({})
           keyboardHeight = 0  // D088 修正5：强制重置（兜底模式收起时 onKeyboardHeightChange 可能不触发）
           if (wx.offKeyboardInput) wx.offKeyboardInput()
@@ -4768,25 +4523,19 @@ function handleFreeInput() {
 // ─────── D058（2026-07-04 21:09 先生拍板）：DBG 「数据」tab ───────
 
 // 调云函数拉先生云端 narrate_history（dryRun=true 统计 / false 真删）
-// 2026-08-02：分页参数 page/pageSize（先生拍板全部显示+分页，不再截断 100 条）
-function dbgLoadCloudNh(dryRun, mode, ids, page) {
+function dbgLoadCloudNh(dryRun, mode, ids) {
   if (dbgDataLoading) return
   dbgDataLoading = true
   const data = { dryRun: !!dryRun }
   if (mode) data.mode = mode
   if (ids) data.ids = ids
-  if (dryRun) {
-    data.page = page || dbgDataPage || 1
-    data.pageSize = 100
-  }
   wx.cloud.callFunction({
     name: 'clean_narrate_history',
     data,
     success: (res) => {
       dbgDataLoading = false
       if (!res || !res.result || !res.result.success) {
-        const errDetail = (res && res.result && res.result.error) ? (res.result.error) : ''
-        if (wx.showToast) wx.showToast({ title: '云函数失败' + (errDetail ? ':' + String(errDetail).slice(0, 12) : ''), icon: 'none', duration: 5000 })
+        if (wx.showToast) wx.showToast({ title: '云函数失败', icon: 'none' })
         return
       }
       const r = res.result
@@ -4795,11 +4544,10 @@ function dbgLoadCloudNh(dryRun, mode, ids, page) {
         dbgDataList = r.stats.all_records
         dbgDataDirtyIds = new Set(r.stats.all_target_ids || [])
         dbgDataSelected = {}
-        dbgDataScroll = 0  // 2026-08-02：云函数已倒序，重置滚动 = 默认显示最新（与 llm_io tab 一致）
-        dbgDataPage = r.stats.page || 1
-        dbgDataTotalPages = r.stats.total_pages || 1
-        dbgDataTotal = r.stats.total || dbgDataList.length
-        const toastMsg = `总 ${dbgDataTotal} / 页 ${dbgDataPage}/${dbgDataTotalPages} / 脏 ${dbgDataDirtyIds.size}`
+        const truncated = r.stats.all_records_truncated || 0
+        const toastMsg = truncated > 0
+          ? `总 ${r.stats.total} / 脏 ${dbgDataDirtyIds.size} / 截 ${truncated}`
+          : `总 ${r.stats.total} / 脏 ${dbgDataDirtyIds.size}`
         if (wx.showToast) wx.showToast({ title: toastMsg, icon: 'none' })
       } else if (!dryRun && r.removed !== undefined) {
         if (wx.showToast) wx.showToast({ title: `删 ${r.removed} 条`, icon: 'success' })
@@ -4819,8 +4567,6 @@ function dbgLoadCloudNh(dryRun, mode, ids, page) {
 
 // 渲染「数据」tab
 function drawDbgDataTab(ctx) {
-  // 2026-08-02 修：重置 dbgLastRenderedText，防止复制按钮拿到上一个 tab 的旧内容（tab 6/7/8 独立渲染不设缓存）
-  dbgLastRenderedText = ''
   const w = layout.windowW
   const h = layout.windowH
   const closeBarH = 40
@@ -4904,9 +4650,8 @@ function drawDbgDataTab(ctx) {
   ctx.fillStyle = '#aaa'
   const dirtyCount = dbgDataDirtyIds ? dbgDataDirtyIds.size : 0
   const selectedCount = Object.keys(dbgDataSelected).length
-  // 2026-08-02：分页后显示总条数（dbgDataTotal）+ 当前页
   const statusText = dbgDataLoading ? '加载中...' :
-    `总 ${dbgDataTotal || dbgDataList.length} / 脏 ${dirtyCount} / 已选 ${selectedCount} / 页 ${dbgDataPage}/${dbgDataTotalPages}`
+    `总 ${dbgDataList.length} / 脏 ${dirtyCount} / 已选 ${selectedCount}`
   ctx.fillText(statusText, 8, opBarY + opBarH - 8)
 
   // 列表区（在操作栏和底部条之间）
@@ -4962,9 +4707,7 @@ function drawDbgDataTab(ctx) {
     ctx.textBaseline = 'top'
     ctx.fillText('[' + (r.role || '?') + ']', cbX + checkboxSize + 6, _curY + 4)
     // content（前 30 字）
-    // 2026-08-02 13:38 防御：narrate_history 曾有 system 消息 content 是对象（worker 已修）→ 对象时取 .content 字段
-    const _rContent = (r.content && typeof r.content === 'object') ? (r.content.content || '') : (r.content || '')
-    const contentStr = String(_rContent).slice(0, 30) + (String(_rContent).length > 30 ? '...' : '')
+    const contentStr = (r.content || '').slice(0, 30) + ((r.content || '').length > 30 ? '...' : '')
     ctx.fillStyle = isDirty ? '#ff8080' : '#c0c0c0'
     ctx.font = '11px sans-serif'
     ctx.fillText(contentStr, cbX + checkboxSize + 6, _curY + 18)
@@ -5019,7 +4762,7 @@ function drawDbgDataTab(ctx) {
 
 // tab 区 + 控制行（数据 tab 复用）
 function drawDbgBottomBar(ctx, w, h, bottomBarH, bottomBarY) {
-  const TAB_LABELS = ['AI₁', 'AI₂', '对话流', 'POLL', '场景', 'System', '数据', 'llm_io', '压缩']
+  const TAB_LABELS = ['AI₁', 'AI₂', '对话流', 'POLL', '场景', 'System', '数据', 'llm_io']
   ctx.fillStyle = '#1a1a1a'
   ctx.fillRect(0, bottomBarY, w, bottomBarH)
   ctx.strokeStyle = '#444'
@@ -5036,11 +4779,10 @@ function drawDbgBottomBar(ctx, w, h, bottomBarH, bottomBarY) {
   const tabBtnW2 = Math.floor((w - 12) / 3)
 
   layout._dbgTabs = []
-  for (let _ti = 0; _ti < 9; _ti++) {
+  for (let _ti = 0; _ti < 8; _ti++) {
     // 数据 tab 占第 3 行第 1 列 + llm_io 占第 3 行第 2 列（2026-07-23 先生指示）
-    // 压缩 tab 占第 3 行第 3 列（2026-08-02）
-    const col = (_ti === 6 || _ti === 7 || _ti === 8) ? _ti - 6 : (_ti % 3)
-    const row = (_ti === 6 || _ti === 7 || _ti === 8) ? 2 : Math.floor(_ti / 3)
+    const col = (_ti === 6 || _ti === 7) ? _ti - 6 : (_ti % 3)
+    const row = (_ti === 6 || _ti === 7) ? 2 : Math.floor(_ti / 3)
     const _curTabX = 6 + col * (tabBtnW2)
     const _curTabY = row === 0 ? tabRow1Y : (row === 1 ? tabRow2Y : tabRow3Y)
     const isActive = _ti === dbgActiveTab
@@ -5108,37 +4850,37 @@ function dbgCopyDataPanel() {
 //   22:10 先生端已验证可用。参数：{collection:'llm_io', limit:20}
 //   diag_query 自身用 orderBy('created_at','desc') —— 已倒序，前端无需再排
 function dbgLoadCloudLlmIo() {
-  if (dbgLlmIoLoading) return
-  dbgLlmIoLoading = true
+  if (dbgDataLoading) return
+  dbgDataLoading = true
   wx.cloud.callFunction({
     name: 'diag_query',
     data: { collection: 'llm_io', limit: 20 },
     success: (res) => {
-      dbgLlmIoLoading = false
+      dbgDataLoading = false
       if (!res || !res.result || !res.result.data) {
         if (wx.showToast) wx.showToast({ title: '拉 llm_io 失败', icon: 'none' })
         return
       }
       const raw = res.result.data || []
+      // diag_query 已经 orderBy created_at desc —— 直接用
       dbgLlmIoList = raw.slice()
       dbgLlmIoScroll = 0
       if (wx.showToast) wx.showToast({ title: `拉到 ${dbgLlmIoList.length} 条`, icon: 'none' })
     },
     fail: (err) => {
-      dbgLlmIoLoading = false
+      dbgDataLoading = false
+      // D094-async hotfix2（2026-07-24 00:36 二次"调云函数失败"反馈）：
+      //   详细记录 err，让先生能看到具体错（errCode/errMsg）
+      //   避免反复"调失败"信息没法定位是权限/env/参数/网络哪一类问题
       console.error('[dbgLoadCloudLlmIo] diag_query fail:', JSON.stringify(err))
-      const errCode = (err && err.errCode) || ''
       const errMsg = (err && (err.errMsg || err.message)) || '未知'
-      if (wx.showToast) wx.showToast({ title: '[' + errCode + ']' + errMsg.slice(0, 14), icon: 'none', duration: 5000 })
-      console.error('[dbgLoadCloudLlmIo] FULL ERR:', JSON.stringify({errCode, errMsg, err}))
+      if (wx.showToast) wx.showToast({ title: 'llm_io 调失败:' + errMsg.slice(0, 24), icon: 'none' })
     },
   })
 }
 
 // 渲染「llm_io」tab（只读 + 列表 + 滚动）
 function drawDbgLlmIoTab(ctx) {
-  // 2026-08-02 修：重置 dbgLastRenderedText（独立渲染 tab，复制走 COPY_FNS[7]）
-  dbgLastRenderedText = ''
   const w = layout.windowW
   const h = layout.windowH
   const closeBarH = 40
@@ -5184,7 +4926,7 @@ function drawDbgLlmIoTab(ctx) {
   const refreshBtnH = 24
   const refreshBtnX = 6
   const refreshBtnY = opBarY + (opBarH - refreshBtnH) / 2
-  const refreshing = dbgLlmIoLoading
+  const refreshing = dbgDataLoading
   ctx.fillStyle = refreshing ? 'rgba(128,128,128,0.25)' : 'rgba(240,200,120,0.25)'
   ctx.fillRect(refreshBtnX, refreshBtnY, refreshBtnW, refreshBtnH)
   ctx.strokeStyle = refreshing ? '#666' : 'rgba(240,200,120,0.5)'
@@ -5208,7 +4950,7 @@ function drawDbgLlmIoTab(ctx) {
   const listY = opBarY + opBarH + 4
   const listH = bottomBarY - listY - 4
 
-  if (dbgLlmIoList.length === 0 && !dbgLlmIoLoading) {
+  if (dbgLlmIoList.length === 0 && !dbgDataLoading) {
     ctx.fillStyle = '#666'
     ctx.font = '12px sans-serif'
     ctx.textAlign = 'center'
@@ -5220,39 +4962,13 @@ function drawDbgLlmIoTab(ctx) {
   ctx.rect(0, listY, w, listH)
   ctx.clip()
 
-  const itemH = 62  // 基础高度，实际会根据 raw_response 行数动态调整
+  const itemH = 62
   let _curY = listY - dbgLlmIoScroll
   layout._dbgLlmIoItems = []
   for (let i = 0; i < dbgLlmIoList.length; i++) {
     const r = dbgLlmIoList[i]
-    // 预计算 raw_response 行数以确定本条高度
-    const out = r.output || {}
-    const raw = out.raw_response || ''
-    const maxW = w - 16
-    const lineHeight = 14
-    let rawLines = 0
-    if (r.error) {
-      rawLines = 1
-    } else if (raw) {
-      let line = ''
-      for (let ci = 0; ci < raw.length; ci++) {
-        const ch = raw[ci]
-        const test = line + ch
-        if (ctx.measureText(test).width > maxW || ch === '\n') {
-          rawLines++
-          line = ch === '\n' ? '' : ch
-        } else {
-          line = test
-        }
-      }
-      if (line) rawLines++
-    } else {
-      rawLines = 1
-    }
-    const thisItemH = 32 + rawLines * lineHeight + 18  // 顶部32 + 内容行 + 底部18
-
-    if (_curY + thisItemH < listY || _curY > listY + listH) {
-      _curY += thisItemH
+    if (_curY + itemH < listY || _curY > listY + listH) {
+      _curY += itemH
       continue
     }
     // 行背景（status 着色）
@@ -5261,7 +4977,7 @@ function drawDbgLlmIoTab(ctx) {
     else if (r.status === 'error' || r.status === 'trigger_fail') bgColor = 'rgba(255,96,96,0.18)'
     else if (r.status === 'pending') bgColor = 'rgba(240,200,120,0.18)'
     ctx.fillStyle = bgColor
-    ctx.fillRect(0, _curY, w, thisItemH - 2)
+    ctx.fillRect(0, _curY, w, itemH - 2)
 
     // 第 1 行：status / partial / category / 时间
     ctx.font = 'bold 10px monospace'
@@ -5273,7 +4989,7 @@ function drawDbgLlmIoTab(ctx) {
     else if (r.status === 'error' || r.status === 'trigger_fail') stColor = '#ff8080'
     else if (r.status === 'pending') stColor = '#f0c878'
     ctx.fillStyle = stColor
-    ctx.fillText(`[${r.status || '?'}${r.status === 'pending' ? '...' : ''}/${r.category || '?'}]`, 6, _curY + 4)
+    ctx.fillText(`[${r.status || '?'}${r.partial ? '/partial' : ''}/${r.category || '?'}]`, 6, _curY + 4)
     // 时间
     ctx.fillStyle = '#666'
     const ts = r.created_at ? new Date(r.created_at).toLocaleTimeString() : '-'
@@ -5288,52 +5004,45 @@ function drawDbgLlmIoTab(ctx) {
     const reqId = (r.request_id || '').slice(0, 14)
     ctx.fillText(`req=${reqId}${(r.request_id || '').length > 14 ? '..' : ''}`, 6, _curY + 18)
 
-    // 第 3 行起：raw_response 完整内容（自动换行）
-    ctx.fillStyle = r.error ? '#ff8080' : '#90c890'
+    // 第 3 行：error_str（如果有，节选） / 否则 output.result.state.month
+    ctx.fillStyle = '#c0c0c0'
     ctx.font = '10px sans-serif'
-    if (r.error) {
-      ctx.fillText('err=' + r.error, 6, _curY + 32)
-    } else {
-      const out = r.output || {}
-      const raw = out.raw_response || ''
-      if (raw) {
-        // 完整显示 raw_response，自动换行
-        const maxW = w - 16
-        const lineHeight = 14
-        let line = ''
-        let yy = _curY + 32
-        for (let ci = 0; ci < raw.length; ci++) {
-          const ch = raw[ci]
-          const test = line + ch
-          if (ctx.measureText(test).width > maxW || ch === '\n') {
-            ctx.fillText(line, 6, yy)
-            line = ch === '\n' ? '' : ch
-            yy += lineHeight
-          } else {
-            line = test
-          }
-        }
-        if (line) ctx.fillText(line, 6, yy)
+    let detailLine = ''
+    if (r.error_str) {
+      detailLine = 'err=' + (r.error_str.length > 40 ? r.error_str.slice(0, 40) + '..' : r.error_str)
+      ctx.fillStyle = '#ff8080'
+    } else if (r.output && r.output.result && r.output.result.state) {
+      const st = r.output.result.state
+      const month = st.month != null ? st.month : '-'
+      const year = st.year != null ? st.year : '-'
+      detailLine = `out.state month=${month} year=${year} age=${st.age || '-'}`
+      ctx.fillStyle = '#90c890'
+    } else if (r.output) {
+      // 尝试抓 output 第一个字段
+      const keys = Object.keys(r.output)
+      if (keys.length) {
+        const k = keys[0]
+        const v = JSON.stringify(r.output[k])
+        detailLine = `out.${k}=${v.length > 40 ? v.slice(0, 40) + '..' : v}`
       } else {
-        ctx.fillText('(无输出)', 6, _curY + 32)
+        detailLine = '(空 output)'
       }
+    } else {
+      detailLine = '(无 output/error)'
     }
+    ctx.fillText(detailLine, 6, _curY + 32)
 
-    // 第 4 行：duration_ms + model（紧接在 raw_response 内容之后）
-    const tailY = _curY + 32 + rawLines * lineHeight + 4
-    ctx.fillStyle = '#666'
+    // 第 4 行：partial 多了（finalize 没跑提示）/ duration_ms
+    ctx.fillStyle = r.partial ? '#f0c878' : '#666'
     ctx.font = '10px monospace'
     let tail = ''
-    const inp = r.input || {}
-    const out4 = r.output || {}
-    if (out4.duration_ms != null) tail += `dur=${out4.duration_ms}ms `
-    if (inp.model) tail += `model=${inp.model.slice(0, 20)}`
-    ctx.fillText(tail, 6, tailY)
+    if (r.partial) tail += '⚠ partial=True(finalize 未跑) '
+    if (r.duration_ms != null) tail += `dur=${r.duration_ms}ms`
+    ctx.fillText(tail, 6, _curY + 46)
 
-    layout._dbgLlmIoItems.push({ x: 0, y: _curY, w: w, h: thisItemH - 2, idx: i, _id: r._id })
-    _curY += thisItemH
+    layout._dbgLlmIoItems.push({ x: 0, y: _curY, w: w, h: itemH - 2, idx: i, _id: r._id })
+    _curY += itemH
   }
-  layout._dbgLlmIoTotalH = _curY - listY + dbgLlmIoScroll  // 总内容高度（用于滚动计算）
   ctx.restore()
 
   // 底部 tab 区 + ▲▼ 复制本 tab（共享布局代码）
@@ -5343,284 +5052,29 @@ function drawDbgLlmIoTab(ctx) {
 // 复制 llm_io tab 统计
 function dbgCopyLlmIoPanel() {
   let s = `D094-async llm_io tab 统计\n共 ${dbgLlmIoList.length} 条\n`
-  s += dbgLlmIoLoading ? '模式: 加载中\n' : '模式: 就绪\n'
+  s += dbgDataLoading ? '模式: 加载中\n' : '模式: 就绪\n'
   // 按 status 计数
   const byStatus = {}
+  let partialCount = 0
   for (const r of dbgLlmIoList) {
     const k = r.status || '?'
     byStatus[k] = (byStatus[k] || 0) + 1
+    if (r.partial) partialCount++
   }
   for (const k of Object.keys(byStatus)) {
     s += `  ${k}: ${byStatus[k]}\n`
   }
+  s += `partial=True 的: ${partialCount}\n`
   // 最近 3 条摘要
   if (dbgLlmIoList.length) {
     s += '\n最近 3 条:\n'
     for (let i = 0; i < Math.min(3, dbgLlmIoList.length); i++) {
       const r = dbgLlmIoList[i]
       s += `  [${r.status || '?'}/${r.category || '?'}] req=${(r.request_id || '').slice(0, 12)} `
-      if (r.error) s += `err=${r.error.slice(0, 30)}`
-      else {
-        const out = r.output || {}
-        const raw = out.raw_response || ''
-        s += `raw=${raw.slice(0, 80)}${raw.length > 80 ? '..' : ''}`
-      }
+      if (r.error_str) s += `err=${r.error_str.slice(0, 30)}`
+      else if (r.output && r.output.result && r.output.result.state) s += `m=${r.output.result.state.month}`
       s += '\n'
     }
   }
-  return s
-}
-
-// 复制单条 llm_io 记录完整内容
-function dbgCopyLlmIoSingle(idx) {
-  const r = dbgLlmIoList[idx]
-  if (!r) return ''
-  const inp = r.input || {}
-  const out = r.output || {}
-  let s = `llm_io [${r.status}/${r.category}]\n`
-  s += `request_id: ${r.request_id}\n`
-  s += `openid: ${r.openid || '-'}\n`
-  s += `created_at: ${r.created_at ? new Date(r.created_at).toLocaleString() : '-'}\n`
-  s += `status: ${r.status}\n`
-  if (r.error) s += `error: ${r.error}\n`
-  s += `\n--- input ---\n`
-  s += `model: ${inp.model || '-'}\n`
-  s += `prompt_chars: ${inp.prompt_chars || '-'}\n`
-  s += `is_retry: ${inp.is_retry}\n`
-  s += `\n--- output ---\n`
-  s += `duration_ms: ${out.duration_ms || '-'}\n`
-  s += `raw_response:\n${out.raw_response || '(空)'}\n`
-  if (out.score_raw_response) s += `\nscore_raw_response:\n${out.score_raw_response}\n`
-  return s
-}
-
-// ─────────────────────────────────────────────────────────────
-// 压缩 tab（2026-08-02 先生指示）：展示 history_compress 记录（对话压缩功能）
-// 字段：openid / life_number / last_id（压缩进度=覆盖到的最后一条原文 _id）/ text（滚动合并摘要）/ compressed_at
-// 只读展示（不删不改），diag_query 拉取（orderBy compressed_at desc）
-// ─────────────────────────────────────────────────────────────
-function dbgLoadCloudCompress() {
-  if (dbgCompressLoading) return
-  dbgCompressLoading = true
-  wx.cloud.callFunction({
-    name: 'diag_query',
-    data: { collection: 'history_compress', limit: 20, orderBy: 'compressed_at' },
-    success: (res) => {
-      dbgCompressLoading = false
-      if (!res || !res.result || !res.result.data) {
-        if (wx.showToast) wx.showToast({ title: '拉压缩记录失败', icon: 'none' })
-        return
-      }
-      const raw = res.result.data || []
-      dbgCompressList = raw.slice()
-      dbgCompressScroll = 0
-      if (wx.showToast) wx.showToast({ title: `拉到 ${dbgCompressList.length} 条`, icon: 'none' })
-    },
-    fail: (err) => {
-      dbgCompressLoading = false
-      console.error('[dbgLoadCloudCompress] diag_query fail:', JSON.stringify(err))
-      const errCode = (err && err.errCode) || ''
-      const errMsg = (err && (err.errMsg || err.message)) || '未知'
-      if (wx.showToast) wx.showToast({ title: '[' + errCode + ']' + errMsg.slice(0, 14), icon: 'none', duration: 5000 })
-      console.error('[dbgLoadCloudCompress] FULL ERR:', JSON.stringify({ errCode, errMsg, err }))
-    },
-  })
-}
-
-// 渲染「压缩」tab（只读 + 列表 + 滚动）
-function drawDbgCompressTab(ctx) {
-  // 2026-08-02 修：重置 dbgLastRenderedText（独立渲染 tab，复制走 COPY_FNS[8]）
-  dbgLastRenderedText = ''
-  const w = layout.windowW
-  const h = layout.windowH
-  const closeBarH = 40
-  const bottomBarH = 84
-  const bottomBarY = h - bottomBarH - (layout.safeBottom || 34)
-  const closeBarY = (layout.safeTop || 0) + 30
-
-  // 背景
-  ctx.fillStyle = 'rgba(0,0,0,0.92)'
-  ctx.fillRect(0, 0, w, h)
-  // 顶部条
-  ctx.fillStyle = '#1a1a1a'
-  ctx.fillRect(0, closeBarY, w, closeBarH)
-  ctx.fillStyle = '#f0c878'
-  ctx.font = 'bold 14px sans-serif'
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'middle'
-  ctx.fillText('DBG · 压缩只读', 12, closeBarY + closeBarH / 2)
-  ctx.textAlign = 'right'
-  // 关闭按钮
-  const arrowSize = 28
-  ctx.fillStyle = 'rgba(192,80,80,0.32)'
-  ctx.fillRect(w - arrowSize - 8, closeBarY + 2, arrowSize, closeBarH - 4)
-  ctx.fillStyle = '#f0c878'
-  ctx.font = 'bold 13px sans-serif'
-  ctx.textAlign = 'center'
-  ctx.fillText('×', w - arrowSize / 2 - 8, closeBarY + closeBarH / 2 + 1)
-  layout._dbgCloseBtn = { x: w - arrowSize - 8, y: closeBarY, w: arrowSize, h: closeBarH }
-
-  // 操作栏（顶部条下方）：仅「刷新」按钮
-  const opBarY = closeBarY + closeBarH
-  const opBarH = 40
-  ctx.fillStyle = '#0a0a0a'
-  ctx.fillRect(0, opBarY, w, opBarH)
-  ctx.strokeStyle = '#444'
-  ctx.lineWidth = 0.5
-  ctx.beginPath()
-  ctx.moveTo(0, opBarY + opBarH + 0.5)
-  ctx.lineTo(w, opBarY + opBarH + 0.5)
-  ctx.stroke()
-
-  const refreshBtnW = 90
-  const refreshBtnH = 24
-  const refreshBtnX = 6
-  const refreshBtnY = opBarY + (opBarH - refreshBtnH) / 2
-  const refreshing = dbgCompressLoading
-  ctx.fillStyle = refreshing ? 'rgba(128,128,128,0.25)' : 'rgba(240,200,120,0.25)'
-  ctx.fillRect(refreshBtnX, refreshBtnY, refreshBtnW, refreshBtnH)
-  ctx.strokeStyle = refreshing ? '#666' : 'rgba(240,200,120,0.5)'
-  ctx.lineWidth = 1
-  ctx.strokeRect(refreshBtnX, refreshBtnY, refreshBtnW, refreshBtnH)
-  ctx.fillStyle = refreshing ? '#666' : '#f0c878'
-  ctx.font = 'bold 11px sans-serif'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText(refreshing ? '加载中...' : '刷新', refreshBtnX + refreshBtnW / 2, refreshBtnY + refreshBtnH / 2 + 1)
-  layout._dbgCompressRefreshBtn = { x: refreshBtnX, y: refreshBtnY, w: refreshBtnW, h: refreshBtnH }
-
-  ctx.font = '10px sans-serif'
-  ctx.textAlign = 'left'
-  ctx.fillStyle = '#aaa'
-  const statusText = refreshing ? '加载中...' :
-    `共 ${dbgCompressList.length} 条 · 倒序 · ▲▼ 可滚 · 点击复制`
-  ctx.fillText(statusText, refreshBtnX + refreshBtnW + 12, opBarY + opBarH / 2 + 1)
-
-  // 列表区
-  const listY = opBarY + opBarH + 4
-  const listH = bottomBarY - listY - 4
-
-  if (dbgCompressList.length === 0 && !dbgCompressLoading) {
-    ctx.fillStyle = '#666'
-    ctx.font = '12px sans-serif'
-    ctx.textAlign = 'center'
-    ctx.fillText('暂无压缩记录（对话 >300 条后自动触发首次压缩）', w / 2, listY + listH / 2)
-  }
-
-  ctx.save()
-  ctx.beginPath()
-  ctx.rect(0, listY, w, listH)
-  ctx.clip()
-
-  const lineHeight = 14
-  let _curY = listY - dbgCompressScroll
-  layout._dbgCompressItems = []
-  for (let i = 0; i < dbgCompressList.length; i++) {
-    const r = dbgCompressList[i]
-    const text = r.text || ''
-    // 摘要按行数动态高度
-    const maxW = w - 16
-    let textLines = 0
-    if (text) {
-      let line = ''
-      for (let ci = 0; ci < text.length; ci++) {
-        const ch = text[ci]
-        const test = line + ch
-        if (ctx.measureText(test).width > maxW || ch === '\n') {
-          textLines++
-          line = ch === '\n' ? '' : ch
-        } else {
-          line = test
-        }
-      }
-      if (line) textLines++
-    }
-    const thisItemH = 46 + Math.max(1, textLines) * lineHeight + 10
-
-    if (_curY + thisItemH < listY || _curY > listY + listH) {
-      _curY += thisItemH
-      continue
-    }
-    // 行背景
-    ctx.fillStyle = 'rgba(144,200,144,0.15)'
-    ctx.fillRect(0, _curY, w, thisItemH - 2)
-
-    // 第 1 行：序号 + 压缩时间
-    ctx.font = 'bold 10px monospace'
-    ctx.textAlign = 'left'
-    ctx.textBaseline = 'top'
-    ctx.fillStyle = '#90c890'
-    ctx.fillText(`[压缩#${dbgCompressList.length - i}]`, 6, _curY + 4)
-    ctx.fillStyle = '#666'
-    ctx.font = '10px monospace'
-    ctx.textAlign = 'right'
-    const ts = r.compressed_at ? new Date(r.compressed_at).toLocaleString() : '-'
-    ctx.fillText(ts, w - 8, _curY + 4)
-
-    // 第 2 行：last_id（压缩进度）+ life_number
-    ctx.fillStyle = '#88c0d0'
-    ctx.font = '10px monospace'
-    ctx.textAlign = 'left'
-    const lid = (r.last_id || '').slice(0, 16)
-    ctx.fillText(`last_id=${lid}${(r.last_id || '').length > 16 ? '..' : ''} life=${r.life_number || '-'}`, 6, _curY + 18)
-
-    // 第 3 行起：摘要内容（自动换行，截前 400 字防卡）
-    ctx.fillStyle = '#c8c8c8'
-    ctx.font = '10px sans-serif'
-    const textCut = text.length > 400 ? text.substring(0, 400) + '…' : text
-    if (textCut) {
-      let line = ''
-      let yy = _curY + 32
-      for (let ci = 0; ci < textCut.length; ci++) {
-        const ch = textCut[ci]
-        const test = line + ch
-        if (ctx.measureText(test).width > maxW || ch === '\n') {
-          ctx.fillText(line, 6, yy)
-          line = ch === '\n' ? '' : ch
-          yy += lineHeight
-        } else {
-          line = test
-        }
-      }
-      if (line) ctx.fillText(line, 6, yy)
-    } else {
-      ctx.fillText('(空)', 6, _curY + 32)
-    }
-
-    layout._dbgCompressItems.push({ x: 0, y: _curY, w: w, h: thisItemH - 2, idx: i, _id: r._id })
-    _curY += thisItemH
-  }
-  layout._dbgCompressTotalH = _curY - listY + dbgCompressScroll
-  ctx.restore()
-
-  // 底部 tab 区 + ▲▼ 复制本 tab（共享布局代码）
-  drawDbgBottomBar(ctx, w, h, bottomBarH, bottomBarY)
-}
-
-// 复制压缩 tab 统计
-function dbgCopyCompressPanel() {
-  let s = `压缩 tab 统计\n共 ${dbgCompressList.length} 条\n`
-  s += dbgCompressLoading ? '模式: 加载中\n' : '模式: 就绪\n'
-  if (dbgCompressList.length) {
-    s += '\n最新一条:\n'
-    const r = dbgCompressList[0]
-    s += `  compressed_at: ${r.compressed_at ? new Date(r.compressed_at).toLocaleString() : '-'}\n`
-    s += `  last_id: ${r.last_id || '-'}\n`
-    s += `  life_number: ${r.life_number || '-'}\n`
-    s += `  text: ${(r.text || '').substring(0, 300)}\n`
-  }
-  return s
-}
-
-// 复制单条压缩记录（含摘要全文）
-function dbgCopyCompressSingle(idx) {
-  const r = dbgCompressList[idx]
-  if (!r) return ''
-  let s = `history_compress 记录\n`
-  s += `compressed_at: ${r.compressed_at ? new Date(r.compressed_at).toLocaleString() : '-'}\n`
-  s += `openid: ${r.openid || '-'}\n`
-  s += `life_number: ${r.life_number || '-'}\n`
-  s += `last_id: ${r.last_id || '-'}\n`
-  s += `\n--- text ---\n${r.text || '(空)'}\n`
   return s
 }

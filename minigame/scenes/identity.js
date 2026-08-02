@@ -48,7 +48,6 @@ function identitySaveToCloud(identity) {
     city: identity.city || '某地',
     year: identity.year || 0,
     month: identity.month || 1,
-    health: 100,  // 初始健康
     lifespan: identity.lifespan || (55 + Math.floor(Math.random() * 25)),  // 55-80
     reputation: identity['声望'] || 0,
     wealth: identity['财富'] || 0,
@@ -447,12 +446,12 @@ function onTouch(x, y, type) {
         city: life.city,
         year: life.year,
         // D080（2026-07-05 17:07 先生拍板）：补 month + 其他完整字段
-        // 真因：之前 id 只塞了 year + 9 属性，没塞 month/lifespan/health/coin/created_at
+        // 真因：之前 id 只塞了 year + 9 属性，没塞 month/lifespan/coin/created_at
         //       → game.init 用默认值 month=1 → state.month 永远 1
         //       → system 消息说"→三月"但 state.month=1 → 不对齐
+        // 2026-08-02：health 字段已废除，不再读取
         month: life.month,
         lifespan: life.lifespan,
-        health: life.health,
         coin: life.wealth,  // player_life.wealth → state.coin（D049 字段映射）
         created_at: life.created_at,
         // 9 属性

@@ -583,7 +583,6 @@ async function buildAndSavePlayerLife(identity, openid) {
       year: typeof identity.year === 'number' ? identity.year : parseInt(identity.year) || 0,
       month: 1,
       round: 0,
-      health: 100,
       coin: 1000,
       reputation: identity['声望'] || 0,
       wealth: identity['财富'] || 0,

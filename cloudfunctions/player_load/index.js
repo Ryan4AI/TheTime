@@ -65,7 +65,19 @@ exports.main = async (event) => {
       lastAi = (lastAiRes.data && lastAiRes.data[0]) || null
     }
 
-    return { success: true, player, player_life, last_ai: lastAi, last_role, openid }
+    // 2026-08-02 12:54 先生实测：ai1 写完剧情但 ai2 没跑就重进 → 剧情已到新地点、state 还是旧的
+    // 修法：返回最后一条 user 消息（玩家上一轮输入），前端检测 is_scoring=true 时补跑 ai2 用
+    let lastUserInput = ''
+    const lastUserRes = await db.collection('narrate_history')
+      .where({ openid, life_number: player.life_number, role: 'user' })
+      .orderBy('created_at', 'desc')
+      .limit(1)
+      .get()
+    if (lastUserRes.data && lastUserRes.data[0]) {
+      lastUserInput = lastUserRes.data[0].content || ''
+    }
+
+    return { success: true, player, player_life, last_ai: lastAi, last_role, last_user_input: lastUserInput, openid }
   } catch (e) {
     console.error('[player_load] failed:', e.message)
     return { success: false, error: e.message }

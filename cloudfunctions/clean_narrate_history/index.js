@@ -26,11 +26,18 @@ function classifyDirty(allRecords) {
 }
 
 // 精简 record 给前端展示（content 截 200 字）
+// 2026-08-01 hotfix：content 强转 String——库里可能有 content 是对象/数字的脏记录，直接 .slice 会崩
+// 2026-08-01 22:50 诊断：统计非字符串 content 的类型分布（排查脏数据来源）
+const nonStrContentTypes = {}
 function slimRecord(r) {
+  if (typeof r.content !== 'string') {
+    const t = Array.isArray(r.content) ? 'array' : (r.content === null ? 'null' : typeof r.content)
+    nonStrContentTypes[t] = (nonStrContentTypes[t] || 0) + 1
+  }
   return {
     _id: r._id,
     role: r.role,
-    content: (r.content || '').slice(0, 200),
+    content: String(r.content == null ? '' : r.content).slice(0, 200),
     message_id: r.message_id,
     created_at: r.created_at,
     life_number: r.life_number,
@@ -61,13 +68,14 @@ exports.main = async (event) => {
   const ids = Array.isArray(event.ids) ? event.ids : []
 
   try {
-    // 拉全部
+    // 拉全部（2026-08-02：orderBy desc 让数据 tab 默认显示最新，与 llm_io tab 一致）
     const MAX = 1000
     let allRecords = []
     let offset = 0
     while (true) {
       const res = await db.collection('narrate_history')
         .where({ openid })
+        .orderBy('created_at', 'desc')
         .skip(offset)
         .limit(MAX)
         .get()
@@ -100,15 +108,29 @@ exports.main = async (event) => {
       target: targetIds.size,
       clean: allRecords.length - targetIds.size,
       sample_target_content: statsSample.map(r => ({
-        _id: r._id, content: (r.content || '').slice(0, 50),
+        _id: r._id, content: String(r.content == null ? '' : r.content).slice(0, 50),
         message_id: r.message_id, role: r.role,
       })),
     }
 
     if (dryRun) {
       stats.all_target_ids = Array.from(targetIds)
-      stats.all_records = allRecords.map(slimRecord).slice(0, 500)  // 限制 500 条防超时
-      stats.all_records_truncated = allRecords.length > 500 ? allRecords.length - 500 : 0
+      // 2026-08-02：先生拍板「全部显示 + 分页」——不再截断 100 条
+      // all_records 返回当前页（page/pageSize 分页），total 给前端算总页数
+      const page = Math.max(1, parseInt(event.page, 10) || 1)
+      const pageSize = Math.min(500, Math.max(1, parseInt(event.pageSize, 10) || 100))
+      const allSlim = allRecords.map(slimRecord)
+      const total = allSlim.length
+      const totalPages = Math.max(1, Math.ceil(total / pageSize))
+      const curPage = Math.min(page, totalPages)
+      stats.all_records = allSlim.slice((curPage - 1) * pageSize, curPage * pageSize)
+      stats.page = curPage
+      stats.page_size = pageSize
+      stats.total_pages = totalPages
+      // 诊断：非字符串 content 类型分布（先生 22:50 问"怎么会有非字符串"）
+      if (Object.keys(nonStrContentTypes).length > 0) {
+        stats.non_str_content_types = nonStrContentTypes
+      }
     }
 
     if (dryRun) {

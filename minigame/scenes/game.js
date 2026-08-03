@@ -1746,11 +1746,13 @@ const SCENE_EN_FALLBACK = {
   city: 'ancient Chinese city street, misty morning, rooftops and walls',
 }
 function sceneTypeFromChinese(text) {
-  if (/战|杀|战场|刀|兵刃|兵/.test(text)) return 'battlefield'
+  // 2026-08-03 18:46 先生反馈「河床乱石躲藏 → battlefield 不对」：裸「兵」字太宽泛（追兵/官兵/士兵都命中战场）
+  // 改：battlefield 只认强战场词；「河床/水边」等场景名词优先命中 river
+  if (/战|杀|战场|刀|兵刃|厮杀|打仗|交战|冲锋|攻城|兵器|厮杀声/.test(text)) return 'battlefield'
   if (/宫|殿|皇|龙/.test(text)) return 'palace'
   if (/寺|庙|观|佛|道/.test(text)) return 'temple'
   if (/村|田|乡|农/.test(text)) return 'countryside'
-  if (/河|江|湖|舟|船|水|渡|溪/.test(text)) return 'river'
+  if (/河|江|湖|舟|船|水|渡|溪|河床|滩/.test(text)) return 'river'
   if (/市|集|商|街|闹|坊/.test(text)) return 'market'
   if (/夜|月|宵|晚/.test(text)) return 'night'
   if (/冬|雪|寒|冰/.test(text)) return 'winter'

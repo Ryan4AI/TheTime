@@ -1208,8 +1208,10 @@ async function runPhaseScene({ openid, sceneRequestId, input }) {
     ]
     // 2026-08-03 18:28 先生反馈"又是美女图"：scene 调用默认 1500 token/110s 超时 → 前端 5s 等不及
     //   走中文叙事兜底 → flux 看不懂中文自由发挥画人物特写
-    // 修：scene 只需一句英文（<30 词），maxTokens=300 + 4s 超时 + thinkOff，保证 5s 内返回英文场景词
-    const raw = await callLLM(messages, null, { maxTokens: 300, timeoutMs: 4000, thinkOff: true })
+    // 修：scene 只需一句英文（<30 词），maxTokens=300 + thinkOff 加速
+    // 2026-08-03 18:46 先生反馈 scene 100% 超时：MiniMax 推理模式实测 4-6s，4s 超时必失败
+    //   调 4.8s（赶在前端 5s 兜底前返回；前端 5s 是先生拍板的 UX 上限，不动）
+    const raw = await callLLM(messages, null, { maxTokens: 300, timeoutMs: 4800, thinkOff: true })
     const scene = extractScene(raw)
     await writeLlmIo(sceneRequestId, openid, 'scene', 'success', {
       prompt_chars: narrativeText.length,

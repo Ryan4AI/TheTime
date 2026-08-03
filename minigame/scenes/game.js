@@ -1729,15 +1729,42 @@ function smartCutNarrative(text, maxLen) {
   return cut + '……'
 }
 
+// ─────── 2026-08-03 18:28 先生反馈"又是美女图"：兜底路径根治 ───────
+// 真因链：scene AI 调用慢（默认 1500 token/110s）→ 前端 5s 超时兜底 → 中文叙事直接拼进 flux prompt
+//   → flux 看不懂中文自由发挥 → 画人物特写（美女图）
+// 修：兜底路径绝不把中文喂给 flux——中文叙事 → 场景类型关键词 → 英文场景句（与 gen_image 云函数同逻辑）
+const SCENE_EN_FALLBACK = {
+  battlefield: 'ancient battlefield, banners, misty plain, distant war drums',
+  palace: 'ancient palace courtyard, carved columns, misty morning light',
+  temple: 'ancient temple on a mountain path, misty forest, stone steps',
+  countryside: 'ancient countryside village, rice paddies, misty mountains',
+  river: 'ancient river scene, wooden boats, misty water, willow trees',
+  market: 'ancient market street, stalls, lanterns, busy crowd in distance',
+  night: 'ancient city at night, moonlight, shadowy rooftops, lantern glow',
+  winter: 'ancient buildings in snow, bare trees, grey sky',
+  storm: 'storm over ancient city, dark clouds, rain, banners whipping',
+  city: 'ancient Chinese city street, misty morning, rooftops and walls',
+}
+function sceneTypeFromChinese(text) {
+  if (/战|杀|战场|刀|兵刃|兵/.test(text)) return 'battlefield'
+  if (/宫|殿|皇|龙/.test(text)) return 'palace'
+  if (/寺|庙|观|佛|道/.test(text)) return 'temple'
+  if (/村|田|乡|农/.test(text)) return 'countryside'
+  if (/河|江|湖|舟|船|水|渡|溪/.test(text)) return 'river'
+  if (/市|集|商|街|闹|坊/.test(text)) return 'market'
+  if (/夜|月|宵|晚/.test(text)) return 'night'
+  if (/冬|雪|寒|冰/.test(text)) return 'winter'
+  if (/雷|暴|雨|风/.test(text)) return 'storm'
+  return 'city'
+}
+
 function buildPollinationsPrompt(narrativeText) {
   const era = state.dynasty || 'default'
   // 2026-08-02 20:01 模板表已抽独立模块 minigame/data/dynasty-templates.js（唯一数据源，有单测）
   const cfg = getDynastyTemplate(era)
-  // 抓叙事前 80 字作为场景描述（恢复 v3.0.14aid 原逻辑；23:20 改按句子边界截断，不再断半句）
-  const hint = smartCutNarrative(narrativeText, 80)
-  // v3.0.14aid: 把叙事场景描述(hint+city)放最前 — flux 模型对 prompt 头部响应最强
-  const city = state.city || ''
-  const sceneDesc = [hint, city].filter(Boolean).join(', ')
+  // 2026-08-03 18:28：兜底不再拼中文叙事——抽场景类型 → 英文场景句（flux 只收纯英文，杜绝人物特写）
+  const sceneType = sceneTypeFromChinese(narrativeText || '')
+  const sceneDesc = SCENE_EN_FALLBACK[sceneType] || SCENE_EN_FALLBACK.city
   const p1 = cfg.style
   const p2 = cfg.elements
   // 固定水墨质感参数（2026-08-02 19:50 先生拍板：去掉 no people——场景就是人时没必要不画人，

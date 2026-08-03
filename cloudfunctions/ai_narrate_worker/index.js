@@ -413,7 +413,7 @@ async function runPhase1({ openid, input, is_retry, narrateRequestId }) {
   console.log('[PERF] queryMonthEvent_ms=', t1 - t0)
 
   globalThis.__PERF_LOGS__ = perfLogs
-  const aiResult = await callAI(preUpdate, realInput, history, monthEvent, is_retry, compressSummary, compressLastId, compressLastSeq)
+  const aiResult = await callAI(preUpdate, realInput, history, monthEvent, is_retry, compressSummary, compressLastId, compressLastSeq, openid)
   branches = aiResult.branches
   systemPrompt = aiResult.systemPrompt
   userPrompt = aiResult.userPrompt
@@ -607,14 +607,13 @@ async function runPhase2({ openid, scoreRequestId, input }) {
     }
   }
 
-  // 系统消息（属性变化时触发）
+  // 系统消息（AI₂ 输出后生成；2026-08-03 02:30 先生拍板：去掉外部触发 if）
+  // 之前：外部 if 只认 月份/属性/物品 变化 → 地点/身份变化被挡掉丢失
+  // 现在：无条件调 emitSystemMessages，它内部 lines.length===0 时返回 [] 不写库
+  // 即：只有 AI₂ 输出为空（无任何变化）才没有系统消息
   let systemMessages = []
   try {
-    const V2_ATTRS = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
-    const changedAttrs = V2_ATTRS.filter(a => typeof updated[a] === 'number' && updated[a] !== (state[a] || 0))
-    if (monthChanged || changedAttrs.length > 0) {
-      systemMessages = emitSystemMessages(state, updated)
-    }
+    systemMessages = emitSystemMessages(state, updated)
   } catch (e) {
     console.error('[D094-async] 系统消息生成失败:', e.message)
   }
@@ -1110,11 +1109,14 @@ function emitSystemMessages(oldState, newState) {
   const seasonNames = ['正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '冬月', '腊月']
 
   // v0.6.50h: 统一合并为一条 system message，去掉 [system · X] 前缀
-  // 1) 时间
+  // 1) 时间 + 年号 + 年龄（2026-08-03 02:26 先生反馈：原来只有年月，AI 不知道年号/玩家年龄）
   if (newState.year !== (oldState.year || newState.year) ||
       newState.month !== (oldState.month || 1)) {
     const monthStr = seasonNames[(newState.month || 1) - 1]
-    lines.push(`时间: ${oldState.year || newState.year}年${seasonNames[(oldState.month || 1) - 1] || ''} → ${newState.year || ''}年${monthStr || ''}`)
+    const oldEra = oldState.eraDisplay ? `（${oldState.eraDisplay}）` : ''
+    const newEra = newState.eraDisplay ? `（${newState.eraDisplay}）` : ''
+    const ageStr = (newState.age && newState.age !== oldState.age) ? `，年龄${newState.age}岁` : ''
+    lines.push(`时间: ${oldState.year || newState.year}年${oldEra}${seasonNames[(oldState.month || 1) - 1] || ''} → ${newState.year || ''}年${newEra}${monthStr || ''}${ageStr}`)
   }
 
   // 2) 地点
@@ -1158,6 +1160,30 @@ function emitSystemMessages(oldState, newState) {
       }
     }
     lines.push(allAttrs.join('  '))
+  }
+
+  // 6) 物品变化（2026-08-03 02:26 先生反馈：原来 system 消息无物品信息，AI 不知道物品栏现状）
+  // 按 id/name 对比新旧列表：新增 / 消失 / 耐久变化
+  const oldItems = oldState.items || []
+  const newItems = newState.items || []
+  const itemDiff = []
+  for (const ni of newItems) {
+    const key = ni.id || ni.name
+    const oi = oldItems.find(o => (o.id || o.name) === key)
+    if (!oi) {
+      itemDiff.push(`获得${ni.name || key}${typeof ni.durability === 'number' ? `(耐久${ni.durability})` : ''}`)
+    } else if (typeof ni.durability === 'number' && typeof oi.durability === 'number' && ni.durability !== oi.durability) {
+      itemDiff.push(`${ni.name || key}耐久 ${oi.durability}→${ni.durability}`)
+    }
+  }
+  for (const oi of oldItems) {
+    const key = oi.id || oi.name
+    if (!newItems.find(n => (n.id || n.name) === key)) {
+      itemDiff.push(`失去${oi.name || key}`)
+    }
+  }
+  if (itemDiff.length > 0) {
+    lines.push(`物品: ${itemDiff.join('，')}`)
   }
 
   // 合并成一条 system message
@@ -1404,7 +1430,7 @@ async function summarizeHistory(oldPart, prevSummaryText) {
   }
 }
 
-async function callAI(state, input, history, monthEvent, isRetry, compressSummary, compressLastId, compressLastSeq) {
+async function callAI(state, input, history, monthEvent, isRetry, compressSummary, compressLastId, compressLastSeq, openid) {
   const systemPrompt = buildSystemPrompt(state, monthEvent)
   const userPrompt = buildUserPrompt(input, history)
   const messages = [{ role: 'system', content: systemPrompt }]
@@ -1547,7 +1573,7 @@ async function callAI(state, input, history, monthEvent, isRetry, compressSummar
   // 2026-08-03 02:13 先生拍板：fallback 兜底出的固定 options 时，单独调一次 AI 生成真实选项
   // 再失败才保留固定文案（'继续观察'/'尝试离开'/'寻找机会'）
   if (singleBranch.optionsFallback) {
-    const aiOptions = await generateOptionsFallback(singleBranch.content)
+    const aiOptions = await generateOptionsFallback(singleBranch.content, openid)
     if (aiOptions && aiOptions.length >= 2) {
       console.log('[callAI] options 兜底补救成功: 固定文案 → AI 生成', JSON.stringify(aiOptions))
       singleBranch.options = aiOptions
@@ -2225,45 +2251,81 @@ async function callScoringAI(content, prevState, history, playerInput) {
 
 // 2026-08-03 02:13 先生拍板：fallback 兜底 options 时的补救——单独调一次 AI 生成 3 个选项
 // 轻量调用：小 max_tokens + 短超时（10s），失败/超时/解析不出 ≥2 个 → 返回 null（上层保留固定文案）
-async function generateOptionsFallback(narrativeContent) {
+// 2026-08-03 02:34 先生反馈「DBG 里看不到兜底生成选项的调用」→ 补 writeLlmIo 记录（category='options_fallback'）
+async function generateOptionsFallback(narrativeContent, openid) {
+  const requestId = 'options_fallback_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)
   const t0 = Date.now()
-  try {
-    const sysMsg = '你是历史穿越人生模拟游戏的选项生成器。根据玩家当前处境，生成 3 个【贴合剧情、风格古风】的行动选项。' +
-      '只输出 JSON：{"options":["选项1","选项2","选项3"]}，不要输出其他任何内容。选项要简短（10字内），且彼此方向不同。'
-    const userMsg = '当前剧情：\n' + String(narrativeContent || '').slice(0, 800)
-    const resp = await callLLM(
-      [
-        { role: 'system', content: sysMsg },
-        { role: 'user', content: userMsg },
-      ],
-      null,
-      { maxTokens: 200, timeoutMs: 10000 }
-    )
-    const raw = resp.choices?.[0]?.message?.content || ''
-    // 解析：优先 JSON，失败用正则抽 [...] 里的字符串
-    let opts = null
+  await writeLlmIo(requestId, openid || '', 'options_fallback', 'pending', {
+    input: { narrative_chars: String(narrativeContent || '').length },
+  })
+  // 2026-08-03 13:13 先生反馈「选项又没有兜底生成」：
+  //   查证：兜底触发了（options_fallback_1785733882469 有记录），但 MiniMax 返回空 content（raw_response=""，5.7s）
+  //   → 解析失败 → 保留固定文案。失败率 50%（13:09 success / 13:11 error）
+  // 修：① 空内容/解析失败重试 1 次（最多 2 次尝试）② 解析增强：支持 `1. xxx\n2. xxx` 按行格式
+  //    ③ error 记录带 raw_response 便于 DBG 排查
+  let lastErr = ''
+  let lastRaw = ''
+  for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const parsed = JSON.parse(raw.replace(/```json\s*/gi, '').replace(/```\s*$/g, '').trim())
-      if (parsed && Array.isArray(parsed.options)) opts = parsed.options
-    } catch (e) { /* 走正则 */ }
-    if (!opts) {
-      const m = raw.match(/\[([\s\S]*?)\]/)
-      if (m) {
-        const strs = m[1].match(/"((?:\\.|[^"\\])*)"/g) || []
-        opts = strs.map(s => s.slice(1, -1).replace(/\\"/g, '"'))
+      const sysMsg = '你是历史穿越人生模拟游戏的选项生成器。根据玩家当前处境，生成 3 个【贴合剧情、风格古风】的行动选项。' +
+        '只输出 JSON：{"options":["选项1","选项2","选项3"]}，不要输出任何其他内容（不要代码块、不要解释）。选项要简短（10字内），且彼此方向不同。'
+      const userMsg = '当前剧情：\n' + String(narrativeContent || '').slice(0, 800)
+      const resp = await callLLM(
+        [
+          { role: 'system', content: sysMsg },
+          { role: 'user', content: userMsg },
+        ],
+        null,
+        { maxTokens: 200, timeoutMs: 10000 }
+      )
+      const raw = (resp.choices?.[0]?.message?.content || '').trim()
+      lastRaw = raw
+      let opts = null
+      if (raw) {
+        // 解析：优先 JSON，失败用正则抽 [...] 里的字符串
+        try {
+          const parsed = JSON.parse(raw.replace(/```json\s*/gi, '').replace(/```\s*$/g, '').trim())
+          if (parsed && Array.isArray(parsed.options)) opts = parsed.options
+        } catch (e) { /* 走正则 */ }
+        if (!opts) {
+          const m = raw.match(/\[([\s\S]*?)\]/)
+          if (m) {
+            const strs = m[1].match(/"((?:\\.|[^"\\])*)"/g) || []
+            opts = strs.map(s => s.slice(1, -1).replace(/\\"/g, '"'))
+          }
+        }
+        // 2026-08-03：AI 可能返回 `1. xxx\n2. xxx` /「一、xxx」格式 → 按行解析
+        if (!opts) {
+          opts = raw.split(/\n+/)
+            .map(l => l.replace(/^[\d一二三四五六七八九十]+[.、)）]\s*/, '').replace(/^["'「『]|["'」』]$/g, '').trim())
+            .filter(l => l.length >= 2 && l.length <= 20)
+        }
       }
+      if (opts && opts.length >= 2) {
+        opts = opts.map(s => String(s).trim()).filter(Boolean).slice(0, 4)
+        console.log('[optionsFallback] 生成成功 第' + attempt + '次 耗时=' + (Date.now() - t0) + 'ms, options=', JSON.stringify(opts))
+        await writeLlmIo(requestId, openid || '', 'options_fallback', 'success', {
+          input: { narrative_chars: String(narrativeContent || '').length, attempt },
+          raw_response: raw,
+          parsed: opts,
+          duration_ms: Date.now() - t0,
+        })
+        return opts
+      }
+      lastErr = raw ? ('解析不出 ≥2 个选项: ' + raw.slice(0, 120)) : 'AI 返回空内容'
+      console.log('[optionsFallback] 第' + attempt + '次失败: ' + lastErr)
+    } catch (e) {
+      lastErr = e.message
+      console.log('[optionsFallback] 第' + attempt + '次调用异常:', e.message, '耗时=' + (Date.now() - t0) + 'ms')
     }
-    if (!opts || opts.length < 2) {
-      console.log('[optionsFallback] 解析失败 raw=', raw.slice(0, 120))
-      return null
-    }
-    opts = opts.map(s => String(s).trim()).filter(Boolean).slice(0, 4)
-    console.log('[optionsFallback] 生成成功耗时=' + (Date.now() - t0) + 'ms, options=', JSON.stringify(opts))
-    return opts
-  } catch (e) {
-    console.log('[optionsFallback] 调用失败:', e.message, '耗时=' + (Date.now() - t0) + 'ms')
-    return null
   }
+  await writeLlmIo(requestId, openid || '', 'options_fallback', 'error', {
+    input: { narrative_chars: String(narrativeContent || '').length, attempts: 2 },
+    raw_response: lastRaw,
+    duration_ms: Date.now() - t0,
+    error: lastErr,
+  })
+  return null
 }
 
 function callLLM(messages, modelOverride, callOpts) {

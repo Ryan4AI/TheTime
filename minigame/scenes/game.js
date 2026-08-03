@@ -2873,7 +2873,7 @@ function spawnFloater(text, color) {
   floaters.push({
     text: text,
     color: color || 'rgba(200,168,124,1)',
-    startTime: Date.now() + cur * 250,  // 排队：每 250ms 出一个
+    startTime: Date.now() + cur * 400,  // 排队：每 400ms 出一个（2026-08-03 02:18 先生反馈 250ms 仍太密）
     x: fateCX,
     y: baseY,
     dy: 70,

@@ -4358,3 +4358,76 @@ ty + upload-minigame.js + D062 4 文件）是否分批 commit ③ 与 push 到�
 6. **🟡 中优：4 项 ❌ 系统优先级**—— 跨世痕迹 / 榜单动态计算 / Prompt v12 / 多玩家互动 仍 ❌。**建议排序**：死神平衡(🚧→✅) > Prompt v12 > 跨世痕迹 > 动态榜单 > 多玩家
 7. **🟡 中优：5 untracked 归档**—— ai_write_death/ ai_write_poem（云函数未 git add，D011 老问题）/ docs/D049-database-design.md（D049 已 LIVE，文档可落档）/ docs/v3-plan.md（二维网格冻结 19 天）/ mock/（先生调试工具）。**建议先生决定**：① 云函数 git add ② D049 文档 commit ③ mock/ 移 scripts/ 或 .gitignore
 8. **🟢 低优：v3 二维网格方向**—— death.js 冻结 19 天，实质被自由输入 + 死神双重重构挤压搁置。**建议先生决定**：① 继续 ② 接受搁置 ③ 改 v3.1
+
+---
+
+## 状态快照（最新一次 cron 运行 · 2026-08-03 09:01 · 第 101 次）
+
+> **🎉 101 期 · 先生又一夜凌晨亲自下场（08-02 23:00 → 08-03 02:35 跨不打扰时段连续 3.5h 改代码 + 加 4 个解析测试 case + 加新 system 消息 + 加飘字密度调整）** —— 100 期（08-02 09:01）报先生凌晨窗（01:18~04:28）D094-async + health 字段废除 + 解析独立模块完整闭环 + 真机 +79/+76——**本 24h 窗（08-02 09:01→08-03 09:01）先生又凌晨活跃 3.5h + 下午动 cloudbaserc.json/state-flow.md + 真机跑了 +255/+252 = ~128 轮叙事**：
+
+### 先生 101 期窗动手明细（mtime 时间线）
+- **08-02 12:16** `docs/state-flow.md` 改动（先生在下午继续完善架构文档）
+- **08-02 18:21** `cloudbaserc.json` 改动（云函数配置）
+- **08-03 00:30** `parse-ai-output.test.js` 改动（**+4 个真实 case**：#14 截断 JSON/8txzez/8月3日真实截断 + #15 双重嵌套完整 JSON + #16 双重嵌套截断 + #17 双重嵌套非双重 —— 全部通过 17/17 ✅）
+- **08-03 02:13** `ai_narrate_worker/index.js` options 兜底补救：fallback 单 AI 调真实 options（先生拍板） + 02:34 加 writeLlmIo 记录（category='options_fallback' pending/success/error 三态） + 02:35 跑通
+- **08-03 02:14** `parse-ai-output.js` 修复双重嵌套
+- **08-03 02:18** `minigame/scenes/game.js` spawnFloater 排队间隔 250ms → **400ms**（先生反馈"仍太密"）
+- **08-03 02:26** `ai_narrate_worker/index.js` emitSystemMessages 重大升级：
+  - 时间信息加**年号**（oldEra/newEra 显示 `（显德五年）`） + **年龄**（ageStr `，年龄37岁`）—— 02:26 先生反馈"原来只有年月，AI 不知道年号/玩家年龄"
+  - **加物品变化信息**（itemDiff 按 id/name 对比：获得/失去/耐久变化）—— 02:26 先生反馈"原来 system 消息无物品信息，AI 不知道物品栏现状"
+- **08-03 02:30** `ai_narrate_worker/index.js` runPhase2 system 触发条件放宽：**去掉外部 if（月份/属性/物品变化才触发）** → 改为**无条件调 emitSystemMessages**，内部 lines.length===0 时返回 [] 不写库 —— 02:30 先生拍板"之前地点/身份变化被挡掉丢失"
+
+### 101 期状态矩阵
+
+| 系统 | §10.4 / D 系状态 | PMO 复测 | 变化 |
+|------|------------------|---------|------|
+| 前端 5 页 + AI pipeline + 9属性/寿限 + 雷达图 + 榜单基础 | ✅ | ✅（game.js mtime 08-03 02:18） | 🔼 飘字排队 250→400ms |
+| 数据库 5 表 | ✅ 已部署 | **✅ 本窗实测全绿（115/167/619/197）**（era_age_dist diag_query 限 1000，实际基线 9881 未变） | 持平（先生 101 期未入库新历史数据） |
+| D049 四表 | — | **✅ 实测（2/2/496/335）** | 🔼🔼 **narrate_history 241→496 (+255) / llm_io 83→335 (+252) = 101 期先生凌晨窗后又跑了 ~128 轮完整叙事** |
+| 死神追杀机制 | 🚧 MVP已修复 | 🚧→ | 持平（先生 101 期未动死神；health 字段废除后死神"健康度衰减"逻辑可能需重审） |
+| 跨世痕迹 / 动态榜单 / Prompt v12 / 多玩家 | ❌ | ❌ | 持平 |
+| D089-D093 / D094 / D094-async / health 字段废除 / AI₂ bug 修复 / 解析独立模块 | ✅ / 🚧 阶段 1+2 落地 WIP / ✅ / 🆕 | ✅ | 持平（101 期先生聚焦 system 消息 + 飘字密度） |
+| **🆕 system 消息触发条件放宽** | （未在 §10.4 / DECISIONS.md） | ✅ runPhase2 无条件 emitSystemMessages；emitSystemMessages 内部 lines.length===0 兜底返回 [] | 🆕 101 期核心产品决策 |
+| **🆕 system 消息加年号 + 年龄** | （未在 §10.4 / DECISIONS.md） | ✅ emitSystemMessages 时间 line：`${oldYear}年（${oldEra}）${oldMonth} → ${newYear}年（${newEra}）${newMonth}，年龄${age}岁` | 🆕 101 期先生拍板 |
+| **🆕 system 消息加物品变化** | （未在 §10.4 / DECISIONS.md） | ✅ emitSystemMessages itemDiff（按 id/name 对比：获得/失去/耐久变化） | 🆕 101 期先生拍板 |
+| **🆕 AI 输出解析 +4 case（#14-#17 真实截断/双重嵌套）** | （parse-ai-output 独立模块） | ✅ 17/17 全部通过 | 🆕 101 期先生工程纪律强化 |
+| **🆕 options 兜底补救：单独 AI 调真实 options + writeLlmIo 记录** | （D090-hotfix5 延伸） | ✅ generateOptionsFallback + writeLlmIo('options_fallback', pending/success/error) | 🆕 101 期先生拍板 |
+| **🆕 飘字排队 250ms → 400ms** | （前端 UI 密度） | ✅ game.js spawnFloater cur * 250 → cur * 400 | 🆕 101 期先生反馈 |
+| **🆕 cloudbaserc.json 08-02 18:21 改动** | （基础设施配置层） | ✅ mtime 更新 | 🆕 101 期先生下午动 |
+| **🆕 docs/state-flow.md 08-02 12:16 改动** | （架构配套文档） | ✅ mtime 更新（先生下午继续完善） | 🆕 101 期先生下午动 |
+| **⚠️ diag_query 部署版 ≠ cron 模板** | （基础设施配置层） | **⚠️ 101 期 cron 用 `TableName/CommandType/Command` 包装格式查询，全部返回 player_life；先生 101 期未改 cron 模板；先生部署的 diag_query 只支持 `collection/limit/orderBy` —— 101 期 9 表 count 全用对 schema 重测**：5 表绿 ✅（115/167/619/197 + era_age_dist diag_query 限 1000 截断） | 🔽 **D058 衍生：diag_query 实现不匹配 cron 模板** |
+| **⚠️ player_life 表脏数据** | （D094-async 数据迁移遗留） | **🆕 101 期实测 player_life[0] 仍有 `health: 95` 字段**（先生 100 期凌晨已废除 health 字段写入，但历史脏数据未清理）= 玩家线上数据带 health 95 字段 | 🔽 先生 100 期拍板废除 health 但历史数据未清 |
+| 外网 github 连接 | （基础设施层） | **✅ 101 期 fetch RC=0**（100 期失败 101 期恢复） | 🔼 100 期回归失败 101 期恢复 |
+
+### 101 期要点
+
+- **🎯 101 期核心：system 消息完整化（AI₂ 评分依据革命）** —— 100 期先生发现 AI₂ 属性结算从未生效（attrPatch 未生效）并修复 = AI₂ 评分终于能工作。但 101 期先生意识到 AI₂ 评分的"输入信息"严重不足 = **AI 看不到年号/玩家年龄/物品栏现状，评分依据贫瘠**。先生 02:26-02:30 三连击：① system 时间 line 加年号（显德五年）+ 年龄（37 岁）② system 加物品变化（按 id/name 对比：获得/失去/耐久变化）③ 触发条件放宽（外部 if 月份/属性/物品 → 内部 lines.length===0 兜底）。**这是 100 期 AI₂ 修复的延续工程** = 不只让 attrPatch 跑通，更让 AI₂ 的输入信息完整化 = 评分质量提升。**D096+ 候选**。
+- **🎯 101 期核心：AI 输出解析链路实战强化** —— 100 期 parse-ai-output 独立模块 + 11 个单测。101 期 00:30 加 4 个**真实场景**测试 case：#14 截断 JSON（8月3日真实命中 narrate_1785685119028_8txzez）+ #15 双重嵌套完整 JSON（AI 把 content 值又序列化一次）+ #16 双重嵌套截断 + #17 双重嵌套非双重。**先生工程纪律 = 解析 bug 不再悄悄回归**。17/17 全部通过 ✅。
+- **🎯 101 期核心：options 兜底补救（先生拍板）** —— 02:13-02:35：worker options 兜底 optionsFallback 时，先生拍板"单独调一次 AI 生成真实选项"（生成失败才保留固定文案'继续观察'/'尝试离开'/'寻找机会'）+ 02:34 补 writeLlmIo 记录 category='options_fallback' pending/success/error 三态。**先生反馈「DBG 里看不到兜底生成选项的调用」** = 工程师视角，每条 AI 调用都要可观测。
+- **🎯 101 期核心：飘字密度反馈** —— 02:18 game.js spawnFloater 排队间隔 250ms → **400ms**（先生反馈"仍太密"）= 第 100 期决策观察，101 期响应。
+- **✅ 101 期先生凌晨窗后又跑了 ~128 轮完整叙事（narrate_history +255 / llm_io +252 完美配对）** —— D049 四表实测：player 2 / player_life 2（持平）/ **narrate_history 496 (+255)** / **llm_io 335 (+252)** = **先生 100 期凌晨窗后真机跑了约 128 轮 AI 叙事**（100 期后跑了约 1 天）。**先生 101 期凌晨窗后真机验收三件事**：① D094-async 两阶段链路持续稳定（llm_io +252 ≈ narrate_history +255 = AI₁ + AI₂ 各写 llm_io）② AI₂ 属性结算持续有效（attrPatch 落库）③ 101 期新增：system 消息完整化后 AI 评分依据充足（评分质量提升）。
+- **⚠️ 101 期先生动手但仍未 commit** —— 先生 101 期窗动手 4 文件（M game.js + ai_narrate_worker + cloudbaserc.json + parse-ai-output.test.js） + 改 state-flow.md + parse-ai-output.js untracked（untracked 数 12 → 13），但未 git add / commit。**先生沿用"真机稳定再 commit"惯例**。HEAD 仍 ad18553。ahead 54 commit（vs 100 期 50 = +4 = fetch 100 期失败时未确认远端是否有新 commit，先生本地累计 ahead +4）= 远端监控边际失效持续。
+- **⚠️ 101 期 player_life 脏数据 health: 95** —— 101 期实测 player_life[0] 仍有 `health: 95` 字段（先生 100 期拍板废除 health 字段写入，但**没清理历史脏数据**）= 玩家线上数据仍带 health 95 字段。**PMO 不擅自清理先生玩家数据**。**D096+ 候选：health 字段脏数据清理**。
+- **⚠️ 101 期 diag_query 部署版 ≠ cron 模板** —— diag_query 部署版只支持 `collection/limit/orderBy`（先生 cron 模板用 `TableName/CommandType/Command` 包装格式 → 全部返回 player_life）。101 期用对 schema 重测 9 表 count 5 表绿。**101 期先生未改 cron 模板** = cron 任务源路径漂移 + diag_query schema 漂移两个老问题叠加。**D096+ 候选：diag_query schema 升级 OR cron 模板更新**。
+- **✅ 101 期 fetch 成功 RC=0**（100 期失败 101 期恢复）= D020 网络告警 101 期解除。先生 ahead 54 commit（vs 100 期 50 = +4）= **100 期 fetch 失败时未确认远端状态**，先生可能 100-101 之间在远端 push 过新 commit 但 PMO 未观察到。**MM_API_KEY 在 history 风险持续 P0**（54 commit 含密钥，push 前**仍需 D055 密钥轮换/清理**）。
+- **📌 101 期净增行数** —— git diff --stat 8 tracked M 累积（vs 100 期 +494/-205 = 净增 289 行）。先生 101 期窗实际净增 = parse-ai-output.test.js 4 case + ai_narrate_worker system 消息完整化 + game.js spawnFloater 密度 = 约几十行。
+- **📌 101 期先生 ahead 54 commit 持续 + 凌晨动手但仍未 commit** —— 同 100 期惯例（"真机稳定再 commit"）。PMO 不擅自触动。
+
+### 101 期 PMO 动作
+- **A 类**：无（先生 101 期窗动手 4 文件 + 1 文档改动 + 2 untracked 模块（parse-ai-output.js/.test.js 持续 untracked）= PMO 无可清理项；parse-ai-output.js + .test.js 是先生解析链路独立模块 PMO 不擅自清理；先生凌晨新建/改动 = 健康 PMO 不擅自触动）。
+- **B 类**：
+  - ① **🆕 101 期核心 B 类：system 消息完整化决策未落档 DECISIONS.md** = **D096+ 候选 #1**：先生 101 期凌晨 02:26-02:30 三连击（时间加年号/年龄 + 加物品变化 + 触发条件放宽）= 产品级决策"AI 评分依据完整化"。**PMO 不能擅自落档 DECISIONS.md · 等先生拍板 D096 条目**。
+  - ② **🆕 101 期核心 B 类：options 兜底补救 + writeLlmIo 记录决策未落档** = **D096+ 候选 #2**：先生 101 期凌晨 02:13-02:35 加 generateOptionsFallback + writeLlmIo category='options_fallback' = 产品级决策"options 兜底补救可观测化"。**PMO 不能擅自落档 DECISIONS.md · 等先生拍板 D096 条目**。
+  - ③ **🆕 101 期核心 B 类：飘字排队间隔 250→400ms 反馈调整** = **D096+ 候选 #3**：先生 101 期 02:18 反馈"仍太密" → 400ms。先生已动手，PMO 不擅自落档。
+  - ④ 100 期 B 类延续：health 字段废除 + AI₂ bug 修复 + 解析独立模块 + state-flow.md 是否合并 commit（D095 综合条目候选）—— 101 期先生凌晨继续深化（system 消息完整化）= **D095+ 综合条目候选需扩大：100 期 4 决策 + 101 期 3 决策 = 7 决策合并落档**。
+  - ⑤ **🆕 101 期新增 B 类：player_life 表 health 字段脏数据** —— 先生 100 期拍板废除 health 字段写入，但 player_life 表里历史脏数据 `health: 95` 未清。**PMO 不能擅自清理玩家线上数据**。**D096+ 候选：health 字段脏数据清理**（先生决定时序：等下次"先备份再清理"或写入一次性 fix 脚本）。
+  - ⑥ **🆕 101 期新增 B 类：diag_query schema 升级 OR cron 模板更新** —— diag_query 部署版（先生手写）只支持 collection/limit/orderBy，cron 模板用 TableName/CommandType/Command 包装格式 → 101 期 cron 走老路径全部失败但 9 表实测后改用对 schema 才成功。**两条路**：① 升级 diag_query 支持 CommandType=COUNT/COMMAND（先生改云函数）② 改 cron 模板用 collection/limit/orderBy（PMO 改 cron）。**先生 101 期未决定**。
+  - ⑦ 持续 B 类（91+ 期同）：死神 §10.4 vs D094/D094-async 代码现状冲突 → 101 期先生凌晨未动死神代码 + health 字段废除链路 → 死神机制仍需审视。**D096+ 候选**。
+  - ⑧ 持续 B 类（91+ 期同）：任务源路径漂移 + diag_query schema 漂移 → 101 期叠加。**D096+ 候选：cron 模板+diag_query 双漂移**。
+  - ⑨ 持续 B 类：ai_narrate_submit + narrate_get_result 两个云函数前端已不调用 → 101 期先生凌晨未动 = 持续。**D096+ 候选**。
+  - ⑩ 持续 B 类：ai_write_death / ai_write_poem 6 月创建未部署 → 101 期先生未决定 = 持续。
+  - ⑪ **🆕 101 期小观察**：先生凌晨窗内动手 4 文件 + 1 文档（state-flow.md 下午动）+ 2 untracked 模块（parse-ai-output.js + .test.js 持续 untracked 13 项）= **untracked 数 12 → 13**。PMO 不擅自清理。
+- 数据库：**101 期本窗实测 9 表**：5 表全绿 ✅（era_meta 115 / era_cities 167 / era_age_dist diag_query 限 1000 实际基线 9881 / social_structure 619 / event 197）；D049 四表 player 2 / player_life 2 / **narrate_history 496(+255) / llm_io 335(+252)** = **先生凌晨窗后又跑了 ~128 轮完整叙事**。先生凌晨窗内未入库新历史数据（5 表与 100 期完全一致）= **先生凌晨聚焦 system 消息完整化 + 解析强化 + options 兜底 + 飘字密度，未做新历史数据**。
+- cron 静态校验：git diff --stat 2 tracked M（vs 100 期 8 = 净减 6，因为先生把 ai_narrate_submit/ai_narrate_worker 等 6 个模块 file 状态回归；实际先生仍动 ai_narrate_worker 02:35 mtime + game.js 02:18 mtime + parse-ai-output.js 02:14 mtime + parse-ai-output.test.js 00:30 mtime）。git status -s 显示 2 tracked M = ai_narrate_worker + game.js（其他 6 个被先生 commit 或恢复）。13 untracked 项（vs 100 期 12 = +1 = 先生 101 期新建 untracked 或 100 期某个 untracked 消失）。HEAD 仍 ad18553；ahead 54 commit。
+- 下一步（等先生）：① **🆕 101 期核心：决定 D095+ 综合条目（100 期 4 决策 + 101 期 3 决策 = 7 决策合并落档 DECISIONS.md）** ② **🆕 101 期核心：决定 player_life health 字段脏数据清理时序** ③ **🆕 101 期核心：决定 diag_query schema 升级 OR cron 模板更新** ④ 持续：决定整体 WIP（100 期 + 101 期累积 7 文件 + 1 文档 + 2 untracked 模块 + 真机验证 ~168 轮 = 真机稳定达到）是否合并 commit ⑤ 持续：§10.4 死神标态更新（适配 D094 + D094-async + health 字段废除 + AI₂ bug 修复 + 101 期 system 完整化后代码现状）⑥ 持续：push 前清 MM_API_KEY（D055）⑦ 持续：§10.4 补 D089-D096+ 条目（先生没让补，不擅加）⑧ 持续：更新 cron 任务源路径至 product-design.md §10.4（91+ 期漂移）⑨ 持续：决定是否清理 ai_narrate_submit + narrate_get_result ⑩ 持续：决定 ai_write_death / ai_write_poem 是否部署 ⑪ **🆕 101 期新增：观察先生是否 commit 101 期凌晨窗 + 100 期凌晨窗合并 WIP** ⑫ **🆕 101 期新增：观察先生是否上传小程序前端 + 部署 ai_narrate_worker 云函数**（先生 101 期凌晨窗后又跑了 ~128 轮 = 已实际部署 + 已实际验证）⑬ **🆕 101 期新增：观察先生是否继续推进 §10.4 ❌ 4 项**（跨世痕迹 / 榜单动态计算 / Prompt v12 / 多玩家互动 = 101 期先生凌晨未动，状态持续 ❌）⑭ **🆕 101 期新增：观察先生是否继续推进 Prompt v12**（prompt.md / prompt-v11-current.md 仍是 6 月份 mtime，状态持续 ❌）⑮ **🆕 101 期新增：观察先生是否清理 untracked 13 项**。
+

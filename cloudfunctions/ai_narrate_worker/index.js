@@ -2258,86 +2258,84 @@ async function generateOptionsFallback(narrativeContent, openid) {
   await writeLlmIo(requestId, openid || '', 'options_fallback', 'pending', {
     input: { narrative_chars: String(narrativeContent || '').length },
   })
-  // 2026-08-03 13:13 先生反馈「选项又没有兜底生成」：
-  //   查证：兜底触发了（options_fallback_1785733882469 有记录），但 MiniMax 返回空 content（raw_response=""，5.7s）
-  //   → 解析失败 → 保留固定文案。失败率 50%（13:09 success / 13:11 error）
-  // 修：① 空内容/解析失败重试 1 次（最多 2 次尝试）② 解析增强：支持 `1. xxx\n2. xxx` 按行格式
-  //    ③ error 记录带 raw_response 便于 DBG 排查
-  let lastErr = ''
-  let lastRaw = ''
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const sysMsg = '你是历史穿越人生模拟游戏的选项生成器。根据玩家当前处境，生成 3 个【贴合剧情、风格古风】的行动选项。' +
-        '只输出 JSON：{"options":["选项1","选项2","选项3"]}，不要输出任何其他内容（不要代码块、不要解释）。选项要简短（10字内），且彼此方向不同。'
-      const userMsg = '当前剧情：\n' + String(narrativeContent || '').slice(0, 800)
-      const resp = await callLLM(
-        [
-          { role: 'system', content: sysMsg },
-          { role: 'user', content: userMsg },
-        ],
-        null,
-        // 2026-08-03 13:19 先生追问「为什么返回空」→ 复现定位真因：
-        //   reasoning_split:true 下模型先输出推理再输出正文，max_tokens=200 被 reasoning_tokens 吃光
-        //   （实测失败时 completion_tokens=200 全为 reasoning_tokens，content 恒空；5 次复现 4 次失败）
-        //   治本：max_tokens 200 → 800（实测 3/3 成功，reasoning 136-244 后仍有充足额度输出选项）
-        { maxTokens: 800, timeoutMs: 10000 }
-      )
-      const raw = (resp.choices?.[0]?.message?.content || '').trim()
-      lastRaw = raw
-      let opts = null
-      if (raw) {
-        // 解析：优先 JSON，失败用正则抽 [...] 里的字符串
-        try {
-          const parsed = JSON.parse(raw.replace(/```json\s*/gi, '').replace(/```\s*$/g, '').trim())
-          if (parsed && Array.isArray(parsed.options)) opts = parsed.options
-        } catch (e) { /* 走正则 */ }
-        if (!opts) {
-          const m = raw.match(/\[([\s\S]*?)\]/)
-          if (m) {
-            const strs = m[1].match(/"((?:\\.|[^"\\])*)"/g) || []
-            opts = strs.map(s => s.slice(1, -1).replace(/\\"/g, '"'))
-          }
-        }
-        // 2026-08-03：AI 可能返回 `1. xxx\n2. xxx` /「一、xxx」格式 → 按行解析
-        if (!opts) {
-          opts = raw.split(/\n+/)
-            .map(l => l.replace(/^[\d一二三四五六七八九十]+[.、)）]\s*/, '').replace(/^["'「『]|["'」』]$/g, '').trim())
-            .filter(l => l.length >= 2 && l.length <= 20)
+  // 2026-08-03 13:19-13:29 先生拍板（真因链）：
+  //   ① 空 content 根因 = think:false+reasoning_split:true 下 max_tokens=200 被 reasoning_tokens 吃光（实测 5 次 4 空）
+  //   ② 实测 think:false 无效（模型强制思考）→ 正确配置 = 只留 reasoning_split:true（thinkOff）+ max_tokens=400（5/5 稳定）
+  //   ③ 先生指示去掉重试兜底 → 恢复单次调用，参数配对后一次成功
+  try {
+    const sysMsg = '你是历史穿越人生模拟游戏的选项生成器。根据玩家当前处境，生成 3 个【贴合剧情、风格古风】的行动选项。' +
+      '只输出 JSON：{"options":["选项1","选项2","选项3"]}，不要输出任何其他内容（不要代码块、不要解释）。选项要简短（10字内），且彼此方向不同。'
+    const userMsg = '当前剧情：\n' + String(narrativeContent || '').slice(0, 800)
+    const resp = await callLLM(
+      [
+        { role: 'system', content: sysMsg },
+        { role: 'user', content: userMsg },
+      ],
+      null,
+      { maxTokens: 400, timeoutMs: 10000, thinkOff: true }
+    )
+    const raw = (resp.choices?.[0]?.message?.content || '').trim()
+    // 解析：优先 JSON，失败用正则抽 [...] 里的字符串，再失败按行格式（`1. xxx\n2. xxx`）
+    let opts = null
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw.replace(/```json\s*/gi, '').replace(/```\s*$/g, '').trim())
+        if (parsed && Array.isArray(parsed.options)) opts = parsed.options
+      } catch (e) { /* 走正则 */ }
+      if (!opts) {
+        const m = raw.match(/\[([\s\S]*?)\]/)
+        if (m) {
+          const strs = m[1].match(/"((?:\\.|[^"\\])*)"/g) || []
+          opts = strs.map(s => s.slice(1, -1).replace(/\\"/g, '"'))
         }
       }
-      if (opts && opts.length >= 2) {
-        opts = opts.map(s => String(s).trim()).filter(Boolean).slice(0, 4)
-        console.log('[optionsFallback] 生成成功 第' + attempt + '次 耗时=' + (Date.now() - t0) + 'ms, options=', JSON.stringify(opts))
-        await writeLlmIo(requestId, openid || '', 'options_fallback', 'success', {
-          input: { narrative_chars: String(narrativeContent || '').length, attempt },
-          raw_response: raw,
-          parsed: opts,
-          duration_ms: Date.now() - t0,
-        })
-        return opts
+      if (!opts) {
+        opts = raw.split(/\n+/)
+          .map(l => l.replace(/^[\d一二三四五六七八九十]+[.、)）]\s*/, '').replace(/^["'「『]|["'」』]$/g, '').trim())
+          .filter(l => l.length >= 2 && l.length <= 20)
       }
-      lastErr = raw ? ('解析不出 ≥2 个选项: ' + raw.slice(0, 120)) : 'AI 返回空内容'
-      console.log('[optionsFallback] 第' + attempt + '次失败: ' + lastErr)
-    } catch (e) {
-      lastErr = e.message
-      console.log('[optionsFallback] 第' + attempt + '次调用异常:', e.message, '耗时=' + (Date.now() - t0) + 'ms')
     }
+    if (!opts || opts.length < 2) {
+      console.log('[optionsFallback] 解析失败 raw=', raw.slice(0, 120))
+      await writeLlmIo(requestId, openid || '', 'options_fallback', 'error', {
+        input: { narrative_chars: String(narrativeContent || '').length },
+        raw_response: raw,
+        duration_ms: Date.now() - t0,
+        error: raw ? ('解析不出 ≥2 个选项: ' + raw.slice(0, 120)) : 'AI 返回空内容',
+      })
+      return null
+    }
+    opts = opts.map(s => String(s).trim()).filter(Boolean).slice(0, 4)
+    console.log('[optionsFallback] 生成成功耗时=' + (Date.now() - t0) + 'ms, options=', JSON.stringify(opts))
+    await writeLlmIo(requestId, openid || '', 'options_fallback', 'success', {
+      input: { narrative_chars: String(narrativeContent || '').length },
+      raw_response: raw,
+      parsed: opts,
+      duration_ms: Date.now() - t0,
+    })
+    return opts
+  } catch (e) {
+    console.log('[optionsFallback] 调用失败:', e.message, '耗时=' + (Date.now() - t0) + 'ms')
+    await writeLlmIo(requestId, openid || '', 'options_fallback', 'error', {
+      input: { narrative_chars: String(narrativeContent || '').length },
+      duration_ms: Date.now() - t0,
+      error: e.message,
+    })
+    return null
   }
-  await writeLlmIo(requestId, openid || '', 'options_fallback', 'error', {
-    input: { narrative_chars: String(narrativeContent || '').length, attempts: 2 },
-    raw_response: lastRaw,
-    duration_ms: Date.now() - t0,
-    error: lastErr,
-  })
-  return null
 }
 
 function callLLM(messages, modelOverride, callOpts) {
   return new Promise((resolve, reject) => {
     const useModel = modelOverride || MM_MODEL
+    // 2026-08-03 13:29 先生拍板：实测 think:false 对 M2.7-highspeed 无效（模型强制思考，
+    //   不带 reasoning_split 时思考直接混进 content；带 reasoning_split 时 thinking 仍占 completion_tokens）
+    //   正确配置 = 只留 reasoning_split:true（思考隔离到 reasoning_content，content 保持干净）
+    //   主链路保持原样（max_tokens=1500 额度充裕，行为已验证）；轻量调用用 thinkOff 去掉 think 字段
     const data = JSON.stringify({
       model: useModel, messages,
-      max_tokens: (callOpts && callOpts.maxTokens) || MAX_TOKENS, temperature: TEMPERATURE, think: false,
+      max_tokens: (callOpts && callOpts.maxTokens) || MAX_TOKENS, temperature: TEMPERATURE,
+      ...((callOpts && callOpts.thinkOff) ? {} : { think: false }),
       reasoning_split: true,  // v3.0.14b: MiniMax 关 thinking（先生 13:44 拍板·reasoning_split 生效）
       stream: false,
     })

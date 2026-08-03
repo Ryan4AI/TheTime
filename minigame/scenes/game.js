@@ -1787,18 +1787,25 @@ function fetchBgImageWithScene(narrativeText) {
   if (typeof wx === 'undefined') return
   const _openid = (wx.getStorageSync && wx.getStorageSync('openid')) || ''
   let done = false
+  // 2026-08-03 22:30 巡检发现：scene 8/8 全超时（MiniMax 推理模式稳定 >4.8s，赶不上 5s 上限）
+  // 修：5s 兜底先出模板图（先生拍板的防空白上限，不动）；scene 迟到成功 → 用 bgImageSeq latest-wins 替换成更贴剧情的图
+  //   兜底后 scene 失败/超时 → 保持模板图，不重复兜底
   const fallback = () => { if (!done) { done = true; fetchBgImage(narrativeText || '') } }
   const timer = setTimeout(fallback, 5000)
   wx.cloud.callFunction({
     name: 'ai_narrate_worker',
     data: { phase: 'scene', openid: _openid, input: narrativeText || '' },
     success: (res) => {
-      if (done) return
-      done = true
       clearTimeout(timer)
       const r = (res && res.result) || {}
       const scene = (r.success && r.scene) ? r.scene : ''
-      fetchBgImage(scene || narrativeText || '')
+      if (scene) {
+        // scene 成功（无论是否已兜底）→ 替换成 scene 图；latest-wins 保证只显示最新
+        fetchBgImage(scene)
+      } else if (!done) {
+        done = true
+        fetchBgImage(narrativeText || '')
+      }
     },
     fail: () => { clearTimeout(timer); fallback() },
   })

@@ -2276,7 +2276,11 @@ async function generateOptionsFallback(narrativeContent, openid) {
           { role: 'user', content: userMsg },
         ],
         null,
-        { maxTokens: 200, timeoutMs: 10000 }
+        // 2026-08-03 13:19 先生追问「为什么返回空」→ 复现定位真因：
+        //   reasoning_split:true 下模型先输出推理再输出正文，max_tokens=200 被 reasoning_tokens 吃光
+        //   （实测失败时 completion_tokens=200 全为 reasoning_tokens，content 恒空；5 次复现 4 次失败）
+        //   治本：max_tokens 200 → 800（实测 3/3 成功，reasoning 136-244 后仍有充足额度输出选项）
+        { maxTokens: 800, timeoutMs: 10000 }
       )
       const raw = (resp.choices?.[0]?.message?.content || '').trim()
       lastRaw = raw

@@ -2334,6 +2334,7 @@ async function generateOptionsFallback(narrativeContent, openid) {
 function callLLM(messages, modelOverride, callOpts) {
   return new Promise((resolve, reject) => {
     const useModel = modelOverride || MM_MODEL
+    const timeoutMs = (callOpts && callOpts.timeoutMs) || LLM_TIMEOUT_MS
     // 2026-08-03 13:29 先生拍板：实测 think:false 对 M2.7-highspeed 无效（模型强制思考，
     //   不带 reasoning_split 时思考直接混进 content；带 reasoning_split 时 thinking 仍占 completion_tokens）
     //   正确配置 = 只留 reasoning_split:true（思考隔离到 reasoning_content，content 保持干净）
@@ -2346,14 +2347,29 @@ function callLLM(messages, modelOverride, callOpts) {
       stream: false,
     })
     const url = new URL(MM_BASE_URL + '/chat/completions')
+    // 2026-08-04 15:20 巡检修复：socket 空闲超时（https.request timeout 选项）在 MiniMax 流式吐
+    //   reasoning_content 时不触发（连接持续活跃）→ scene 请求挂起到云函数 60s 平台杀进程，
+    //   writeLlmIo('error') 永远跑不到 → llm_io 卡 pending（08-04 凌晨 47 条）。
+    // 修：硬性截止计时器，到点强制 req.destroy() + reject('AI响应超时')，不依赖 socket 空闲。
+    //   保证 callLLM 必在 timeoutMs 内 settle；settled 防抖避免 destroy 后 error 事件二次 reject。
+    let settled = false
+    const hardTimeout = setTimeout(() => {
+      if (settled) return
+      settled = true
+      req.destroy()
+      reject(new Error('AI响应超时'))
+    }, timeoutMs)
     const req = https.request({
       hostname: url.hostname, path: url.pathname, method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + MM_API_KEY },
-      timeout: (callOpts && callOpts.timeoutMs) || LLM_TIMEOUT_MS,
+      timeout: timeoutMs,
     }, res => {
       let body = ''
       res.on('data', chunk => body += chunk)
       res.on('end', () => {
+        if (settled) return
+        settled = true
+        clearTimeout(hardTimeout)
         if (res.statusCode !== 200) {
           console.error('[ai_narrate_worker] AI 非 200 响应，model=' + useModel + ', status=' + res.statusCode + ', body:', body)
           const err = new Error(`AI服务暂不可用 (${res.statusCode})`)
@@ -2365,8 +2381,14 @@ function callLLM(messages, modelOverride, callOpts) {
         try { resolve(JSON.parse(body)) } catch (e) { reject(new Error('AI响应格式异常')) }
       })
     })
-    req.on('error', reject)
-    req.on('timeout', () => { req.destroy(); reject(new Error('AI响应超时')) })
+    req.on('error', (e) => { if (settled) return; settled = true; clearTimeout(hardTimeout); reject(e) })
+    req.on('timeout', () => {
+      if (settled) return
+      settled = true
+      clearTimeout(hardTimeout)
+      req.destroy()
+      reject(new Error('AI响应超时'))
+    })
     req.write(data)
     req.end()
   })

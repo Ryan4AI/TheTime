@@ -21,7 +21,7 @@
  *   - history 为空（首轮 init）时才补"开始"防 MiniMax 2013
  *
  * v0.2.5 — 按 docs/prompt.md 完整替换 buildSystemPrompt 字符串（先生 2026-06-12 09:31 拍板）
- *   - AI 角色定位："死神"（先生 prompt.md 开场白）—— 玩家逗留越久 AI 越差劲
+ *   - AI 角色定位：已废弃（原"死神"设定，2026-08-17 终结）
  *   - 跨世机制：v0.2.4 改写版 → 先生 v9 原文（4 层痕迹：文字/血脉/物品/念念不忘）
  *   - 世界观：5 种危险 → 6 种（多了"其它"）；写危险原则 #3 加"诱导玩家进圈套"
  *   - 写危险原则 #4："梯度" 删掉（先生 prompt.md 没这条）
@@ -72,6 +72,27 @@ const BOARD_THRESHOLDS = {
   '名医榜': 2550,   '名将榜': 5200,   '富商榜': 3000,
   '文豪榜': 4350,   '能臣榜': 3445,   '义士榜': 2700,
   '全能榜': 19978,  '颜值榜': 8000,
+}
+
+// 时间跨度建议分布（2026-08-16 先生拍板方案 B）
+// 平均 month_delta ≈ 2.06，400 轮 ≈ 69 年
+const MONTH_DELTA_WEIGHTS = [
+  { value: 0,  weight: 35 },    // 同日到几天（不跨月）
+  { value: 1,  weight: 37.5 },  // 跨月（约一个月）
+  { value: 2,  weight: 12 },    // 跨季（约两个月）
+  { value: 3,  weight: 5 },     // 跨季度（约三个月）
+  { value: 6,  weight: 3.5 },   // 半年
+  { value: 12, weight: 1.5 },   // 一年
+  { value: 60, weight: 0.5 },   // 五年以上
+]
+function weightedRandom(weights) {
+  const total = weights.reduce((s, w) => s + w.weight, 0)
+  let r = Math.random() * total
+  for (const w of weights) {
+    r -= w.weight
+    if (r <= 0) return w.value
+  }
+  return weights[weights.length - 1].value
 }
 const BOARD_TARGET_PERSON = {
   '名医榜': '孔伯华(民国)', '名将榜': '林冲(宋)', '富商榜': '伍崇曜(清)',
@@ -419,6 +440,7 @@ async function runPhase1({ openid, input, is_retry, narrateRequestId }) {
   userPrompt = aiResult.userPrompt
   messages = aiResult.messages
   rawContent = aiResult.rawContent
+  const suggestedMonthDelta = aiResult.suggestedMonthDelta
   const t2 = Date.now()
   console.log('[PERF] callAI_ms=', t2 - t1)
   perfLogs.push({ stage: 'queryMonthEvent_ms', ms: t1 - t0 })
@@ -480,6 +502,7 @@ async function runPhase1({ openid, input, is_retry, narrateRequestId }) {
     history: history,
     monthEvent: monthEvent,
     is_retry: is_retry,
+    suggestedMonthDelta: suggestedMonthDelta,
     debug: {
       system_prompt: systemPrompt,
       user_prompt: userPrompt,
@@ -1243,8 +1266,8 @@ const SCENE_SYSTEM_PROMPT = `你是古风历史游戏的场景抽取器。阅读
 function extractScene(raw) {
   if (!raw) return ''
   let t = String(raw)
-  // 剥离 <think> 标签
-  t = t.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+  // 剥离 <think> 和 aihint 标签
+  t = t.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<aihint>[\s\S]*?<\/aihint>/g, '').trim()
   // 尝试解析 JSON（function_calls 或纯 JSON）
   const m = t.match(/\{[\s\S]*\}/)
   if (m) {
@@ -1426,7 +1449,7 @@ async function summarizeHistory(oldPart, prevSummaryText) {
   try {
     const resp = await callLLM(messages, MM_MODEL)
     let content = resp.choices?.[0]?.message?.content || ''
-    content = content.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<function_calls>[\s\S]*?<\/function_calls>/g, '').trim()
+    content = content.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<aihint>[\s\S]*?<\/aihint>/g, '').replace(/<function_calls>[\s\S]*?<\/function_calls>/g, '').trim()
     if (!content) return null
     // 2026-08-03 先生拍板：摘要结果不截断，AI 写多长就存多长（prompt 已约束 300-500 字）
     return content
@@ -1508,6 +1531,22 @@ async function callAI(state, input, history, monthEvent, isRetry, compressSummar
   // 之前是输出 4 个 branches（用 1 个扔 3 个）= 20s 延迟大头
   // 现在只输出 1 个 narrative（200 字）→ 输出时间 20s → 10-13s
   // 先生 2026-06-24 02:36 拍板：砍 3/4 冗余换取延迟
+
+  // 2026-08-16：时间跨度建议（系统随机 + AI 否决权）
+  const suggestedMonthDelta = weightedRandom(MONTH_DELTA_WEIGHTS)
+  const monthDeltaHints = {
+    0: '即将生成的剧情建议按同日到几天的节奏设计，不跨月。聚焦当天发生的事——一场对话、一次赶集、一日劳作。',
+    1: '即将生成的剧情建议按跨月的节奏设计（约一个月）。用自然过渡体现——"入秋了""年关将近""月余过去"。',
+    2: '即将生成的剧情建议按跨一个季节的节奏设计（如冬→春、夏→秋），用自然节律体现时间流逝——"河面的冰开始化了""院子里的桂树开了"。',
+    3: '即将生成的剧情建议按跨一个季度的节奏设计，用季节变化带过——"春种忙完，入夏后……""秋收过后，日子清闲下来"。',
+    6: '即将生成的剧情建议按跨半年的节奏设计，用季节/节气自然带过——"入秋后""开春以来""半年过去"。半年跨度可能有较大变化，选最重要的写。',
+    12: '即将生成的剧情建议按跨一年的节奏设计，用年份变化体现——"一年就这么过去了""又到了年关"。适合用标志性事件标记这一年。',
+    60: '即将生成的剧情建议按跨五年以上的节奏设计，必须有强叙事理由——"五年后，孩子已经能在院子里跑了"。用蒙太奇手法一笔带过中间年月。',
+  }
+  const deltaLabels = { 0: '同日到几天', 1: '约一个月', 2: '一季', 3: '一个季度', 6: '半年', 12: '一年', 60: '五年以上' }
+  const deltaLabel = deltaLabels[suggestedMonthDelta] || '几天到一个月'
+  const monthDeltaHint = monthDeltaHints[suggestedMonthDelta] || monthDeltaHints[1]
+  messages.push({ role: 'system', content: `【时间跨度：${deltaLabel}】${monthDeltaHint}时间跨度仅为系统建议，如果当前剧情不适合按此跨度推进，可灵活调整，以剧情连贯性优先。` })
 
   // v3.0.14ai-fix: formatReminder 加在 user 之后（messages 末尾）
   // 用 user 角色（避免 MiniMax 多 system 返 2013）
@@ -1595,7 +1634,7 @@ async function callAI(state, input, history, monthEvent, isRetry, compressSummar
     patch: singleBranch.patch || singleBranch.state || {},
   }]
 
-  return { branches: finalBranches, systemPrompt, userPrompt, messages, rawContent: cleaned }
+  return { branches: finalBranches, systemPrompt, userPrompt, messages, rawContent: cleaned, suggestedMonthDelta }
 }
 
 function buildSystemPrompt(state, monthEvent) {
@@ -2081,13 +2120,14 @@ async function callScoringAI(content, prevState, history, playerInput) {
     `- 不变场景：纯自保/不涉及他人`,
     ``,
     `## B. month_delta（剧情时间跨度，整数 0~60）`,
-    `- 0：同月内（看病/买东西/闲坐半日/一场对话）`,
-    `- 1：次日/几天（默认，多数回合用这个）`,
-    `- 3：季度（"过完冬天开春"/"夏去秋来"）`,
-    `- 6：半年（"入秋后"）`,
-    `- 12：跨年（"一年就这么过去了"）`,
-    `- 60：十年/极长（慎用，剧情必须明确"十年后"）`,
-    `- **关键**：根据剧情里写的时间线索判断（"次日""入秋""三年后"），不是固定填 1`,
+    `- 0：同日到几天——不跨月，聚焦当天发生的事（一场对话、一次赶集、一日劳作）`,
+    `- 1：跨月——约一个月，用自然过渡体现（"入秋了""月余过去"）`,
+    `- 2：跨季——约两个月，自然节律体现时间流逝（冬→春、夏→秋）`,
+    `- 3：跨季度——约三个月，季节变化带过（春种到秋收）`,
+    `- 6：跨半年——有较大变化（搬家、身份转变、关系变化）`,
+    `- 12：跨一年——用年份变化或标志性事件标记`,
+    `- 60：跨五年以上——极罕见，剧情必须有明确的长时间跨度描写`,
+    `- **关键**：结合剧情整体判断时间跨度，不是只找时间词。看场景变化、人物变化、季节描写、叙事节奏来综合推断`,
     ``,
     `## C. items（物品状态，可选字段，无变化不写）`,
     `- **items 必须是 JSON 对象 {物品名: 变化}，禁止写成数组 [{...}]**（2026-08-02 实测：数组会导致物品解析错误）`,
@@ -2151,7 +2191,7 @@ async function callScoringAI(content, prevState, history, playerInput) {
     `3. 每个新事件 → 映射到 9 属性（用上面的"加分/减分事件"清单）`,
     `4. 检查抑制规则：当前属性 × 系数`,
     `5. 检查年龄约束：幼儿/少年能不能获得这个属性？`,
-    `6. 检查 time 跨度：剧情里写了"次日/季节/年"？给出 month_delta`,
+    `6. 检查时间跨度：结合剧情整体节奏——场景是否跨季节、人物是否变化、叙事是否快进——给出 month_delta`,
     `7. 检查物品：剧情里明文出现的物品名？新增/损耗/丢失？`,
     `8. 检查地点/职业：剧情里玩家是否明确离开/到达某地、职业是否变化？`,
     `9. 检查死亡：剧情是否明文写出致命伤害/必死境地？玩家这轮选择是否成功脱险？——决定是否写 death 字段`,
@@ -2190,7 +2230,7 @@ async function callScoringAI(content, prevState, history, playerInput) {
       globalThis.__PERF_LOGS__.push({ stage: 'callScoringAI.llm_ms', ms: t_score_end - t_score_start, score_prompt_chars: scorePrompt.length })
     }
     // D090-hotfix：raw 已在 try 外声明（函数顶层 let raw = ''），此处直接赋值
-    raw = (response.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+    raw = (response.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<aihint>[\s\S]*?<\/aihint>/g, '').replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
     // D090-hotfix6（先生 22:24 反馈声望卡194+DBG跳）：AI 偶发格式不规范导致 finalize 崩
     //   现象：'Unexpected token " in JSON at position 1' —— AI 用中文引号包裹键名（"财富" 而非 "财富"）
     //   或漏写外层花括号（返回 "财富":-200 而非 {"财富":-200}）

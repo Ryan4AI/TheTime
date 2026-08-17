@@ -8,7 +8,6 @@
 //   规则 3：即使出错，DBG也要返回AI原始输出（worker fakeResult + frontend RESPONSE_ERROR 分支填 raw_response）
 
 const ui = require('../engine/ui')
-const { getDynastyTemplate } = require('../data/dynasty-templates')
 const { COLORS, getSystemInfo, drawBackground, drawText, drawCenteredText, drawTextInRect, hitTest, roundRect } = ui
 
 // ─────── 状态 ───────
@@ -47,9 +46,6 @@ var itemListScroll = 0       // 物品列表浮窗滚动偏移
 var itemListTouchStartY = 0  // 列表浮窗触摸起始 y
 var itemListTouchStartScroll = 0  // 列表浮窗触摸起始滚动
 var itemListTouchMoved = false    // 列表浮窗本次触摸是否发生拖动
-var bgImage = null           // 当前背景图（云函数返回 URL）
-var bgImageLoading = false   // 是否在加载
-var imageRevealStart = 0     // v0.6.50g: 画像从上到下展开动画时间戳
 
 // ─── 统一色彩常量（v0.2.5-X 审美统一）───
 // 之前版本散落在各处的颜色字面量，现在统一收口到 C 对象
@@ -94,7 +90,7 @@ var dbgDataTotalPages = 1     // 总页数
 var dbgDataTotal = 0          // 总条数
 const DEBUG_MAX_ROUNDS = 3   // 保留最近 3 轮
 // v0.1.63: 小游戏没有 move 事件，改用 ▲▼ 箭头按钮滚动
-var bgImgEl = null           // <image> 元素缓存
+// 生图逻辑已移除（bgImgEl 等变量已清理）
 
 // ─── 朝代风格表（先生拍板：每朝代不同风格）───
 const STYLE_BY_DYNASTY = {
@@ -138,6 +134,9 @@ function extractContent(raw) {
     .replace(/<think>[\s\S]*?<\/think>/g, '')
     .replace(/<think>[\s\S]*?(?={"content"|$)/g, '')
     .replace(/<think>/g, '')
+    .replace(/<aihint>[\s\S]*?<\/aihint>/g, '')
+    .replace(/<aihint>[\s\S]*?(?={"content"|$)/g, '')
+    .replace(/<aihint>/g, '')
     .replace(/```json\s*/gi, '')
     .replace(/```\s*$/g, '')
     .trim()
@@ -321,14 +320,15 @@ module.exports = {
               if (playerLife.gender) state.gender = playerLife.gender
               if (playerLife.social_class) state.socialClass = playerLife.social_class
               console.log('[D094-async] game.init 从云端 player_life 恢复 state.month=', state.month, ' state.year=', state.year, ' state.round=', state.round)
+              // player_load 后用最新 state 刷新榜单（init 时 fetchClosestBoard 用了旧 state）
+              closestBoardInfo = computeClosestBoard(state)
+              fetchClosestBoard()
             }
             if (lastAi && lastAi.content) {
               narrative = lastAi.content
               if (Array.isArray(lastAi.options) && lastAi.options.length > 0) {
                 options = lastAi.options.map(label => ({ label: label, bounds: null }))
               }
-              // 2026-08-02 13:29 修：重进恢复也刷新背景图（否则一直显示上次会话的旧图）
-              fetchBgImage(lastAi.content)
             }
             // narrativeHistory 只保留 last_ai 这一条（前端不再缓存全量）
             narrativeHistory = lastAi ? [lastAi] : []
@@ -359,32 +359,61 @@ module.exports = {
                 data: { phase: 'ai2', openid: _openid, input: (r.result && r.result.last_user_input) || '' },
                 success: (r2) => {
                   const res2 = (r2 && r2.result) || {}
-                  if (res2.success && res2.newState) {
-                    const ns = res2.newState
-                    if (typeof ns.age === 'number') state.age = ns.age
-                    if (ns.coin !== undefined) state.coin = ns.coin
-                    if (ns.month) state.month = ns.month
-                    if (ns.year) state.year = ns.year
-                    if (ns.round !== undefined) state.round = ns.round
-                    if (ns.eraDisplay) state.eraDisplay = ns.eraDisplay
-                    if (ns.city) state.city = ns.city
-                    if (ns.occupation) state.occupation = ns.occupation
-                    if (ns.alive !== undefined) state.alive = ns.alive
-                    if (ns.lifespan) state.lifespan = ns.lifespan
-                    const V2_ATTRS = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
-                    for (const attr of V2_ATTRS) {
-                      if (typeof ns[attr] === 'number') state[attr] = ns[attr]
-                    }
-                    if (Array.isArray(ns.items)) {
-                      // 同 13:31 修复：slice() 拷贝，避免与 currentItems 同引用导致重复 push
-                      state.items = ns.items.slice()
-                      currentItems = ns.items.slice()
-                    }
-                    console.log('[D094-async] 补跑 ai2 完成，state 刷新: city=', state.city, ' month=', state.month, ' year=', state.year)
-                    // 补跑发现死亡 → 走死亡流程（封笔 → 墓碑）
-                    if (ns.alive === false && !deathMode && typeof callWriteDeathAndGo === 'function') {
-                      callWriteDeathAndGo()
-                    }
+                  if (res2.success) {
+                    // 从 DB 拉最新 state（不依赖 r2.newState）
+                    const db = wx.cloud.database()
+                    db.collection('player_life').where({ openid: _openid, life_number: state.life_number || 1 }).get({
+                      success: (dbRes) => {
+                        const ns = (dbRes.data && dbRes.data[0]) || res2.newState || {}
+                        if (typeof ns.age === 'number') state.age = ns.age
+                        if (ns.coin !== undefined) state.coin = ns.coin
+                        if (ns.month) state.month = ns.month
+                        if (ns.year) state.year = ns.year
+                        if (ns.round !== undefined) state.round = ns.round
+                        if (ns.eraDisplay) state.eraDisplay = ns.eraDisplay
+                        if (ns.city) state.city = ns.city
+                        if (ns.occupation) state.occupation = ns.occupation
+                        if (ns.alive !== undefined) state.alive = ns.alive
+                        if (ns.lifespan) state.lifespan = ns.lifespan
+                        const V2_ATTRS = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
+                        for (const attr of V2_ATTRS) {
+                          if (typeof ns[attr] === 'number') state[attr] = ns[attr]
+                        }
+                        if (Array.isArray(ns.items)) {
+                          state.items = ns.items.slice()
+                          currentItems = ns.items.slice()
+                        }
+                        console.log('[D094-async] 补跑 ai2 完成（DB 直读），state 刷新: city=', state.city, ' month=', state.month, ' year=', state.year)
+                        if (ns.alive === false && !deathMode && typeof callWriteDeathAndGo === 'function') {
+                          callWriteDeathAndGo()
+                        }
+                      },
+                      fail: (dbErr) => {
+                        console.warn('[D094-async] DB 读取失败，降级用 r2.newState:', dbErr)
+                        const ns = res2.newState || {}
+                        if (typeof ns.age === 'number') state.age = ns.age
+                        if (ns.coin !== undefined) state.coin = ns.coin
+                        if (ns.month) state.month = ns.month
+                        if (ns.year) state.year = ns.year
+                        if (ns.round !== undefined) state.round = ns.round
+                        if (ns.eraDisplay) state.eraDisplay = ns.eraDisplay
+                        if (ns.city) state.city = ns.city
+                        if (ns.occupation) state.occupation = ns.occupation
+                        if (ns.alive !== undefined) state.alive = ns.alive
+                        if (ns.lifespan) state.lifespan = ns.lifespan
+                        const V2_ATTRS = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
+                        for (const attr of V2_ATTRS) {
+                          if (typeof ns[attr] === 'number') state[attr] = ns[attr]
+                        }
+                        if (Array.isArray(ns.items)) {
+                          state.items = ns.items.slice()
+                          currentItems = ns.items.slice()
+                        }
+                        if (ns.alive === false && !deathMode && typeof callWriteDeathAndGo === 'function') {
+                          callWriteDeathAndGo()
+                        }
+                      }
+                    })
                   } else {
                     console.warn('[D094-async] 补跑 ai2 失败:', (res2 && res2.error) || 'unknown')
                   }
@@ -452,7 +481,7 @@ function initLayout() {
   const topBarH = 52
   const statusBarH = 0  // v0.6.55: 第三行已删
   const boardTargetH = 22  // 榜单目标条
-  const sceneH = 120  // C 方案：略缩（130→120）腾空间给输入框
+  const sceneH = 0  // 生图已移除，场景区高度归零
   // C 方案：物品栏从 80 砍到 56（雷达图缩小）
   const itemBarH = 56
 
@@ -482,12 +511,12 @@ function initLayout() {
     boardTargetH: boardTargetH,
     inputZoneH: inputZoneH,
     inputGap: inputGap,
-    sceneY: topOffset + topBarH + statusBarH + 2 + boardTargetH + 4,
-    sceneH: sceneH,
-    sceneVisible: true,
-    textY: topOffset + topBarH + statusBarH + 4 + sceneH + 8 + boardTargetH,
-    _textY0: topOffset + topBarH + statusBarH + 4 + sceneH + 8 + boardTargetH,  // D088 修正8：键盘平移原始锚点
-    _sceneY0: topOffset + topBarH + statusBarH + 2 + boardTargetH + 4,
+    sceneY: 0,
+    sceneH: 0,
+    sceneVisible: false,
+    textY: topOffset + topBarH + statusBarH + 4 + boardTargetH,
+    _textY0: topOffset + topBarH + statusBarH + 4 + boardTargetH,  // D088 修正8：键盘平移原始锚点
+    _sceneY0: 0,
     statusBarH: statusBarH,
     textH: finalTextH,
     // C 方案：输入框常驻区紧贴叙事区下方
@@ -665,36 +694,75 @@ function callAI(userInput) {
               // 选项保留 partial 阶段的（玩家能继续玩）
               return
             }
-            // 先生 ai2 成功：构造完整 result 给 handleAIResponse
-            const fullResult = {
-              success: true,
-              partial: false,
-              branch: r.picked,
-              branches: r.branches,
-              state: r2.newState,
-              month_changed: r2.monthChanged,
-              new_month: r2.newMonth,
-              new_year: r2.newYear,
-              history: r.history,
-              narrate_history_added_ids: null,
-              debug: { ...r.debug, ...r2.debug },
-              event: r.monthEvent,
-              system_messages: r2.systemMessages,
-              closest_board: r2.closestBoard,
-              is_retry: r.is_retry,
-              attr_patch: r2.attrPatch,
-            }
-            // 填 debugLog ai2 字段
-            if (debugLog.length > 0) {
-              const last = debugLog[debugLog.length - 1]
-              last.attr_patch = r2.attrPatch
-              last.score_prompt = r2.debug.score_prompt
-              last.score_raw_response = r2.debug.score_raw_response
-              last.poll_attempts = 1
-              last.poll_elapsed_ms = (typeof loadingStart === 'number' && loadingStart > 0) ? (Date.now() - loadingStart) : 0
-            }
-            // 调 handleAIResponse 做属性 merge + 飘字 + 存档
-            handleAIResponse(fullResult, action, userInput)
+            // 先生 ai2 成功：从 DB 拉最新 state（避免 merge 丢字段）
+            const db = wx.cloud.database()
+            db.collection('player_life').where({ openid, life_number: state.life_number || 1 }).get({
+              success: (dbRes) => {
+                const dbState = (dbRes.data && dbRes.data[0]) || {}
+                // 用 DB 返回的完整 state 替代 r2.newState
+                const fullResult = {
+                  success: true,
+                  partial: false,
+                  branch: r.picked,
+                  branches: r.branches,
+                  state: dbState,
+                  month_changed: r2.monthChanged,
+                  new_month: r2.newMonth,
+                  new_year: r2.newYear,
+                  history: r.history,
+                  narrate_history_added_ids: null,
+                  debug: { ...r.debug, ...r2.debug },
+                  event: r.monthEvent,
+                  system_messages: r2.systemMessages,
+                  closest_board: r2.closestBoard,
+                  is_retry: r.is_retry,
+                  attr_patch: r2.attrPatch,
+                }
+                // 填 debugLog ai2 字段
+                if (debugLog.length > 0) {
+                  const last = debugLog[debugLog.length - 1]
+                  last.attr_patch = r2.attrPatch
+                  last.score_prompt = r2.debug.score_prompt
+                  last.score_raw_response = r2.debug.score_raw_response
+                  last.poll_attempts = 1
+                  last.poll_elapsed_ms = (typeof loadingStart === 'number' && loadingStart > 0) ? (Date.now() - loadingStart) : 0
+                  last.state_source = 'db_fresh'
+                }
+                // 调 handleAIResponse 做属性 merge + 飘字 + 存档
+                handleAIResponse(fullResult, action, userInput)
+              },
+              fail: (dbErr) => {
+                // DB 读失败，降级用 r2.newState
+                console.warn('[DB] player_life 读取失败，降级用 AI₂ 返回值:', dbErr)
+                const fullResult = {
+                  success: true,
+                  partial: false,
+                  branch: r.picked,
+                  branches: r.branches,
+                  state: r2.newState,
+                  month_changed: r2.monthChanged,
+                  new_month: r2.newMonth,
+                  new_year: r2.newYear,
+                  history: r.history,
+                  narrate_history_added_ids: null,
+                  debug: { ...r.debug, ...r2.debug },
+                  event: r.monthEvent,
+                  system_messages: r2.systemMessages,
+                  closest_board: r2.closestBoard,
+                  is_retry: r.is_retry,
+                  attr_patch: r2.attrPatch,
+                }
+                if (debugLog.length > 0) {
+                  const last = debugLog[debugLog.length - 1]
+                  last.attr_patch = r2.attrPatch
+                  last.score_prompt = r2.debug.score_prompt
+                  last.score_raw_response = r2.debug.score_raw_response
+                  last.poll_attempts = 1
+                  last.state_source = 'ai2_fallback'
+                }
+                handleAIResponse(fullResult, action, userInput)
+              }
+            })
           },
           fail: (err2) => {
             loading = false
@@ -1100,44 +1168,42 @@ function handleAIResponse(result, action, userInput) {
     }
   }
 
-  // 1. 应用 AI 返回的 state 更新（含 AI₂ 评分的属性变化）
+  // 1. 应用 DB 返回的完整 state（AI₂ 后直读数据库，不再 field-by-field merge）
   if (newState) {
-    // D048f（先生 2026-06-28 12:09 拍板·偶现 bug 排查）：merge 前打印关键字段
-    // 排查"7岁→150岁"偶现 bug——比对 newState 实际值与 state 旧值
-    if (typeof console !== 'undefined') {
-      console.log('[D094-month-debug] merge 进入, newState.month=', newState.month, ' newState.year=', newState.year, ' newState.round=', newState.round, ' | 当前 state.month=', state.month, ' state.year=', state.year, ' state.round=', state.round)
-    }
-    if (newState.age) state.age = newState.age
-    if (newState.coin !== undefined) state.coin = newState.coin
-    if (typeof console !== 'undefined') {
-      console.log('[D094-month-debug] merge 前 month truthy=', !!newState.month, ', month 值=', newState.month)
-    }
-    if (newState.month) state.month = newState.month
-    if (newState.year) state.year = newState.year
-    // 2026-08-03：年号实时更新——worker 跨年时已重算 eraDisplay（computeEraDisplay），
-    // 但 merge 路径漏接收，导致顶部年号永远停在初始值（补跑 ai2 路径 line 364 有，主路径漏了）
-    if (newState.eraDisplay) state.eraDisplay = newState.eraDisplay
-    if (newState.round !== undefined) state.round = newState.round
-    if (newState.epitaph) state.epitaph = newState.epitaph  // v0.6.89: 云函数生成的墓志铭
-    if (typeof console !== 'undefined') {
-      console.log('[D094-month-debug] merge 后 state.month=', state.month, ' state.year=', state.year, ' state.round=', state.round)
-    }
-    // D094（2026-07-22 先生拍板）：死神三字段已删，不再 merge
-    // v0.6.35: AI₂ 评分后的属性从 newState 读（patch 不再含属性）
+    // 飘字：先算属性差值
     const V2_ATTRS = ['声望', '财富', '学识', '颜值', '医术', '战功', '文采', '政绩', '义行']
     for (const attr of V2_ATTRS) {
-      if (typeof newState[attr] === 'number') {
-        var oldVal = state[attr] || 0
-        var newVal = newState[attr]
-        var diff = newVal - oldVal
-        state[attr] = newVal
-        // 属性变化飘字（+50 暖金 / -50 朱砂）
-        if (diff !== 0) {
-          var sign = diff > 0 ? '+' : ''
-          var color = diff > 0 ? 'rgba(232,200,130,1)' : 'rgba(192,48,48,1)'
-          spawnFloater(attr + sign + diff, color)
-        }
+      const oldVal = state[attr] || 0
+      const newVal = newState[attr]
+      if (typeof newVal === 'number' && newVal !== oldVal) {
+        const diff = newVal - oldVal
+        const sign = diff > 0 ? '+' : ''
+        const color = diff > 0 ? 'rgba(232,200,130,1)' : 'rgba(192,48,48,1)'
+        spawnFloater(attr + sign + diff, color)
       }
+    }
+    // 用 DB 数据直接覆盖本地 state 的业务字段
+    if (typeof newState.age === 'number') state.age = newState.age
+    if (newState.coin !== undefined) state.coin = newState.coin
+    if (typeof newState.month === 'number') state.month = newState.month
+    if (typeof newState.year === 'number') state.year = newState.year
+    if (newState.eraDisplay) state.eraDisplay = newState.eraDisplay
+    if (typeof newState.round === 'number') state.round = newState.round
+    if (newState.epitaph) state.epitaph = newState.epitaph
+    if (newState.city) state.city = newState.city
+    if (newState.occupation) state.occupation = newState.occupation
+    if (typeof newState.alive === 'boolean') state.alive = newState.alive
+    if (newState.lifespan) state.lifespan = newState.lifespan
+    if (newState.name) state.name = newState.name
+    if (newState.dynasty) state.dynasty = newState.dynasty
+    if (newState.social_class) state.socialClass = newState.social_class
+    if (newState.gender) state.gender = newState.gender
+    for (const attr of V2_ATTRS) {
+      if (typeof newState[attr] === 'number') state[attr] = newState[attr]
+    }
+    if (Array.isArray(newState.items)) {
+      state.items = newState.items.slice()
+      currentItems = newState.items.slice()
     }
     // D089（修正·2026-07-21）：finalize 成功 + state 已结算后，才自动重发缓存的点击
     // 真因：原逻辑在 error 判断前无条件 setTimeout 重发 → finalize 崩（Y1-B 保留选项）仍重发下一轮
@@ -1296,9 +1362,6 @@ function handleAIResponse(result, action, userInput) {
 
   // 5. round 计数 +1（P1.6: AI 响应后递增）
   state.round = (state.round || 0) + 1
-
-  // 5.5 异步加载背景图（不阻塞叙事显示；23:35 改：优先 AI 抽 scene，5s 超时兜底叙事）
-  fetchBgImageWithScene(branch.content || '')
 
   // 6. 准备显示
   // 系统状态变化不进 narrative 字符串（前端不显示 [system · XXX] 文字）
@@ -1530,9 +1593,6 @@ function render(ctx) {
   // 1. 暗色古风背景
   drawBackground(ctx, layout.windowW, layout.windowH)
 
-  // 1.5 生图背景（v0.1.63 拼贴·题跋版：画占 55% 上半屏，1.0 透明度 + 卷轴边框）
-  drawBgImage(ctx)
-
   // 3. 月份变化提示（如有）— v0.6.45 移除"时光流转"交互
   // 原 drawMonthNotice(ctx) 已删除
 
@@ -1701,273 +1761,6 @@ function adjustFluidLayout() {
       last.typewriter_debug = `typingDone=${typingDone}, narrative.length=${narrative.length}, displayedChars=${displayedChars}, inputY=${layout.inputY}, optionY=${layout.optionY}, options.length=${options.length}`
     }
   }
-}
-
-// ─────── 生图背景（v0.1.69：前端直连 Pollinations.ai，跳过云函数） ───────
-// 朝代风格表（v0.1.62 起，p1: 简洁英文 prompt；p2: 水墨质感参数）
-// 2026-08-02 18:28 修：elements 全表去人物词（scholars/hermits/palace ladies/flying apsaras/court ladies）
-//   真因：先生反馈"剧情早不是翠姑还是每轮美女图"——人物词在模板里每轮必进 prompt → flux 必画人
-//   背景图只画景：全部换成纯场景元素
-// ─────── 2026-08-02 19:58 根治：模板 key 与数据源 era_meta.dynasty 实际值完全一致 ───────
-// 之前用短名（五代/宋/汉/晋/周）+ 别名表/模糊匹配全是绕开——数据源存的是完整名（五代十国/北宋/西汉…）
-// 现在 key = era_meta 实际取值集合，buildPollinationsPrompt 纯精确匹配，零映射
-
-// 2026-08-02 23:20 先生反馈 prompt 不通顺：硬截断 80 字断在句子中间（「像是在, 汴梁,...」半句中文接英文模板）
-// 修法：按句子边界截断——截断点不在句末时向后找最近的句末标点补全，保证 prompt 以完整句结尾
-function smartCutNarrative(text, maxLen) {
-  const t = (text || '').replace(/\s+/g, ' ').trim()
-  if (t.length <= maxLen) return t
-  let cut = t.slice(0, maxLen)
-  const rest = t.slice(maxLen)
-  // 向后最多找 40 字内的句末标点（。！？及引号收尾），补全成完整句
-  const m = rest.slice(0, 40).match(/^[^。！？]*[。！？」』]/)
-  if (m) return cut + m[0]
-  // 向后没有 → 向前找最后一个句末标点，截到完整句（太靠前就不截，保证有内容）
-  const lastEnd = Math.max(cut.lastIndexOf('。'), cut.lastIndexOf('！'), cut.lastIndexOf('？'))
-  if (lastEnd > Math.floor(maxLen * 0.4)) return cut.slice(0, lastEnd + 1)
-  // 整段无句末标点（超长一句）→ 硬截加省略号
-  return cut + '……'
-}
-
-// ─────── 2026-08-03 18:28 先生反馈"又是美女图"：兜底路径根治 ───────
-// 真因链：scene AI 调用慢（默认 1500 token/110s）→ 前端 5s 超时兜底 → 中文叙事直接拼进 flux prompt
-//   → flux 看不懂中文自由发挥 → 画人物特写（美女图）
-// 修：兜底路径绝不把中文喂给 flux——中文叙事 → 场景类型关键词 → 英文场景句（与 gen_image 云函数同逻辑）
-const SCENE_EN_FALLBACK = {
-  battlefield: 'ancient battlefield, banners, misty plain, distant war drums',
-  palace: 'ancient palace courtyard, carved columns, misty morning light',
-  temple: 'ancient temple on a mountain path, misty forest, stone steps',
-  countryside: 'ancient countryside village, rice paddies, misty mountains',
-  river: 'ancient river scene, wooden boats, misty water, willow trees',
-  market: 'ancient market street, stalls, lanterns, busy crowd in distance',
-  night: 'ancient city at night, moonlight, shadowy rooftops, lantern glow',
-  winter: 'ancient buildings in snow, bare trees, grey sky',
-  storm: 'storm over ancient city, dark clouds, rain, banners whipping',
-  city: 'ancient Chinese city street, misty morning, rooftops and walls',
-}
-function sceneTypeFromChinese(text) {
-  // 2026-08-03 18:46 先生反馈「河床乱石躲藏 → battlefield 不对」：裸「兵」字太宽泛（追兵/官兵/士兵都命中战场）
-  // 改：battlefield 只认强战场词；「河床/水边」等场景名词优先命中 river
-  if (/战|杀|战场|刀|兵刃|厮杀|打仗|交战|冲锋|攻城|兵器|厮杀声/.test(text)) return 'battlefield'
-  if (/宫|殿|皇|龙/.test(text)) return 'palace'
-  if (/寺|庙|观|佛|道/.test(text)) return 'temple'
-  if (/村|田|乡|农/.test(text)) return 'countryside'
-  if (/河|江|湖|舟|船|水|渡|溪|河床|滩/.test(text)) return 'river'
-  if (/市|集|商|街|闹|坊/.test(text)) return 'market'
-  if (/夜|月|宵|晚/.test(text)) return 'night'
-  if (/冬|雪|寒|冰/.test(text)) return 'winter'
-  if (/雷|暴|雨|风/.test(text)) return 'storm'
-  return 'city'
-}
-
-function buildPollinationsPrompt(narrativeText) {
-  const era = state.dynasty || 'default'
-  // 2026-08-02 20:01 模板表已抽独立模块 minigame/data/dynasty-templates.js（唯一数据源，有单测）
-  const cfg = getDynastyTemplate(era)
-  // 2026-08-03 18:28：兜底不再拼中文叙事——抽场景类型 → 英文场景句（flux 只收纯英文，杜绝人物特写）
-  const sceneType = sceneTypeFromChinese(narrativeText || '')
-  const sceneDesc = SCENE_EN_FALLBACK[sceneType] || SCENE_EN_FALLBACK.city
-  const p1 = cfg.style
-  const p2 = cfg.elements
-  // 固定水墨质感参数（2026-08-02 19:50 先生拍板：去掉 no people——场景就是人时没必要不画人，
-  //   背景图跟着叙事走：剧情有人物就画人物、有景就画景；模板人物词已去，不会再每轮强制画人）
-  const suffix = 'ink wash, monochrome, rice paper texture, no text, no watermark, masterpiece, --ar 3:2'
-  return [sceneDesc, p1, p2, suffix].filter(Boolean).join(', ')
-}
-
-// 2026-08-02 13:29 先生反馈"插画每次都是美女图"——非上下文截断，是前端换图机制 bug：
-//   ① 重进恢复路径不调 fetchBgImage → 一直显示上次会话旧图
-//   ② if (bgImageLoading) return 防重入 → Pollinations 出图几十秒，玩得快时后续轮次换图全被跳过
-//   ③ onerror 不清旧图 → 失败就一直显示过期图
-// 修法：去掉防重入 return，改"最新优先"——每轮都发请求，bgImageSeq 序号保证只显示最新一轮的图
-var bgImageSeq = 0
-// 2026-08-02 23:35 先生拍板：scene 独立 AI 调用（不寄生 AI₁/AI₂）
-// 时序：AI₁ 叙事返回 → 并行抽 scene（2-4s）→ 用 scene 画图；5s 超时/失败 → 叙事 80 字兜底
-function fetchBgImageWithScene(narrativeText) {
-  if (typeof wx === 'undefined') return
-  const _openid = (wx.getStorageSync && wx.getStorageSync('openid')) || ''
-  let done = false
-  // 2026-08-03 22:30 巡检发现：scene 8/8 全超时（MiniMax 推理模式稳定 >4.8s，赶不上 5s 上限）
-  // 修：5s 兜底先出模板图（先生拍板的防空白上限，不动）；scene 迟到成功 → 用 bgImageSeq latest-wins 替换成更贴剧情的图
-  //   兜底后 scene 失败/超时 → 保持模板图，不重复兜底
-  const fallback = () => { if (!done) { done = true; fetchBgImage(narrativeText || '') } }
-  const timer = setTimeout(fallback, 5000)
-  wx.cloud.callFunction({
-    name: 'ai_narrate_worker',
-    data: { phase: 'scene', openid: _openid, input: narrativeText || '' },
-    success: (res) => {
-      clearTimeout(timer)
-      const r = (res && res.result) || {}
-      const scene = (r.success && r.scene) ? r.scene : ''
-      if (scene) {
-        // scene 成功（无论是否已兜底）→ 替换成 scene 图；latest-wins 保证只显示最新
-        fetchBgImage(scene)
-      } else if (!done) {
-        done = true
-        fetchBgImage(narrativeText || '')
-      }
-    },
-    fail: () => { clearTimeout(timer); fallback() },
-  })
-}
-
-function fetchBgImage(narrativeText) {
-  if (typeof wx === 'undefined') return
-  const seq = ++bgImageSeq
-
-  // 从叙事/城市/事件抽 1-2 个关键词作为 scene 描述
-  const era = state.dynasty || '宋'
-  const city = state.city || ''
-  // 2026-08-02 23:35 scene 模式：AI 抽的英文场景（无中文且短）→ 直接当 prompt 主体，不再拼叙事
-  const isScene = narrativeText && !/[\u4e00-\u9fa5]/.test(narrativeText) && narrativeText.length < 200
-  let hint = ''
-  let prompt = ''
-  if (isScene) {
-    hint = narrativeText
-    const cfg = getDynastyTemplate(era)
-    prompt = [narrativeText, cfg.style, cfg.elements, 'ink wash, monochrome, rice paper texture, no text, no watermark, masterpiece, --ar 3:2'].filter(Boolean).join(', ')
-  } else {
-    // 抓叙事前 60 字（23:20 改按句子边界截断）
-    hint = smartCutNarrative(narrativeText, 60)
-    prompt = buildPollinationsPrompt(narrativeText)
-  }
-  // Pollinations.ai 公开 API，URL 拼装即图
-  const seed = Math.floor(Math.random() * 1000000)
-  const encoded = encodeURIComponent(prompt)
-  const url = `https://image.pollinations.ai/prompt/${encoded}?width=768&height=512&seed=${seed}&nologo=true&model=flux`
-
-  // v3.0.14aid: 每轮把画图 prompt / url / seed / 加载结果写进 debugLog（先生 22:54 反馈"图都一样"要看到底是不是 prompt 在变）
-  if (debugLog.length > 0) {
-    const last = debugLog[debugLog.length - 1]
-    last.bg_prompt = prompt
-    last.bg_url = url
-    last.bg_seed = seed
-    last.bg_dynasty = era
-    last.bg_city = city
-    last.bg_narrative_hint = hint
-  }
-
-  if (bgImgEl) { try { bgImgEl.src = '' } catch(e) {} }
-  bgImgEl = typeof wx.createImage === 'function' ? wx.createImage() : new Image()
-  bgImgEl.onload = () => {
-    if (seq !== bgImageSeq) return  // 已有更新的请求，丢弃本次（latest-wins）
-    bgImageLoading = false
-    bgImage = url
-    imageRevealStart = Date.now()  // v0.6.50g: 开始从上到下展开
-    // v3.0.14aid: 加载成功也填 debugLog（区分"prompt 没变"vs"prompt 变了但 flux 输出相似"）
-    if (debugLog.length > 0) {
-      const last = debugLog[debugLog.length - 1]
-      last.bg_load = 'ok'
-    }
-    console.log('[bg] 换图成功 seq=', seq, ' url=', url.slice(0, 60))
-  }
-  bgImgEl.onerror = () => {
-    if (seq !== bgImageSeq) return
-    bgImageLoading = false
-    // 2026-08-02 13:29 修：失败时清掉旧图（否则一直显示过期图误导"图没变"）
-    bgImage = null
-    console.warn('Pollinations 加载失败:', url.slice(0, 80))
-    if (debugLog.length > 0) {
-      const last = debugLog[debugLog.length - 1]
-      last.bg_load = 'fail'
-    }
-  }
-  bgImgEl.src = url
-}
-
-function drawBgImage(ctx) {
-  const sx = layout.padding
-  const sy = layout.sceneY
-  const sw = layout.windowW - layout.padding * 2
-  const sh = layout.sceneH
-
-  // v0.6.57: 榜单目标与画卷分隔线（双线）
-  ctx.save()
-  ctx.strokeStyle = 'rgba(200,168,124,0.3)'
-  ctx.lineWidth = 0.8
-  ctx.beginPath()
-  ctx.moveTo(sx, sy - 5)
-  ctx.lineTo(sx + sw, sy - 5)
-  ctx.stroke()
-  ctx.strokeStyle = 'rgba(200,168,124,0.08)'
-  ctx.lineWidth = 0.4
-  ctx.beginPath()
-  ctx.moveTo(sx, sy - 8)
-  ctx.lineTo(sx + sw, sy - 8)
-  ctx.stroke()
-  ctx.restore()
-  // v0.6.50h: 画像区始终预留 130px，加载时显示水墨加载提示
-  if (!bgImgEl || !bgImgEl.complete || bgImgEl.width === 0) {
-    ctx.save()
-    ctx.fillStyle = 'rgba(15,12,8,0.95)'
-    ctx.fillRect(sx, sy, sw, sh)
-    // 水墨加载提示（呼吸动画）
-    const pulse = 0.3 + 0.15 * Math.sin(Date.now() / 1200)
-    ctx.fillStyle = 'rgba(200,168,124,' + pulse + ')'
-    ctx.font = '16px ' + ui.fontFamily
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText('🎨', sx + sw / 2, sy + sh / 2 - 6)
-    ctx.fillStyle = 'rgba(170,210,180,' + (pulse * 0.6) + ')'
-    ctx.font = '9px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-    ctx.fillText('画卷生成中…', sx + sw / 2, sy + sh / 2 + 14)
-    ctx.restore()
-    return
-  }
-
-  // v0.6.50g: 从上向下展开（300ms）
-  let revealH = sh
-  if (imageRevealStart > 0) {
-    const elapsed = Date.now() - imageRevealStart
-    const progress = Math.min(1, elapsed / 300)
-    revealH = sh * progress
-    if (progress >= 1) imageRevealStart = 0
-  }
-
-  // 1. 卷轴底框
-  ctx.save()
-  ctx.fillStyle = 'rgba(20,16,10,0.85)'
-  ctx.fillRect(sx - 4, sy - 4, sw + 8, sh + 8)
-  ctx.restore()
-
-  // 2. 画主体（revealH 限制可见高度 = 展开动画）
-  ctx.save()
-  ctx.beginPath()
-  ctx.rect(sx, sy, sw, revealH)
-  ctx.clip()
-  const imgW = bgImgEl.width
-  const imgH = bgImgEl.height
-  const scale = Math.max(sw / imgW, sh / imgH)  // 用全高算出图 scale
-  const drawW = imgW * scale
-  const drawH = imgH * scale
-  const drawX = sx + (sw - drawW) / 2
-  const drawY = sy + (sh - drawH) / 2
-  ctx.drawImage(bgImgEl, drawX, drawY, drawW, drawH)
-  ctx.restore()
-
-  // 3. 卷轴边框（暗金）
-  ctx.save()
-  ctx.strokeStyle = 'rgba(200,168,124,0.45)'
-  ctx.lineWidth = 1.5
-  ctx.strokeRect(sx, sy, sw, sh)
-  ctx.restore()
-
-  // 4. 卷轴上下暗金细线（强调"画"）
-  ctx.save()
-  ctx.strokeStyle = 'rgba(200,168,124,0.6)'
-  ctx.lineWidth = 1
-  ctx.beginPath()
-  ctx.moveTo(sx + 6, sy + 6)
-  ctx.lineTo(sx + sw - 6, sy + 6)
-  ctx.moveTo(sx + 6, sy + sh - 6)
-  ctx.lineTo(sx + sw - 6, sy + sh - 6)
-  ctx.stroke()
-  ctx.restore()
-
-  // 5. 左上"画"字朱砂小印（强调"这是画"）
-  // v0.6.91: 删掉画区左上角"画 · 北宋"朱砂章文字（先生 11:23 拍板）
-  ctx.save()
-  ctx.restore()
 }
 
 // ─────── 顶部朱砂印 + 纪代（古卷风 v0.1.61） ───────
@@ -5422,9 +5215,10 @@ function dbgCopyDataPanel() {
 function dbgLoadCloudLlmIo() {
   if (dbgLlmIoLoading) return
   dbgLlmIoLoading = true
+  const _openid = (wx.getStorageSync && wx.getStorageSync('openid')) || ''
   wx.cloud.callFunction({
     name: 'diag_query',
-    data: { collection: 'llm_io', limit: 20 },
+    data: { collection: 'llm_io', limit: 20, openid: _openid },
     success: (res) => {
       dbgLlmIoLoading = false
       if (!res || !res.result || !res.result.data) {
@@ -5883,7 +5677,7 @@ function drawDbgCompressTab(ctx) {
     // 第 3 行起：摘要内容（自动换行，截前 400 字防卡）
     ctx.fillStyle = '#c8c8c8'
     ctx.font = '10px sans-serif'
-    const textCut = text.length > 400 ? text.substring(0, 400) + '…' : text
+    const textCut = text
     if (textCut) {
       let line = ''
       let yy = _curY + 32
@@ -5924,7 +5718,7 @@ function dbgCopyCompressPanel() {
     s += `  last_seq: ${typeof r.last_seq === 'number' ? r.last_seq : '-'}\n`
     s += `  last_id: ${r.last_id || '-'}\n`
     s += `  life_number: ${r.life_number || '-'}\n`
-    s += `  text: ${(r.text || '').substring(0, 300)}\n`
+    s += `  text: ${r.text || ''}\n`
   }
   return s
 }

@@ -60,13 +60,15 @@ function getFontStack() {
 
 function getSystemInfo() {
   const sys = wx.getSystemInfoSync()
+  const w = sys.windowWidth || 375
+  const h = sys.windowHeight || 667
   return {
-    width: sys.windowWidth,
-    height: sys.windowHeight,
-    windowWidth: sys.windowWidth,
-    windowHeight: sys.windowHeight,
-    pixelRatio: sys.pixelRatio,
-    safeArea: sys.safeArea || { top: 0, bottom: sys.windowHeight }
+    width: w,
+    height: h,
+    windowWidth: w,
+    windowHeight: h,
+    pixelRatio: sys.pixelRatio || 2,
+    safeArea: sys.safeArea || { top: 0, bottom: h }
   }
 }
 
@@ -175,6 +177,7 @@ function drawClassicalDivider(ctx, x, y, width, opacity) {
 
 // Draw gradient background with warm ancient feel
 function drawBackground(ctx, w, h) {
+  if (!w || !h || w <= 0 || h <= 0) return
   // Main warm-dark gradient
   const grad = ctx.createLinearGradient(0, 0, 0, h)
   grad.addColorStop(0, COLORS.bgGradient1)

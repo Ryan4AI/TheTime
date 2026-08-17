@@ -164,9 +164,9 @@ function fallbackExtractBranch(rawText) {
     }
   }
   // 抽 options：找所有 [...] 数组，挑包含 ≥2 字符串的那个
-  // 2026-08-02：AI 偶发二次转义（\"a\"），先还原 \" → " 再匹配
-  // 2026-08-03：剥壳已拿到内层 options 时跳过（避免外层把内层数组再抽一遍）
-  const arrayMatches = options.length === 0 ? cleaned.replace(/\\"/g, '"').matchAll(/\[([^\[\]]*)\]/g) : []
+  // 2026-08-16 修：先不做全局 replace(/\\"/g, '"')，避免把选项文本里的合法转义引号（如 \"门\"）还原成裸引号导致正则拆断
+  // 如果直接匹配拿不到 ≥2 个选项，再做去转义重试（处理双重转义场景）
+  let arrayMatches = options.length === 0 ? cleaned.matchAll(/\[([^\[\]]*)\]/g) : []
   for (const m of arrayMatches) {
     const inner = m[1]
     const strs = inner.match(/"((?:\\.|[^"\\])*)"/g) || []
@@ -178,6 +178,23 @@ function fallbackExtractBranch(rawText) {
         .replace(/\\\\/g, '\\')
       )
       break
+    }
+  }
+  // 去转义重试：处理双重转义场景（\\"options\\":[\\"a\\", \\"b\\"]）
+  if (options.length === 0) {
+    arrayMatches = cleaned.replace(/\\"/g, '"').matchAll(/\[([^\[\]]*)\]/g)
+    for (const m of arrayMatches) {
+      const inner = m[1]
+      const strs = inner.match(/"((?:\\.|[^"\\])*)"/g) || []
+      if (strs.length >= 2) {
+        options = strs.map(s => s.slice(1, -1)
+          .replace(/\\"/g, '"')
+          .replace(/\\n/g, '\n')
+          .replace(/\\t/g, '\t')
+          .replace(/\\\\/g, '\\')
+        )
+        break
+      }
     }
   }
   if (!content || options.length === 0) {

@@ -193,6 +193,16 @@ test('截断双重嵌套剥壳', () => {
   assert.ok(!content.startsWith('{"content"'), 'content 不应是 JSON 原文')
 })
 
+console.log('\n=== 场景 17：options 含转义引号（\"门\"）===')
+test('options 里有转义引号不被拆断', () => {
+  const raw = '{content "你走到翠姑身边。", "options ["追问更多关于\\"门\\"的秘密", "让哑巴师父先休息", "把翠姑叫醒告诉她真相"]}'
+  const { branches } = parseAIOutput(raw)
+  assert.ok(branches, '应解析出分支')
+  const opts = getOptions(branches)
+  assert.strictEqual(opts.length, 3, '应有3个选项')
+  assert.ok(opts[0].includes('门'), '第一个选项应包含"门"')
+})
+
 // ═══════════════════════════════════════════════════════
 // 汇总
 // ═══════════════════════════════════════════════════════

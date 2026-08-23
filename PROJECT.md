@@ -6,13 +6,31 @@
 
 ---
 
-## 状态快照（最新一次巡检 · 2026-08-21 09:34 · 第 127 次）
+## 状态快照（最新一次巡检 · 2026-08-23 09:01 · 第 131 次）
 
-> **🎉 127 期 · DB 查询恢复 + 数据修正** —— 121-126 期因 env ID + API 端点双重错误导致 DB 查询 40066 阻塞（360h+），**本期修复**：① env `thetime-7g0fpc4f703b9416` → `cloud1-d5gkbowyvbd1c85e1` ② endpoint `databaserecord` → `databasequery`（查询用）/ `databasecount`（计数用）。**修正后真实数据**：narrate_history=699 条（含 1 init），最新 seq=645 @ 08-16 18:30 北京时间（**非 126 期报的 seq=536 @ 08-03**——过期缓存导致）；player_life=4 条（含 1 init），李昌 round=21 age=39 alive=true 最后更新 08-16；leaderboard 表不存在（需 import_leaderboards 创建）。**实际离线时长 ~111h（4.6 天），非 126 期报的 409h（17 天）**。**本窗（126→127 期 ~12h）先生 0 commit / 0 新游玩 / 0 新数据入库**。代码：node -c 全 OK + f459dff 后无新 commit。**🎯 127 期决策点 = PMO DB 查询能力已恢复，后续巡检可用真实数据**。
+> **🎉 131 期 · 先生持续离线 158.5h+（6.6 天）/ llm_io 卡轮 99 条持续 607h+（25.3 天）/ 全部指标持平** —— 130 期（08-22 21:01）报全部指标持平。**本 12h 窗（08-22 21:01→08-23 09:01）先生 3 件零事**：① 0 commit（776c1b4 后无新提交 / ahead=0 持平）② 0 真机游玩（narrate_history 仍停 seq=645 @ 08-16 18:30:48 = **158.5h+ 静止 = 6.6 天**）③ 0 新历史数据入库 = **先生持续离线（新玩家 08-16 活动后 → 131 期连续 0 动作）**。**PMO 131 期动作 = 四大类常态巡检全部指标持平**：① 产品功能/遗留事项：§10.4 5 系统状态：死神 ❌已废弃 / 跨世痕迹 ❌ / 动态榜单 ❌ / Prompt v12 ❌ / 多玩家 ❌ = 5 ❌ 持平；遗留：任务源路径漂移 131+ 期 + dc68eac 功能改善待真机验证 ② UX 优化：先生 158.5h+ 未游玩 = 对话流增量 = 0 = 无新增审查 ③ 代码：node -c 2 个查询脚本全 OK（q_db.js + q_pmo_http.js）+ 单测 26/26 全跑（18+8，test-narrate-pipeline.js 不存在）+ 776c1b4 后无新 commit = 零净增代码 ④ 数据库：5 表 115/167/9881/619/197 全部持平 · D049 4 表 player=3 / player_life=4 / narrate_history=699 / llm_io=591 全部持平 · **卡轮 99 条持续（pending_total=99，最早 607.3h 前 07-28 01:48 CST，breakdown: scene=88+narrate=8+score=3）** · dirty content=17 条（content 缺失）持平 · ai_narrate_worker timeout=60s 确认 · cron 正常（consecutiveErrors=0 + lastDeliveryStatus=delivered）。**🎯 131 期决策点 = 卡轮 99 条持续 607h+（25.3 天）需排查 worker 为什么不再消费 pending 请求**（延续 128-130 期，worker 可能已停止或阻塞）。
+
+---
+
+> **🎉 130 期 · 先生持续离线 138.5h+（5.8 天）/ llm_io 卡轮 99 条持续 595h+ / 全部指标持平** —— 129 期（08-22 09:01）报全部指标持平。**本 12h 窗（08-22 09:01→08-22 21:01）先生 3 件零事**：① 0 commit（776c1b4 后无新提交 / ahead=0 持平）② 0 真机游玩（narrate_history 仍停 seq=645 @ 08-16 18:30:48 = **138.5h+ 静止 = 5.8 天**）③ 0 新历史数据入库 = **先生持续离线（新玩家 08-16 活动后 → 130 期连续 0 动作）**。**PMO 130 期动作 = 四大类常态巡检全部指标持平**：① 产品功能/遗留事项：§10.4 5 系统状态：死神 ❌已废弃 / 跨世痕迹 ❌ / 动态榜单 ❌ / Prompt v12 ❌ / 多玩家 ❌ = 5 ❌ 持平；遗留：任务源路径漂移 130+ 期 + dc68eac 功能改善待真机验证 ② UX 优化：先生 138.5h+ 未游玩 = 对话流增量 = 0 = 无新增审查 ③ 代码：node -c 2 个查询脚本全 OK（q_db.js + q_pmo_http.js）+ 单测 26/26 全跑（18+8，test-narrate-pipeline.js 不存在）+ 776c1b4 后无新 commit = 零净增代码 ④ 数据库：5 表 115/167/9881/619/197 全部持平 · D049 4 表 player=3 / player_life=4 / narrate_history=699 / llm_io=591 全部持平 · **卡轮 99 条持续（pending_total=99，最早 595.3h 前 08-03 02:26，breakdown: narrate=多数+score=少数）** · dirty content 采样 50 条 0 脏 = dirty 改善（vs 129 期采样 5 条含 1 脏） · ai_narrate_worker timeout=60s 确认 · cron 正常（consecutiveErrors=0 + lastDeliveryStatus=delivered）。**🎯 130 期决策点 = 卡轮 99 条持续 595h+ 需排查 worker 为什么不再消费 pending 请求**（延续 128-129 期，worker 可能已停止或阻塞）。
 
 ---
 
 > ✅ §10.4 死神行矛盾已解决（120 期 f459dff 08-17 21:59 🚧→❌已废弃）· 持续 25 天（跨 101-120 期）· **MM_API_KEY 决策点已按先生指令移除（⛔ 2026-08-18）**
+
+---
+
+> 📌 **本期（130 期）待 commit 清单 · 0 项先生 + 1 项 PMO**
+> - ✅ `M PROJECT.md`（PMO 130 期简报快照 + 先生持续离线 138.5h+（5.8 天）+ llm_io 卡轮 99 条持续 595h+（breakdown: narrate+score）+ 5 基础表全部持平 + D049 全部持平（player=3/player_life=4/narrate_history=699/llm_io=591）+ dirty 采样 50 条 0 脏（改善） + ai_narrate_worker 60s 确认 + 776c1b4 后无新 commit + node -c OK + 单测 26/26 全跑 + cron 正常）
+> - 其他 working tree = 1 untracked（`scripts/q_pmo_http.js`，40066 旧端点未修复）+ PROJECT.md 待 commit
+> - ⚠️ q_pmo_http.js 仍用 `databaserecord` 端点（40066），q_db.js 已修复为 `databasequery`/`databasecount`
+
+---
+
+> 📌 **本期（128 期）待 commit 清单 · 0 项先生 + 1 项 PMO**
+> - ✅ `M PROJECT.md`（PMO 128 期简报快照 + 新玩家出现 + llm_io 卡轮 99 条（scene=88+narrate=8+score=3）+ 5 基础表稳定 + D049 变化 player=3/player_life=4/narrate_history=699/llm_io=591 + dirty=17 持平 + ai_narrate_worker 60s 确认 + f459dff 后无新 commit + node -c OK + 单测 26/26 全跑）
+> - 其他 working tree = 1 untracked（`scripts/q_pmo_http.js`，40066 旧端点未修复）+ PROJECT.md 待 commit
+> - ⚠️ q_pmo_http.js 仍用 `databaserecord` 端点（40066），q_db.js 已修复为 `databasequery`/`databasecount`
 
 ---
 

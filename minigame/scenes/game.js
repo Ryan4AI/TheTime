@@ -132,7 +132,7 @@ function getStyleForDynasty(dynasty) {
 }
 
 const TYPEWRITE_SPEED = 15   // v3.0.11: 每字符 15ms（流式下 LLM 100 TPS=10ms/字·需要打字机接近 LLM 速度）
-const MAX_NARRATIVE_CHARS = 600  // 单次叙事最大字符数
+// 2026-09-11 先生拍板：删除 MAX_NARRATIVE_CHARS=600 硬截断（超长叙事尾部被静默吞掉，存库原文却是完整的 → 玩家看到的内容 < AI 后续接的内容）
 
 // v3.0.14: 指针扫描抽 content（替代脆弱正则）
 // 不依赖 JSON 闭合，能在流式未闭合时正确切分；不被 content 内的转义引号提前截断
@@ -999,7 +999,7 @@ function showPartialNarrative(result) {
   // Y2（2026-07-20 先生拍板）：partial 阶段恢复打字机（逐字显示叙事文字）
   // 选项来自 callAI（第一次调用），与属性评分无关，立即可点
   // finalize 完整版到达时走 skipRerender 分支 → 不重置 displayedChars → 若已打完则停在完整文字，不重打
-  const finalContent = (branch.content || '').slice(0, MAX_NARRATIVE_CHARS)
+  const finalContent = branch.content || ''
   narrative = finalContent
   displayedChars = 0  // Y2：从 0 开始逐字打（原 D089 为 finalContent.length 整段出）
   displayStartTime = Date.now()
@@ -1379,7 +1379,7 @@ function handleAIResponse(result, action, userInput) {
   // 改回 TYPEWRITE_SPEED 累加显示（前端假打字机：拿到完整 content 后逐字显示）
   // D089 两阶段：partial 已渲染文字+选项时，跳过重渲（避免文字重打、选项重排）
   if (!skipRerender) {
-  const finalContent = (branch.content || '').slice(0, MAX_NARRATIVE_CHARS)
+  const finalContent = branch.content || ''
   if (streamedText && finalContent.length >= streamedText.length) {
     // 兼容：done 来了但 streamedText 已被 done 路径填过（不再发生——后端非流式，streamedText 始终为空）
     narrative = finalContent

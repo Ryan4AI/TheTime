@@ -218,6 +218,26 @@ function fallbackExtractBranch(rawText) {
  *   - cleaned: 预处理/修复后的文本（用于存 llm_io.raw_response 原始输出）
  *   - parseError: 全部失败时的错误（branches 为 null 时有效）
  */
+// 2026-09-11 先生反馈：叙事页把 `{content "…", "options […]` 外壳一起显示出来
+//   真因：prompt 约定的输出写法本身就缺冒号（MiniMax 与 DeepSeek 输出完全一致 → 是模板而非模型抽风）
+//   → JSON.parse 必失败 → 走 fallbackExtractBranch 时外壳被当成正文
+//   修法：补上缺失的冒号再解析。只在 JSON.parse 失败时尝试，且只认 content/options 两个已知字段，
+//   正常 JSON（{"content": "…"}）不会被匹配，无副作用。
+function repairMissingColons(s) {
+  let out = s
+  // {content "正文"  →  {"content": "正文"
+  out = out.replace(/\{\s*"?(content)"?(\s+)"?/gi, '{"content": "')
+  // , "options [ … ]  →  , "options": [ … ]
+  out = out.replace(/,\s*"?options"?(\s*)(\[)/gi, ', "options": [')
+  // AI 有时输出未转义的真实换行（JSON 字符串里裸换行非法 → "Bad control character in string literal"）
+  //   转成字面 \n 后再 parse；JSON.parse 会自动还原成真实换行，正文不受影响
+  //   注意：仅当本轮 parse 成功才会采用本结果，失败则沿用原 cleaned，不会污染纯文本路径
+  if (out.indexOf('\n') !== -1 || out.indexOf('\r') !== -1) {
+    out = out.replace(/\r?\n/g, '\\n')
+  }
+  return out
+}
+
 function parseAIOutput(content) {
   // 流式下 think 标签可能未关闭·前端展示时再剥
   let cleaned = (content || '').replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json\s*/gi, '').replace(/```\s*$/g, '').trim()
@@ -245,6 +265,20 @@ function parseAIOutput(content) {
     try {
       branches = JSON.parse(cleaned)
     } catch (e) {
+      // 2026-09-11：先试补冒号（prompt 模板缺冒号的畸形写法，两个厂商都中招）
+      if (!branches) {
+        const colons = repairMissingColons(cleaned)
+        if (colons !== cleaned) {
+          try {
+            branches = JSON.parse(colons)
+            if (branches) {
+              cleaned = colons
+              repaired = true
+            }
+          } catch (eColon) { /* 补冒号仍失败 → 继续走下面原有兜底 */ }
+        }
+      }
+
       // 2026-08-02：AI 偶发把 JSON 二次转义（\"options\":[\"a\"...] 键值全带反斜杠）
       // 特征：JSON.parse 报 "Expected double-quoted property name"
       // 修法：全局还原 \" → " 再试；若 content 里有合法转义引号被误伤，继续走 fixJSONContentQuotes 兜底

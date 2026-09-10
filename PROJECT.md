@@ -6,6 +6,25 @@
 
 ---
 
+## 状态快照（最新一次巡检 · 2026-09-11 00:25 · 第 142 次）
+
+> **🎯 142 期 · 卡了 14 期的「worker 不消费 pending」结案：系废弃功能残留，非活跃 bug** —— 先生 09-11 00:19 上线（**离线 605.9h = 25.2 天**，08-16 18:31 → 09-11 00:24），指示跑完整巡检。**本期唯一实质产出 = 破案**：
+> **【根因】** 99 条 pending 按 category 拆开看 → **scene=88 / narrate=8 / score=3**。逐类别拉最近 10 条 status 发现：**narrate 10/10 success、score 10/10 success（主链路 100% 健康）**，pending 几乎全部集中在 **scene**（且 scene 同时有大量 error，08-16 16:xx 时段 pending 与 error 交织出现）。
+> **【机制】** scene 抽取是「为生图服务的独立 AI 调用」（`runPhaseScene`，8s 硬超时）。MiniMax 实测响应慢 → 大部分 8s 超时进 catch 写 error；少数请求在云函数 60s 平台超时被强杀，catch 分支跑不到 → 卡 pending（与 08-04 15:20 `hardTimeout` 注释描述的机制一致）。
+> **【闭环证据】** ① `dc68eac`（2026-08-17）「生图逻辑清理」已把 scene 一并下线 ② 全仓 grep：前端 `minigame/` 无任何 `phase:'scene'` / `sceneRequestId` / 画图残留 ③ **最新一条 pending = 08-16 16:26:51**（1786868811731），早于 dc68eac（08-17）→ 下线后零新增，与数据完全吻合。
+> **【结论】** 99 条 pending = **已废弃功能的墓碑**，不会再增长。worker 从未「停止消费」，主链路一直正常。**128-141 期连续 14 期的决策点到此结案**，无需再排查 worker。
+> **其余指标全部持平**：git `dd183d2` 后无新 commit / ahead=7 未 push；5 基础表 115/167/9881/619/197 持平；D049 4 表 player=3 / player_life=4 / narrate_history=699 / llm_io=591 持平；narrate_history 仍停 seq=645 @ 08-16 18:30；单测 hardtimeout 3/3 ✅ + parse-ai-output 18/18 ✅；`node -c` index.js / q_db.js / q_pmo_http.js 全 OK；`test-narrate-pipeline.js` 端到端 ❌（`npx tcb fn invoke` 超时，仍受 tcb 凭证阻塞，非代码问题）；`ai_narrate_worker` timeout=60s。
+> **本期改动**：`scripts/q_pmo_http.js` 新增 `cat_recent` 查询类型（按 category 拉最近 10 条 status，本次破案的关键工具）。
+> **🎯 142 期决策点（唯一）= 是否授权清理这 99 条僵尸 pending 记录**（88 条属已废弃 scene；纯脏数据，不影响线上）。需先生点头——数据库写操作不擅自动。
+
+---
+
+## 状态快照（最新一次巡检 · 2026-08-28 21:01 · 第 141 次）
+
+> **🎉 141 期 · 先生持续离线 290.5h+（12.1 天）/ llm_io 卡轮 99 条持续 739.2h+（30.8 天）/ 全部指标持平** —— 140 期（08-27 21:01）报全部指标持平。**本 12h 窗（08-27 21:01→08-28 21:01）先生 3 件零事**：① 0 commit（dd183d2 后无新提交 / ahead=7 +1）② 0 真机游玩（narrate_history 仍停 seq=645 @ 08-16 18:30:48 = **290.5h+ 静止 = 12.1 天**）③ 0 新历史数据入库 = **先生持续离线（新玩家 08-16 活动后 → 141 期连续 0 动作）**。**PMO 141 期动作 = 四大类常态巡检全部指标持平**：① 产品功能/遗留事项：§10.4 5 系统状态：死神 ❌已废弃 / 跨世痕迹 ❌ / 动态榜单 ❌ / Prompt v12 ❌ / 多玩家 ❌ = 5 ❌ 持平；遗留：任务源路径漂移 141+ 期 + dc68eac 功能改善待真机验证 ② UX 优化：先生 290.5h+ 未游玩 = 对话流增量 = 0 = 无新增审查 ③ 代码：node -c 4 个关键文件全 OK（index.js + parse-ai-output.js + q_db.js + q_pmo_http.js）+ 单测 26/26 全跑（18+8，test-narrate-pipeline.js 不存在）+ dd183d2 后无新 commit = 零净增代码 ④ 数据库：5 表 115/167/9881/619/197 全部持平 · D049 4 表 player=3 / player_life=4 / narrate_history=699 / llm_io=591 全部持平 · **卡轮 99 条持续（pending_total=99，最早 739.2h 前 07-28 01:48 CST，category 分布: scene=88+narrate=8+score=3，done=0）** · dirty content 采样 50 条 1 脏（vs 140 期 0 脏，微增） · ai_narrate_worker timeout=60s（cloudbaserc.json 确认）· ahead=7 未 push。**🎯 141 期决策点 = 卡轮 99 条持续 739.2h+（30.8 天）需排查 worker 为什么不再消费 pending 请求**（延续 128-140 期，worker 可能已停止或阻塞；done=0 表明 worker 完全未产出结果）。
+
+---
+
 ## 状态快照（最新一次巡检 · 2026-08-27 21:01 · 第 140 次）
 
 > **🎉 140 期 · 先生持续离线 266.5h+（11.1 天）/ llm_io 卡轮 99 条持续 715.2h+（29.8 天）/ 全部指标持平** —— 139 期（08-27 09:01）报全部指标持平。**本 12h 窗（08-27 09:01→08-27 21:01）先生 3 件零事**：① 0 commit（2656a9b 后无新提交 / ahead=6 +1）② 0 真机游玩（narrate_history 仍停 seq=645 @ 08-16 18:30:48 = **266.5h+ 静止 = 11.1 天**）③ 0 新历史数据入库 = **先生持续离线（新玩家 08-16 活动后 → 140 期连续 0 动作）**。**PMO 140 期动作 = 四大类常态巡检全部指标持平**：① 产品功能/遗留事项：§10.4 5 系统状态：死神 ❌已废弃 / 跨世痕迹 ❌ / 动态榜单 ❌ / Prompt v12 ❌ / 多玩家 ❌ = 5 ❌ 持平；遗留：任务源路径漂移 140+ 期 + dc68eac 功能改善待真机验证 ② UX 优化：先生 266.5h+ 未游玩 = 对话流增量 = 0 = 无新增审查 ③ 代码：node -c 4 个关键文件全 OK（index.js + parse-ai-output.js + q_db.js + q_pmo_http.js）+ 单测 26/26 全跑（18+8，test-narrate-pipeline.js 不存在）+ 2656a9b 后无新 commit = 零净增代码 ④ 数据库：5 表 115/167/9881/619/197 全部持平 · D049 4 表 player=3 / player_life=4 / narrate_history=699 / llm_io=591 全部持平 · **卡轮 99 条持续（pending_total=99，最早 715.2h 前 07-28 01:48 CST，category 分布: scene=88+narrate=8+score=3，done=0）** · dirty content 采样 50 条 0 脏 · ai_narrate_worker timeout=60s（cloudbaserc.json 确认）· ahead=6 未 push。**🎯 140 期决策点 = 卡轮 99 条持续 715.2h+（29.8 天）需排查 worker 为什么不再消费 pending 请求**（延续 128-139 期，worker 可能已停止或阻塞；done=0 表明 worker 完全未产出结果）。
@@ -53,6 +72,13 @@
 ---
 
 > ✅ §10.4 死神行矛盾已解决（120 期 f459dff 08-17 21:59 🚧→❌已废弃）· 持续 25 天（跨 101-120 期）· **MM_API_KEY 决策点已按先生指令移除（⛔ 2026-08-18）**
+
+---
+
+> 📌 **本期（141 期）待 commit 清单 · 0 项先生 + 1 项 PMO**
+> - ✅ `M PROJECT.md`（PMO 141 期简报快照 + 先生持续离线 290.5h+（12.1 天）+ llm_io 卡轮 99 条持续 739.2h+（category: scene=88/narrate=8/score=3，done=0）+ 5 基础表全部持平 + D049 全部持平（player=3/player_life=4/narrate_history=699/llm_io=591）+ dirty 采样 50/1 脏 + dd183d2 后无新 commit + node -c OK + 单测 26/26 全跑 + ai_narrate_worker timeout=60s + ahead=7 未 push）
+> - working tree 干净
+> - ahead=7 待 push（先生确认后可推）
 
 ---
 

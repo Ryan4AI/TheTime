@@ -70,6 +70,11 @@ async function dbQuery(query, isCount=false) {
     } else if (type === 'recent3') {
       query = `db.collection('${table}').orderBy('created_at','desc').limit(3).field({_id:true,created_at:true,status:true,category:true}).get()`;
       isCount = false;
+    } else if (type === 'cat_recent') {
+      // 用法: node q_pmo_http.js llm_io cat_recent scene  （查某 category 最近 10 条 status/created_at）
+      const cat = process.argv[4];
+      query = `db.collection('${table}').where({category:'${cat}'}).orderBy('created_at','desc').limit(10).field({_id:true,created_at:true,status:true,category:true}).get()`;
+      isCount = false;
     } else if (type === 'max_seq') {
       query = `db.collection('${table}').orderBy('seq','desc').limit(3).field({_id:true,seq:true,created_at:true,content:true,role:true}).get()`;
       isCount = false;

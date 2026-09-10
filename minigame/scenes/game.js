@@ -134,6 +134,43 @@ function getStyleForDynasty(dynasty) {
 const TYPEWRITE_SPEED = 15   // v3.0.11: 每字符 15ms（流式下 LLM 100 TPS=10ms/字·需要打字机接近 LLM 速度）
 // 2026-09-11 先生拍板：删除 MAX_NARRATIVE_CHARS=600 硬截断（超长叙事尾部被静默吞掉，存库原文却是完整的 → 玩家看到的内容 < AI 后续接的内容）
 
+// 2026-09-11：player_life 数据库记录 → worker/前端 state 结构（字段名对齐）
+// 根因：AI₂ 后前端直读 player_life 原始记录（era_display / reputation / wealth … 英文字段），
+// 但 handleAIResponse 按 worker 风格读（eraDisplay / 声望 / 财富 …）
+// → eraDisplay + 9 项属性 + items 全部匹配不上、静默不更新（先生反馈月份/地点不动）
+function mapDbToWorkerState(rec) {
+  // 空记录（DB 读失败/查不到）返回 null → 调用处自动降级用 worker 返回的 state
+  if (!rec || typeof rec.age !== 'number') return null
+  return {
+    life_number: rec.life_number,
+    name: rec.name,
+    gender: rec.gender === 'female' ? '女' : '男',
+    age: rec.age,
+    occupation: rec.occupation,
+    social_class: rec.social_class || rec.socialClass,
+    dynasty: rec.dynasty,
+    eraDisplay: rec.era_display || rec.eraDisplay,
+    city: rec.city,
+    year: rec.year,
+    month: rec.month,
+    round: rec.round,
+    coin: rec.coin,
+    '声望': rec.reputation || 0,
+    '财富': rec.wealth || 0,
+    '学识': rec.knowledge || 0,
+    '颜值': rec.appearance || 0,
+    '医术': rec.medical || 0,
+    '战功': rec.military || 0,
+    '文采': rec.literary || 0,
+    '政绩': rec.political || 0,
+    '义行': rec.righteous || 0,
+    lifespan: rec.lifespan,
+    epitaph: rec.epitaph || '',
+    alive: rec.alive !== false,
+    items: rec.current_items || [],
+  }
+}
+
 // v3.0.14: 指针扫描抽 content（替代脆弱正则）
 // 不依赖 JSON 闭合，能在流式未闭合时正确切分；不被 content 内的转义引号提前截断
 function extractContent(raw) {
@@ -298,6 +335,8 @@ module.exports = {
             // 修法：用 player_life（平铺字段）覆盖 state 的业务字段（month/year/round/属性等）
             // 注：player_life 字段是平铺的（month/year/reputation 在顶级），不是嵌套 state
             if (playerLife) {
+              // 2026-09-11：life_number 之前没恢复 → 第 2 世起 DB 直读 where({life_number:1}) 查不到记录
+              if (typeof playerLife.life_number === 'number') state.life_number = playerLife.life_number
               if (typeof playerLife.month === 'number') state.month = playerLife.month
               if (typeof playerLife.year === 'number') state.year = playerLife.year
               if (typeof playerLife.round === 'number') state.round = playerLife.round
@@ -373,7 +412,7 @@ module.exports = {
                     const db = wx.cloud.database()
                     db.collection('player_life').where({ openid: _openid, life_number: state.life_number || 1 }).get({
                       success: (dbRes) => {
-                        const ns = (dbRes.data && dbRes.data[0]) || res2.newState || {}
+                        const ns = mapDbToWorkerState(dbRes.data && dbRes.data[0]) || res2.state || res2.newState || {}
                         if (typeof ns.age === 'number') state.age = ns.age
                         if (ns.coin !== undefined) state.coin = ns.coin
                         if (ns.month) state.month = ns.month
@@ -399,7 +438,7 @@ module.exports = {
                       },
                       fail: (dbErr) => {
                         console.warn('[D094-async] DB 读取失败，降级用 r2.newState:', dbErr)
-                        const ns = res2.newState || {}
+                        const ns = res2.state || res2.newState || {}
                         if (typeof ns.age === 'number') state.age = ns.age
                         if (ns.coin !== undefined) state.coin = ns.coin
                         if (ns.month) state.month = ns.month
@@ -714,23 +753,24 @@ function callAI(userInput) {
                   partial: false,
                   branch: r.picked,
                   branches: r.branches,
-                  state: dbState,
-                  month_changed: r2.monthChanged,
-                  new_month: r2.newMonth,
-                  new_year: r2.newYear,
+                  // 2026-09-11：DB 记录字段映射成 worker 风格（否则 eraDisplay/属性全丢）
+                  state: mapDbToWorkerState(dbState) || r2.state,
+                  month_changed: (r2.month_changed !== undefined ? r2.month_changed : r2.monthChanged),
+                  new_month: (r2.new_month !== undefined ? r2.new_month : r2.newMonth),
+                  new_year: (r2.new_year !== undefined ? r2.new_year : r2.newYear),
                   history: r.history,
                   narrate_history_added_ids: null,
                   debug: { ...r.debug, ...r2.debug },
                   event: r.monthEvent,
-                  system_messages: r2.systemMessages,
-                  closest_board: r2.closestBoard,
+                  system_messages: (r2.system_messages !== undefined ? r2.system_messages : r2.systemMessages),
+                  closest_board: (r2.closest_board !== undefined ? r2.closest_board : r2.closestBoard),
                   is_retry: r.is_retry,
-                  attr_patch: r2.attrPatch,
+                  attr_patch: (r2.attr_patch !== undefined ? r2.attr_patch : r2.attrPatch),
                 }
                 // 填 debugLog ai2 字段
                 if (debugLog.length > 0) {
                   const last = debugLog[debugLog.length - 1]
-                  last.attr_patch = r2.attrPatch
+                  last.attr_patch = (r2.attr_patch !== undefined ? r2.attr_patch : r2.attrPatch)
                   last.score_prompt = r2.debug.score_prompt
                   last.score_raw_response = r2.debug.score_raw_response
                   last.poll_attempts = 1
@@ -748,22 +788,23 @@ function callAI(userInput) {
                   partial: false,
                   branch: r.picked,
                   branches: r.branches,
-                  state: r2.newState,
-                  month_changed: r2.monthChanged,
-                  new_month: r2.newMonth,
-                  new_year: r2.newYear,
+                  // 2026-09-11：worker 返回字段是 state（不是 newState），写错 → undefined → 整轮 state 不更新
+                  state: r2.state || r2.newState,
+                  month_changed: (r2.month_changed !== undefined ? r2.month_changed : r2.monthChanged),
+                  new_month: (r2.new_month !== undefined ? r2.new_month : r2.newMonth),
+                  new_year: (r2.new_year !== undefined ? r2.new_year : r2.newYear),
                   history: r.history,
                   narrate_history_added_ids: null,
                   debug: { ...r.debug, ...r2.debug },
                   event: r.monthEvent,
-                  system_messages: r2.systemMessages,
-                  closest_board: r2.closestBoard,
+                  system_messages: (r2.system_messages !== undefined ? r2.system_messages : r2.systemMessages),
+                  closest_board: (r2.closest_board !== undefined ? r2.closest_board : r2.closestBoard),
                   is_retry: r.is_retry,
-                  attr_patch: r2.attrPatch,
+                  attr_patch: (r2.attr_patch !== undefined ? r2.attr_patch : r2.attrPatch),
                 }
                 if (debugLog.length > 0) {
                   const last = debugLog[debugLog.length - 1]
-                  last.attr_patch = r2.attrPatch
+                  last.attr_patch = (r2.attr_patch !== undefined ? r2.attr_patch : r2.attrPatch)
                   last.score_prompt = r2.debug.score_prompt
                   last.score_raw_response = r2.debug.score_raw_response
                   last.poll_attempts = 1

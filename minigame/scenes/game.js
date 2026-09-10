@@ -79,6 +79,15 @@ var dbgCompressList = []      // 2026-08-02：DBG「压缩」tab 拉到的 histo
 var dbgCompressLoading = false // tab 8「压缩」加载中
 var dbgCompressScroll = 0     // tab 8 列表滚动偏移
 
+// 2026-09-11 先生反馈：DBG 里只显示时间、没日期，跨天排查分不清 → 统一 MM-DD HH:mm:ss
+function fmtDbgTs(ts) {
+  if (!ts) return '-'
+  const d = new Date(ts)
+  if (isNaN(d.getTime())) return '-'
+  const p = n => String(n).padStart(2, '0')
+  return p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds())
+}
+
 // DBG llm_io tab（先生 2026-07-23 23:49 指示加）：只读展示 dump_result 拉到的云端 llm_io 集合
 var dbgLlmIoScroll = 0        // 列表滚动偏移
 var dbgDataDirtyIds = null    // dryRun 算出的脏 _id Set（null=未算）
@@ -4188,7 +4197,11 @@ function handleTouch(x, y, type) {
   }
 
   // ── v0.6.56: 命格区点击切换数值详情 ──
-  if (type === 'end' && layout.fateArea && hitTest(x, y, layout.fateArea.x, layout.fateArea.y, layout.fateArea.w, layout.fateArea.h)) {
+  // 2026-09-11 修：命格区在屏幕底部（y ≈ [H-94, H-38]），与 DBG 第 3 行 tab（数据/llm_io/压缩）
+  //   重叠约 38px，而本判定排在 DBG 拦截之前 → 点 DBG「数据」tab 被它抢走
+  //  （先生反馈："在 DBG 页面点击切换，经常会变成点击底部"）
+  //   修：DBG 展开时本判定让位——DBG 是模态浮窗，应优先吃掉所有触摸
+  if (type === 'end' && !debugOpen && layout.fateArea && hitTest(x, y, layout.fateArea.x, layout.fateArea.y, layout.fateArea.w, layout.fateArea.h)) {
     showFateDetail = !showFateDetail
     return null
   }
@@ -5074,7 +5087,7 @@ function drawDbgDataTab(ctx) {
     ctx.font = '11px sans-serif'
     ctx.fillText(contentStr, cbX + checkboxSize + 6, _curY + 18)
     // meta: msg_id + time
-    const meta = `msg=${r.message_id || '-'}  ${new Date(r.created_at || 0).toLocaleTimeString()}`
+    const meta = `msg=${r.message_id || '-'}  ${fmtDbgTs(r.created_at)}`
     ctx.fillStyle = '#666'
     ctx.font = '9px monospace'
     ctx.fillText(meta, cbX + checkboxSize + 6, _curY + 30)

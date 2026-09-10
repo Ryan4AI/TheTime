@@ -4659,6 +4659,18 @@ function handleTouch(x, y, type) {
       return null
     }
     scrollTouchStartY = 0
+
+    // 2026-09-11（先生拍板）：点叙事区 = 跳过打字机，立即显示全文
+    // 去掉 600 字截断后长剧情可达 1000+ 字 × 15ms/字 = 19 秒才打完才出选项，手动点一下直接到底
+    const _skipArea = layout._scrollArea
+    if (_skipArea && narrative && displayedChars < narrative.length &&
+        x >= _skipArea.x && x <= _skipArea.x + _skipArea.w &&
+        y >= _skipArea.y && y <= _skipArea.y + _skipArea.h) {
+      displayStartTime = Date.now() - narrative.length * TYPEWRITE_SPEED  // 让 elapsed 直接越过总字数
+      displayedChars = narrative.length
+      if (optionsAppearTime > Date.now()) optionsAppearTime = Date.now()  // 选项立即淡入，不用再等
+      return null
+    }
   }
 
   if (type !== 'end') return null

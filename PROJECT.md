@@ -16,6 +16,8 @@
 > **其余指标全部持平**：git `dd183d2` 后无新 commit / ahead=7 未 push；5 基础表 115/167/9881/619/197 持平；D049 4 表 player=3 / player_life=4 / narrate_history=699 / llm_io=591 持平；narrate_history 仍停 seq=645 @ 08-16 18:30；单测 hardtimeout 3/3 ✅ + parse-ai-output 18/18 ✅；`node -c` index.js / q_db.js / q_pmo_http.js 全 OK；`test-narrate-pipeline.js` 端到端 ❌（`npx tcb fn invoke` 超时，仍受 tcb 凭证阻塞，非代码问题）；`ai_narrate_worker` timeout=60s。
 > **本期改动**：`scripts/q_pmo_http.js` 新增 `cat_recent` 查询类型（按 category 拉最近 10 条 status，本次破案的关键工具）。
 > **🎯 142 期决策点（唯一）= 是否授权清理这 99 条僵尸 pending 记录**（88 条属已废弃 scene；纯脏数据，不影响线上）。需先生点头——数据库写操作不擅自动。
+>
+> **✅ 决策已执行（09-11 00:37 先生授权）**：新增 `scripts/cleanup-pending.js`（三模式 export/delete/verify，硬编码安全约束：只碰 `llm_io` + 只删 `status==='pending'`，delete 前强制导出备份）→ 备份 `backups/llm_io-pending-20260911-003711.json`（99 条 / 33.6 KB，`backups/` 已被 .gitignore 排除不入库）→ 删除前核对：category 分布 narrate=8/score=3/scene=88 · 时间范围 **07-29 01:48 ~ 08-16 16:26**（全早于 08-17 生图下线，零误伤风险）→ `databasedelete` 返回 `deleted:99` → **清理后 pending = 0，llm_io 总数 591 → 492（减量 99，success/error 一条未动）**。
 
 ---
 

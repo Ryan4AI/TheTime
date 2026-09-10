@@ -54,13 +54,15 @@ const https = require('https')
 // 规则：每遇解析失败加测试 case；改解析函数必须保证历史 case 全过
 const { parseAIOutput } = require('./parse-ai-output')
 
-// v0.6.9x（先生 2026-06-19 04:27 拍板）：换回 MiniMax-M2.7-highspeed
-// 之前用 DeepSeek v4 Flash（v0.6.9 切到 DS；本次反向回滚）
-// 思考链：think=false 关闭，保留前端 think 剥离作为兜底
-const MM_API_KEY = process.env.MM_API_KEY
-const MM_BASE_URL = 'https://api.minimaxi.com/v1'
-const MM_MODEL = 'MiniMax-M2.7-highspeed'
-const MM_FALLBACK_MODEL = 'MiniMax-M2.7-highspeed'
+// 2026-09-11 01:20 先生拍板：切到 DeepSeek-V4.1-Flash（model=deepseek-flash）
+//   起因：MiniMax Token Plan 额度耗尽（HTTP 429 code 2056），非 key 失效
+//   选型：官方定价闲时 $0.15/$0.6 每百万（约 ¥1/¥4），MiniMax-M2.7-highspeed 为 ¥4.2/¥16.8
+//   实测：吞吐 126 TPS（MiniMax 官方标称 100 TPS）；thinking 可显式关闭（M2.x 关不掉，思考过程一直在烧钱）
+//   注：变量名 DS_* 为语义命名，早期曾叫 MM_*（MiniMax 时期遗留）
+const DS_API_KEY = process.env.DS_API_KEY
+const DS_BASE_URL = 'https://api.deepseek.com'
+const DS_MODEL = 'deepseek-flash'
+const DS_FALLBACK_MODEL = 'deepseek-flash'
 const MAX_TOKENS = 1500  // v3.0.9: 单分支 narrative 只需 ~500 token，1500 给 LLM 推理余量
 const SCORE_MAX_TOKENS = 800  // D045：AI₂ JSON 9 属性 + month_delta + items 至少 200 token, 300 太短经常截断
 const TEMPERATURE = 0.85
@@ -342,7 +344,7 @@ async function runPhase1({ openid, input, is_retry, narrateRequestId }) {
 
   // 写 pending llm_io（精简版：只记调用参数）
   await writeLlmIo(narrateRequestId, openid, 'narrate', 'pending', {
-    input: { model: MM_MODEL, prompt_chars: 0, is_retry: !!is_retry },
+    input: { model: DS_MODEL, prompt_chars: 0, is_retry: !!is_retry },
   })
 
   // D090：后端自治 state，从 player_life 拉最新世
@@ -455,7 +457,7 @@ async function runPhase1({ openid, input, is_retry, narrateRequestId }) {
   let parsedBranches = ''
   try { parsedBranches = JSON.stringify(branches) } catch (e) {}
   await writeLlmIo(narrateRequestId, openid, 'narrate', 'success', {
-    input: { model: MM_MODEL, prompt_chars: systemPrompt.length + userPrompt.length, is_retry: !!is_retry },
+    input: { model: DS_MODEL, prompt_chars: systemPrompt.length + userPrompt.length, is_retry: !!is_retry },
     raw_response: rawContent || '',
     parsed: parsedBranches,
     duration_ms: t2 - startTs,
@@ -520,7 +522,7 @@ async function runPhase2({ openid, scoreRequestId, input }) {
 
   // 写 pending score llm_io
   await writeLlmIo(scoreRequestId, openid, 'score', 'pending', {
-    input: { model: MM_MODEL },
+    input: { model: DS_MODEL },
   })
 
   // D090：从 player_life 拉最新世 state
@@ -572,7 +574,7 @@ async function runPhase2({ openid, scoreRequestId, input }) {
 
   // 写 score llm_io 成功记录（精简版：只记评分AI原始返回+耗时）
   await writeLlmIo(scoreRequestId, openid, 'score', 'success', {
-    input: { model: MM_MODEL, prompt_chars: scorePrompt.length },
+    input: { model: DS_MODEL, prompt_chars: scorePrompt.length },
     raw_response: scoreRawResponse || '',
     duration_ms: t1 - startTs,
   })
@@ -1235,7 +1237,10 @@ async function runPhaseScene({ openid, sceneRequestId, input }) {
     // 2026-08-03 18:46 先生反馈 scene 100% 超时：MiniMax 推理模式实测 4.5-6s，4s 必失败 → 调 4.8s
     // 2026-08-03 22:30 巡检：4.8s 仍 8/8 全超时 → 前端改"5s 先出模板图 + scene 迟到替换"（latest-wins）
     //   worker 超时放宽到 8s，给 MiniMax 完整响应时间；前端 5s 先生拍板的防空白上限不动
-    const raw = await callLLM(messages, null, { maxTokens: 300, timeoutMs: 8000, thinkOff: true })
+    // 2026-09-11 修：callLLM 返回完整响应对象，此前直接把对象当字符串用 → scene 恒为 "[object Object]"
+    const resp = await callLLM(messages, null, { maxTokens: 300, timeoutMs: 8000 })
+    const raw = ((resp.choices?.[0]?.message?.content) || '')
+      .replace(/<think>[\s\S]*?<\/think>/g, '').trim()
     const scene = extractScene(raw)
     await writeLlmIo(sceneRequestId, openid, 'scene', 'success', {
       prompt_chars: narrativeText.length,
@@ -1447,7 +1452,7 @@ async function summarizeHistory(oldPart, prevSummaryText) {
     { role: 'user', content: `${prevSummaryText ? '这是之前压缩过的前情提要，请结合下面的新对话，输出一份更新后的完整前情提要（覆盖全部历史，不要只写新增部分）：\n' : ''}以下是对话记录（玩家=玩家输入，叙事=AI 剧情，系统=状态变化）：\n\n${text}\n\n请输出 300-500 字的前情提要，必须包含：主角身份与当前处境、重要人物及关系、关键事件与恩怨、持有的重要物品、当前目标。只输出提要正文，不要任何前缀或解释。` },
   ]
   try {
-    const resp = await callLLM(messages, MM_MODEL)
+    const resp = await callLLM(messages, DS_MODEL)
     let content = resp.choices?.[0]?.message?.content || ''
     content = content.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<aihint>[\s\S]*?<\/aihint>/g, '').replace(/<function_calls>[\s\S]*?<\/function_calls>/g, '').trim()
     if (!content) return null
@@ -1558,20 +1563,20 @@ async function callAI(state, input, history, monthEvent, isRetry, compressSummar
   // D048c（2026-06-28 09:42 拍板）：改非流式 callLLM（凌晨 9 版本真因：流式根本做不好）
   // 前端拿完整 content 后用前端假打字机（streamedText + TYPEWRITE_SPEED）
   try {
-    response = await callLLM(messages, MM_MODEL)
+    response = await callLLM(messages, DS_MODEL)
   } catch (e) {
     const status = e.statusCode || 0
     if (status === 400 || status === 429 || (status >= 500 && status < 600)) {
       console.error('[ai_narrate_worker] 主模型失败，回退:', status, e.message)
-      response = await callLLM(messages, MM_FALLBACK_MODEL)
+      response = await callLLM(messages, DS_FALLBACK_MODEL)
     } else {
       throw e
     }
   }
   const t_llm_end = Date.now()
-  console.log('[PERF] callAI.llm_ms=', t_llm_end - t_llm_start, 'model=', MM_MODEL, 'prompt_chars=', systemPrompt.length + userPrompt.length)
+  console.log('[PERF] callAI.llm_ms=', t_llm_end - t_llm_start, 'model=', DS_MODEL, 'prompt_chars=', systemPrompt.length + userPrompt.length)
   if (typeof globalThis.__PERF_LOGS__ !== 'undefined') {
-    globalThis.__PERF_LOGS__.push({ stage: 'callAI.llm_ms', ms: t_llm_end - t_llm_start, model: MM_MODEL, prompt_chars: systemPrompt.length + userPrompt.length })
+    globalThis.__PERF_LOGS__.push({ stage: 'callAI.llm_ms', ms: t_llm_end - t_llm_start, model: DS_MODEL, prompt_chars: systemPrompt.length + userPrompt.length })
   }
   const content = response.choices?.[0]?.message?.content || ''
   // 2026-08-02：解析链路抽到 parse-ai-output.js（含预处理/截取/去转义/fixJSON/fallback）
@@ -2373,7 +2378,7 @@ async function generateOptionsFallback(narrativeContent, openid) {
 
 function callLLM(messages, modelOverride, callOpts) {
   return new Promise((resolve, reject) => {
-    const useModel = modelOverride || MM_MODEL
+    const useModel = modelOverride || DS_MODEL
     const timeoutMs = (callOpts && callOpts.timeoutMs) || LLM_TIMEOUT_MS
     // 2026-08-03 13:29 先生拍板：实测 think:false 对 M2.7-highspeed 无效（模型强制思考，
     //   不带 reasoning_split 时思考直接混进 content；带 reasoning_split 时 thinking 仍占 completion_tokens）
@@ -2382,11 +2387,12 @@ function callLLM(messages, modelOverride, callOpts) {
     const data = JSON.stringify({
       model: useModel, messages,
       max_tokens: (callOpts && callOpts.maxTokens) || MAX_TOKENS, temperature: TEMPERATURE,
-      ...((callOpts && callOpts.thinkOff) ? {} : { think: false }),
-      reasoning_split: true,  // v3.0.14b: MiniMax 关 thinking（先生 13:44 拍板·reasoning_split 生效）
+      // 2026-09-11 切 DeepSeek：thinking 显式关闭（官方默认开启，不传就会带思考链）
+      //   注意：原 thinkOff 分支语义在 DeepSeek 下是反的（不传=开启思考），故统一无条件关闭
+      thinking: { type: 'disabled' },
       stream: false,
     })
-    const url = new URL(MM_BASE_URL + '/chat/completions')
+    const url = new URL(DS_BASE_URL + '/chat/completions')
     // 2026-08-04 15:20 巡检修复：socket 空闲超时（https.request timeout 选项）在 MiniMax 流式吐
     //   reasoning_content 时不触发（连接持续活跃）→ scene 请求挂起到云函数 60s 平台杀进程，
     //   writeLlmIo('error') 永远跑不到 → llm_io 卡 pending（08-04 凌晨 47 条）。
@@ -2401,7 +2407,7 @@ function callLLM(messages, modelOverride, callOpts) {
     }, timeoutMs)
     const req = https.request({
       hostname: url.hostname, path: url.pathname, method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + MM_API_KEY },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DS_API_KEY },
       timeout: timeoutMs,
     }, res => {
       let body = ''

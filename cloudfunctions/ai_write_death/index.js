@@ -16,10 +16,10 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
 const https = require('https')
 
-const MM_API_KEY = process.env.MM_API_KEY
-const MM_BASE_URL = 'https://api.minimaxi.com/v1'
-const MM_MODEL = 'MiniMax-M2.7-highspeed'
-const MM_FALLBACK_MODEL = 'MiniMax-M2.7-highspeed'
+const DS_API_KEY = process.env.DS_API_KEY
+const DS_BASE_URL = 'https://api.deepseek.com'
+const DS_MODEL = 'deepseek-flash'
+const DS_FALLBACK_MODEL = 'deepseek-flash'
 const MAX_TOKENS = 1500  // v0.6.97: 死因 + 志(50-100字) + 铭(4-16字)，token 多给点
 const TEMPERATURE = 0.8
 const LLM_TIMEOUT_MS = 90000
@@ -48,14 +48,14 @@ exports.main = async (event) => {
   // 调 LLM
   let content = ''
   try {
-    const response = await callLLM(messages, MM_MODEL)
+    const response = await callLLM(messages, DS_MODEL)
     content = response.choices?.[0]?.message?.content || ''
   } catch (e) {
     const status = e.statusCode || 0
     if (status === 400 || status === 429 || (status >= 500 && status < 600)) {
       console.error('[ai_write_death] 主模型失败，回退:', status, e.message)
       try {
-        const response = await callLLM(messages, MM_FALLBACK_MODEL)
+        const response = await callLLM(messages, DS_FALLBACK_MODEL)
         content = response.choices?.[0]?.message?.content || ''
       } catch (e2) {
         return { success: false, error: 'AI 不可用: ' + (e2.message || e.message) }
@@ -76,7 +76,7 @@ exports.main = async (event) => {
       { role: 'user', content: '你之前的输出格式不对。请严格按 JSON 输出 { deathCause, epRecord, epitaph } 三个字段，不要任何其他文字（包括解释、markdown 标记、think 标签）。' },
     ]
     try {
-      const retryResponse = await callLLM(retryMessages, MM_MODEL)
+      const retryResponse = await callLLM(retryMessages, DS_MODEL)
       const retryContent = retryResponse.choices?.[0]?.message?.content || ''
       parsed = tryParseJson(retryContent)
       if (parsed) content = retryContent
@@ -239,22 +239,22 @@ function getDefaultEpitaph(state, dt) {
 
 function callLLM(messages, modelOverride) {
   return new Promise((resolve, reject) => {
-    const useModel = modelOverride || MM_MODEL
+    const useModel = modelOverride || DS_MODEL
     const data = JSON.stringify({
       model: useModel,
       messages,
       max_tokens: MAX_TOKENS,
       temperature: TEMPERATURE,
-      think: false,
+      thinking: { type: 'disabled' },
     })
-    const url = new URL(MM_BASE_URL + '/chat/completions')
+    const url = new URL(DS_BASE_URL + '/chat/completions')
     const req = https.request({
       hostname: url.hostname,
       path: url.pathname,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + MM_API_KEY,
+        'Authorization': 'Bearer ' + DS_API_KEY,
       },
       timeout: LLM_TIMEOUT_MS,
     }, res => {

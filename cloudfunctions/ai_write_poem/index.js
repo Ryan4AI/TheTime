@@ -16,10 +16,10 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
 const https = require('https')
 
-const MM_API_KEY = process.env.MM_API_KEY
-const MM_BASE_URL = 'https://api.minimaxi.com/v1'
-const MM_MODEL = 'MiniMax-M2.7-highspeed'
-const MM_FALLBACK_MODEL = 'MiniMax-M2.7-highspeed'
+const DS_API_KEY = process.env.DS_API_KEY
+const DS_BASE_URL = 'https://api.deepseek.com'
+const DS_MODEL = 'deepseek-flash'
+const DS_FALLBACK_MODEL = 'deepseek-flash'
 const MAX_TOKENS = 400  // 诗很短，token 少给
 const TEMPERATURE = 1.0  // 高温，多样性
 const LLM_TIMEOUT_MS = 30000  // 抽签时诗需要快速出来
@@ -58,14 +58,14 @@ exports.main = async (event) => {
   // 调 LLM
   let content = ''
   try {
-    const response = await callLLM(messages, MM_MODEL)
+    const response = await callLLM(messages, DS_MODEL)
     content = response.choices?.[0]?.message?.content || ''
   } catch (e) {
     const status = e.statusCode || 0
     if (status === 400 || status === 429 || (status >= 500 && status < 600)) {
       console.error('[ai_write_poem] 主模型失败，回退:', status, e.message)
       try {
-        const response = await callLLM(messages, MM_FALLBACK_MODEL)
+        const response = await callLLM(messages, DS_FALLBACK_MODEL)
         content = response.choices?.[0]?.message?.content || ''
       } catch (e2) {
         return { success: false, error: 'AI 不可用: ' + (e2.message || e.message) }
@@ -189,22 +189,22 @@ function buildPoemUserPrompt(state, arc, arcDesc) {
 
 function callLLM(messages, modelOverride) {
   return new Promise((resolve, reject) => {
-    const useModel = modelOverride || MM_MODEL
+    const useModel = modelOverride || DS_MODEL
     const data = JSON.stringify({
       model: useModel,
       messages,
       max_tokens: MAX_TOKENS,
       temperature: TEMPERATURE,
-      think: false,
+      thinking: { type: 'disabled' },
     })
-    const url = new URL(MM_BASE_URL + '/chat/completions')
+    const url = new URL(DS_BASE_URL + '/chat/completions')
     const req = https.request({
       hostname: url.hostname,
       path: url.pathname,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + MM_API_KEY,
+        'Authorization': 'Bearer ' + DS_API_KEY,
       },
       timeout: LLM_TIMEOUT_MS,
     }, res => {

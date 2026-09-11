@@ -66,7 +66,10 @@ const DS_FALLBACK_MODEL = 'deepseek-flash'
 const MAX_TOKENS = 1500  // v3.0.9: 单分支 narrative 只需 ~500 token，1500 给 LLM 推理余量
 const SCORE_MAX_TOKENS = 800  // D045：AI₂ JSON 9 属性 + month_delta + items 至少 200 token, 300 太短经常截断
 const TEMPERATURE = 0.85
-const LLM_TIMEOUT_MS = 110000
+// 2026-09-11 10:10：110s → 45s。云函数平台超时是 60s（cloudbaserc.json ai_narrate_worker），
+//   硬截止比平台超时还大 = 慢请求必然被平台在 60s 强杀 → catch 跑不到 → llm_io 卡 pending、
+//   前端只拿到平台超时（无明确报错、无重试入口）。45s 留 15s 给 catch 写 error 并返回。
+const LLM_TIMEOUT_MS = 45000
 
 // 榜单阈值（硬编码，从 data/leaderboards.json 预计算，数据不变）
 // v0.6.47: 各榜单末位历史人物的实际综合分（数据已重算到游戏量级）

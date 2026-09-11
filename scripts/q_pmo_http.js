@@ -68,12 +68,25 @@ async function dbQuery(query, isCount=false) {
       query = `db.collection('${table}').where({status:'pending'}).orderBy('created_at','desc').limit(100).field({_id:true,category:true,created_at:true}).get()`;
       isCount = false;
     } else if (type === 'recent3') {
-      query = `db.collection('${table}').orderBy('created_at','desc').limit(3).field({_id:true,created_at:true,status:true,category:true}).get()`;
+      const lim = parseInt(process.argv[4] || '3', 10);
+      query = `db.collection('${table}').orderBy('created_at','desc').limit(${lim}).field({_id:true,created_at:true,status:true,category:true}).get()`;
       isCount = false;
     } else if (type === 'cat_recent') {
       // 用法: node q_pmo_http.js llm_io cat_recent scene  （查某 category 最近 10 条 status/created_at）
       const cat = process.argv[4];
       query = `db.collection('${table}').where({category:'${cat}'}).orderBy('created_at','desc').limit(10).field({_id:true,created_at:true,status:true,category:true}).get()`;
+      isCount = false;
+    } else if (type === 'role_recent') {
+      // 用法: node q_pmo_http.js narrate_history role_recent system 8
+      const role = process.argv[4] || 'system';
+      const lim = parseInt(process.argv[5] || '8', 10);
+      query = `db.collection('${table}').where({role:'${role}'}).orderBy('seq','desc').limit(${lim}).field({_id:true,seq:true,created_at:true,role:true,content:true}).get()`;
+      isCount = false;
+    } else if (type === 'cat_raw') {
+      // 用法: node q_pmo_http.js llm_io cat_raw narrate 2  （看某 category 最近 N 条的原始输出/状态）
+      const cat = process.argv[4];
+      const lim = parseInt(process.argv[5] || '2', 10);
+      query = `db.collection('${table}').where({category:'${cat}'}).orderBy('created_at','desc').limit(${lim}).get()`;
       isCount = false;
     } else if (type === 'max_seq') {
       query = `db.collection('${table}').orderBy('seq','desc').limit(3).field({_id:true,seq:true,created_at:true,content:true,role:true}).get()`;
@@ -87,7 +100,8 @@ async function dbQuery(query, isCount=false) {
       const data = r.data;
       if (Array.isArray(data)) {
         console.log(`${table} ${type}: array len=${data.length}`);
-        data.slice(0, 10).forEach(x => console.log(' ', JSON.stringify(x).slice(0, 220)));
+        const sw = parseInt(process.env.Q_SLICE || "220", 10);
+        data.slice(0, parseInt(process.env.Q_LIMIT || "10", 10)).forEach(x => console.log(' ', JSON.stringify(x).slice(0, sw)));
       } else if (typeof data === 'number') {
         console.log(`${table} ${type} total = ${data}`);
       } else {

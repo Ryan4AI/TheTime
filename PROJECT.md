@@ -6,6 +6,33 @@
 
 ---
 
+## 状态快照（最新一次巡检 · 2026-09-11 09:01 · 第 143 次）
+
+> **🎉 143 期 · 先生回归大爆发：离线 25.2 天后上线 8 小时，9 commit + 真机游玩 51 条叙事（seq 645→696）** —— 142 期（09-11 00:25）报「僵尸 pending 破案」。本期先生从 00:19 上线后连续作战到 05:14，**9 个 commit**（235aef9 清 pending → d0726c3 换 DeepSeek → 16ccb2c 停跟踪 cloudbaserc → f33b0d8 DBG 修 → 858739f 叙事外壳 → 8edc013 去 600 截断 → c7d46f6 点叙事跳过 → 91a41e7 state 不更新修复 → 35703fa 查询工具），真机数据 **narrate_history 699→750（+51）· llm_io 492→543（+51）· max seq 645→696**。
+> **① 产品功能**：§10.4 五系统状态 5 ❌ 持平（死神❌已废弃/跨世痕迹❌/榜单动态计算❌/Prompt v12❌/多玩家❌）；无 ✅→🚧 推进。**本期先生交付的 4 个实质修复**（去 600 字截断 / 叙事外壳 / DBG 触摸抢事件 / AI2 后 state 冻结）全部已 commit 入库。遗留：任务源路径漂移 143+ 期；**91a41e7（05:14 state 修复）晚于最后一次真机游玩 05:09:46 = 尚未真机验证**。
+> **② UX**：对话流审查（+51 条新增）→ 属性变动 system 消息正常（例：义行 2150→2180 (+30) / 财富 1159→1129 (-30)），叙事连贯无断裂，**0 脏新增**。前端审查 → 新提案 P-143-1（长叙事等待：隐形跳过手势 + 打字机不自适应，见决策候选区）。
+> **③ 代码**：单测 **26/26 全过**（parse-ai-output 18/18 + dynasty-templates 8/8，`test-narrate-pipeline.js` 不存在）；`node -c` 6 文件全 OK（index.js / parse-ai-output.js / q_db.js / q_pmo_http.js / cleanup-pending.js / cleanup-narrate-shell.js）；9 commit 改动 11 文件 +419/-174；**新代码一致性**：字段名双读兜底（`r2.state || r2.newState`、`r2.month_changed ?? r2.monthChanged`）模式统一，无引用未声明变量。
+> **④ 数据库**：5 基础表 **115/167/9881/619/197 全部持平**；D049 四表 **player=3 / player_life=4 持平，narrate_history=750（+51）/ llm_io=543（+51）**；**卡轮：pending=1**（唯一一条 = 01:24:59 scene，`openid:"scene"`+`input:{}` = PMO 切换 LLM 前的**人工测试残留**，非玩家触发、非活跃 bug，印证 142 期 scene 已废弃结论）；⚠️ **`pending_old10m` 自动卡轮检测失效**（`created_at` 存 number，查询传 ISO 字符串 → 永远返回 0，假阴性）；dirty（content 缺失）17 条持平；`ai_narrate_worker timeout=60s` ✅；working tree 干净，**ahead=4 待 push**。
+> **🔍 本期最大发现 = options 兜底率腰斩**：llm_io 分类对账 543 = narrate 250 + score 242 + options_fallback 34 + scene 21（完美对账）。`options_fallback` 触发 = AI 未输出有效 options 走正则兜底 + 补一次 AI 调用。**MiniMax 时代 23/228 = 10.1%；DeepSeek-V4.1-Flash（01:28 切换后）11/22 = 50.0%**。主链路 status 仍 100% success（无 error），但多出 50% 的额外 LLM 调用 + 选项由补救 AI 生成。
+> **🎯 143 期决策点（唯一）= DeepSeek 后 options 兜底率 50%（vs MiniMax 10%）是否要处理**（回滚 MiniMax / 换模型 / 给 prompt 加 options 格式强约束三选一）。
+>
+> **📌 本期（143 期）待 commit 清单**
+> - `M PROJECT.md`（PMO 143 期简报快照）—— 待 commit
+> - working tree 其余干净；**ahead=4 待 push**（先生确认后可推）
+> - 先生 9 个 commit 全部已入库，无堆积
+
+### 决策候选区（下期逐一提，本期只提第 1 条）
+
+| # | 候选决策 | 状态 |
+|---|---------|------|
+| 1 | **DeepSeek 后 options 兜底率 50%**（vs MiniMax 10%）→ 回滚 / 换模型 / 加 prompt 约束 | ⬆️ 143 期已提 |
+| 2 | **91a41e7（AI2 后 state 冻结修复）未真机验证**（修复 05:14 > 最后游玩 05:09:46）→ 请先生真机跑一轮确认月份/地点/属性会动 | 待提 |
+| 3 | **UX 提案 P-143-1 长叙事等待优化**：点叙事跳过是隐形手势（无 UI 提示）+ 打字机固定 15ms/字（1000 字 = 19 秒）→ 加「▼ 点击跳过」提示 + 速度自适应（>400 字时压到 ~8 秒） | 待提 |
+| 4 | **清理 1 条 scene 测试残留 pending**（01:24:59，`openid:"scene"`）→ 沿用 cleanup-pending.js，需先生授权 | 待提 |
+| 5 | **修复 `pending_old10m` 卡轮检测假阴性**（created_at number vs ISO 字符串比较，永远返回 0） | 待提 |
+
+---
+
 ## 状态快照（最新一次巡检 · 2026-09-11 00:25 · 第 142 次）
 
 > **🎯 142 期 · 卡了 14 期的「worker 不消费 pending」结案：系废弃功能残留，非活跃 bug** —— 先生 09-11 00:19 上线（**离线 605.9h = 25.2 天**，08-16 18:31 → 09-11 00:24），指示跑完整巡检。**本期唯一实质产出 = 破案**：

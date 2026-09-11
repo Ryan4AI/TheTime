@@ -103,14 +103,15 @@ function ts() {
     }
 
     if (MODE === 'delete') {
+      const totalBefore = await countTotal();
       const r = await callApi('databasedelete', `db.collection('${TABLE}').where({status:'pending'}).remove()`);
       if (r.errcode) throw new Error(`delete 失败: ${r.errcode} ${r.errmsg}`);
       console.log(`🗑️  delete 返回: ${JSON.stringify(r)}`);
 
       const after = await countPending();
       const total = await countTotal();
-      console.log(`✅ 清理后 pending = ${after.count}（原 ${before.count}）· ${TABLE} 总条数 = ${total.count}（原 591）`);
-      console.log(`   success/error 记录 untouched：total 减少量 = ${591 - total.count}，应等于删除的 ${before.count}`);
+      console.log(`✅ 清理后 pending = ${after.count}（原 ${before.count}）· ${TABLE} 总条数 = ${total.count}（原 ${totalBefore.count}）`);
+      console.log(`   success/error 记录 untouched：total 减少量 = ${totalBefore.count - total.count}，应等于删除的 ${before.count}`);
     }
   } catch (e) {
     console.error('❌ 出错:', e.message || e);

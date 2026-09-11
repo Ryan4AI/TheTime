@@ -1563,12 +1563,12 @@ async function callAI(state, input, history, monthEvent, isRetry, compressSummar
   // D048c（2026-06-28 09:42 拍板）：改非流式 callLLM（凌晨 9 版本真因：流式根本做不好）
   // 前端拿完整 content 后用前端假打字机（streamedText + TYPEWRITE_SPEED）
   try {
-    response = await callLLM(messages, DS_MODEL)
+    response = await callLLM(messages, DS_MODEL, { jsonMode: true })
   } catch (e) {
     const status = e.statusCode || 0
     if (status === 400 || status === 429 || (status >= 500 && status < 600)) {
       console.error('[ai_narrate_worker] 主模型失败，回退:', status, e.message)
-      response = await callLLM(messages, DS_FALLBACK_MODEL)
+      response = await callLLM(messages, DS_FALLBACK_MODEL, { jsonMode: true })
     } else {
       throw e
     }
@@ -2391,6 +2391,11 @@ function callLLM(messages, modelOverride, callOpts) {
       //   注意：原 thinkOff 分支语义在 DeepSeek 下是反的（不传=开启思考），故统一无条件关闭
       thinking: { type: 'disabled' },
       stream: false,
+      // 2026-09-11 09:40：AI₁ 主链路强制 JSON 输出（DeepSeek 支持 response_format）
+      //   背景：切 DeepSeek 后 8 条叙事里 6 条 raw 无 options（纯文本），被迫二次调用补选项
+      //   （兜底率 ~75%，MiniMax 时代 ~29%）→ 多一次调用 + 3~5s 延迟
+      //   仅对显式开 jsonMode 的调用生效（narrate 主链路），其余调用行为不变
+      ...(callOpts && callOpts.jsonMode ? { response_format: { type: 'json_object' } } : {}),
     })
     const url = new URL(DS_BASE_URL + '/chat/completions')
     // 2026-08-04 15:20 巡检修复：socket 空闲超时（https.request timeout 选项）在 MiniMax 流式吐

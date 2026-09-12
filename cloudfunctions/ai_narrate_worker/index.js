@@ -200,9 +200,14 @@ exports.main = async (event) => {
   const t0 = Date.now()
   console.log('[ai_narrate_worker] 启动 phase=', phase, ' openid=', openid)
 
+  // 2026-09-12 14:45：request_id 在 try 外生成，catch 复用同一个
+  //   原代码 catch 里另起一个随机 request_id 写 error → writeLlmIo 走 update 分支匹配 0 条
+  //   → 错误记录根本不落库，llm_io 只剩 pending（09-12 排查时完全看不到报错原因）
+  const sharedRequestId = `${phase === 'ai1' ? 'narrate' : phase === 'scene' ? 'scene' : 'score'}_${t0}_${Math.random().toString(36).slice(2, 8)}`
+
   try {
     if (phase === 'ai1') {
-      const narrateRequestId = `narrate_${t0}_${Math.random().toString(36).slice(2, 8)}`
+      const narrateRequestId = sharedRequestId
       const result = await runPhase1({ openid, input, is_retry, narrateRequestId })
       console.log('[ai_narrate_worker] ai1 完成, elapsed_ms=', Date.now() - t0)
       return { success: true, phase: 'ai1', ...result }
@@ -212,16 +217,15 @@ exports.main = async (event) => {
       console.log('[ai_narrate_worker] scene 完成, elapsed_ms=', Date.now() - t0)
       return { success: true, phase: 'scene', ...result }
     } else {
-      const scoreRequestId = `score_${t0}_${Math.random().toString(36).slice(2, 8)}`
+      const scoreRequestId = sharedRequestId
       const result = await runPhase2({ openid, scoreRequestId, input })
       console.log('[ai_narrate_worker] ai2 完成, elapsed_ms=', Date.now() - t0)
       return { success: true, phase: 'ai2', ...result }
     }
   } catch (e) {
     console.error('[ai_narrate_worker] phase=', phase, ' 异常:', e.message, '\n', e.stack)
-    // 写 error llm_io（精简版）
-    const errRequestId = `${phase === 'ai1' ? 'narrate' : phase === 'scene' ? 'scene' : 'score'}_${t0}_${Math.random().toString(36).slice(2, 8)}`
-    await writeLlmIo(errRequestId, openid || 'scene', phase === 'ai1' ? 'narrate' : phase === 'scene' ? 'scene' : 'score', 'error', {
+    // 写 error llm_io（精简版）— 复用 sharedRequestId，保证能更新到 pending 那条
+    await writeLlmIo(sharedRequestId, openid || 'scene', phase === 'ai1' ? 'narrate' : phase === 'scene' ? 'scene' : 'score', 'error', {
       error: e.message,
     })
     return { success: false, phase, error: e.message, partial: phase === 'ai1' }
@@ -718,7 +722,11 @@ async function writeLlmIo(request_id, openid, category, status, opts) {
     if (status === 'pending') {
       await db.collection('llm_io').add({ data })
     } else {
-      await db.collection('llm_io').where({ request_id }).update({ data })
+      // 2026-09-12：update 匹配 0 条时补 add（否则 error/success 记录静默丢失）
+      const r = await db.collection('llm_io').where({ request_id }).update({ data })
+      if (!r || !r.stats || r.stats.updated === 0) {
+        await db.collection('llm_io').add({ data })
+      }
     }
   } catch (e) {
     console.error('[writeLlm_io] 失败:', e.message, 'request_id=', request_id)
@@ -2401,11 +2409,13 @@ function callLLM(messages, modelOverride, callOpts) {
       //   注意：原 thinkOff 分支语义在 DeepSeek 下是反的（不传=开启思考），故统一无条件关闭
       thinking: { type: 'disabled' },
       stream: false,
-      // 2026-09-11 09:40：AI₁ 主链路强制 JSON 输出（DeepSeek 支持 response_format）
-      //   背景：切 DeepSeek 后 8 条叙事里 6 条 raw 无 options（纯文本），被迫二次调用补选项
-      //   （兜底率 ~75%，MiniMax 时代 ~29%）→ 多一次调用 + 3~5s 延迟
-      //   仅对显式开 jsonMode 的调用生效（narrate 主链路），其余调用行为不变
-      ...(callOpts && callOpts.jsonMode ? { response_format: { type: 'json_object' } } : {}),
+      // 2026-09-12 14:40 停用 response_format（原 2026-09-11 09:40 加的 jsonMode）：
+      //   实测（scripts/tmp_repro_ai1.js，真实 state + 297 条真实 history，prompt ≈40K token）：
+      //   jsonMode ON → HTTP 200 但 content 全是空格（trimmed.length=0，两次复现一致）
+      //     → parseAIOutput 报 Unexpected end of JSON input → 抛错 → 前端拿不到叙事
+      //   jsonMode OFF → 正常输出叙事纯文本
+      //   短 prompt（78 token）下 jsonMode 正常，长上下文下才吐空白（DeepSeek 侧问题）
+      // 代价：options 仍走 options_fallback 二次调用（多 3-5s），但主链路可用
     })
     const url = new URL(DS_BASE_URL + '/chat/completions')
     // 2026-08-04 15:20 巡检修复：socket 空闲超时（https.request timeout 选项）在 MiniMax 流式吐

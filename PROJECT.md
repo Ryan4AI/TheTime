@@ -6,6 +6,45 @@
 
 ---
 
+## 状态快照（最新一次巡检 · 2026-09-12 21:01 · 第 148 次）
+
+> **🎉 148 期最大事件 = 6541cec 的修复「已离线验证通过」——不用等先生真机，结论到手了**。我用只读本地复现脚本（`scripts/tmp_repro_ai1.js`：拉真实玩家数据 + 真实 40K prompt，3 次调用，不写库）跑了一遍：
+> - **jsonMode ON ×2 → HTTP 200 但 `content` 297 字符全是空格（`trimmed.length=0`）→ 解析失败** —— 完整复现了 147 期的根因，坐实「长上下文 + response_format 返回空白」不是偶发。
+> - **jsonMode OFF（= 6541cec 之后的线上配置）→ `parseError=none`，正常吐出 content + 3 个 options，468 字符完整叙事。修复有效 ✅**
+> - 顺带好消息：`prompt_tokens=40382` 里 **40192 命中缓存（99.5%）**，40K 长 prompt 的实际增量成本很低。
+> **先生最后游玩仍停在 09-12 14:26:42（距今 6.6h）**，llm_io 546 零新增 → 本期依旧无真人样本。
+> **① 产品功能**：§10.4 五系统 **5 ❌ 持平**（死神追杀已废弃 D096 / 跨世痕迹 / 榜单动态计算 / Prompt v12 / 多玩家）。**待真机验证队列 4 项 → 3 项**：6541cec 已由本地复现代验 ✅ 结案，剩 `91a41e7` state / `e10de4c` 45s / `a4326c6` city。
+> **② UX**：B 类对话流增量 **= 0**（narrate_history 751 / llm_io 546 全持平，连续第 3 期无样本）。A 类前端审查本期过**物品栏 + 命格（雷达图）区**，揪出一个真 bug：
+>   - **P-148-1a（已修 ✅）**：`layout.fateArea.w` 还是 D088 缩小物品栏**之前**的旧值 **86**（`(24+6)*2+26`，radarR=24 时代），而 `drawItemBar` 现在按 `radarR=15 / radarLabelOff=4` 画 → 命格板实际只有 **58px** 宽、`dividerX=72`、物品格从 `gridStartX≈78` 开始（slotW=44 → 78~122）。**点击区右探到 x=100，盖住第 1 个物品格**；而命格判定 `game.js:4246` 排在物品格判定 `game.js:4811` **之前** → **玩家点第 1 个物品 → 不弹物品详情，反而切成「属性数值详情」面板**。修法：`fateArea.w` 同步为 `(15+4)*2+20 = 58`，并把「D088 遗留 + 判定顺序陷阱」写进注释。`node --check` 过。**待先生真机点一下第 1 个物品格确认。**
+>   - **P-148-1b（新提案，待决策）**：属性详情模式（点雷达图切换）用 **5px 字号 + 5px 行距** 在 56px 高的物品栏里塞 9 行属性 → 中文 5px 基本糊成一团，这个切换功能**形同虚设**；雷达图外围属性标签 6px 同样偏小。
+> **③ 代码**：单测 **29/29 全过**（parse-ai-output 18/18 · callllm-hardtimeout 3/3 · dynasty-templates 8/8）；`node --check minigame/scenes/game.js` OK。**无新 commit**（HEAD 仍 `37a9747`）+ 巡检开始时 working tree 干净 → 零新代码；本期唯一改动就是上面的 P-148-1a。`node --check` 复核 `cloudfunctions/ai_narrate_worker/index.js` 正常；`response_format` 确认已移除（`index.js:2412` 注释）。
+>   - **🧹 PMO 自纠**：147 期复现脚本打印 `branches= undefined` **不是 bug** —— 脚本自己写的是 `(parsed.branches||[]).length`，而 v3.0.13 起 `parseAIOutput` 返回的是**单对象**不是数组，取 `.length` 自然是 undefined。已用干净脚本复核：`branches` 是完整对象，content / options 都在。教训：看到 `undefined` 先怀疑探针写法，别先怀疑生产代码。
+> **④ 数据库**：5 基础表 **115/167/9881/619/197 全持平**；D049 **player=3 / player_life=4 / narrate_history=751 / llm_io=546 全持平**；**pending = 4**（仍是 `14:24:21 / 14:24:33 / 14:25:01 / 14:26:42` 事故遗留，**无新增**）；`pending_old10m = 4`；dirty（content 缺失）**17 持平**；`ai_narrate_worker timeout=60s` ✅；**ahead=0，push 已通**。
+> **🎯 148 期决策点（唯一）= 前端两处「看得见 / 点得着」的微调，现在一起做吗？**
+>   1. **P-144-1 选项可点区**（146 期提过、未决）：选项单行高 **36px** < 移动端 44px 惯例、`optGap=4` 相邻仅 4px 易误点、D088 后无边框无底板 → 玩家看不出哪里能点。**每轮都要点，影响面最大**。
+>   2. **P-148-1b 属性详情 5px 字号**：9 行属性挤在 56px 里不可读 → 要么字号 5→8px + 行距 5→6px（仍挤但能认），要么改成从物品栏上方弹临时面板（字号 11-12px，空间充足，但要动布局）。
+>   两处都是纯前端绘制数值，**PMO 可直接实施，不需要真机验证**（「弹面板」方案除外）。先生一句「都改」/「只改 1」/「都不改」我就动。
+
+### 决策候选区（148 期更新）
+
+| # | 候选决策 | 状态 |
+|---|---------|------|
+| 1 | **玩一轮验证 6541cec** | ✅ **结案**（148 期本地复现代验：jsonMode OFF 正常出叙事） |
+| 2 | **options 兜底率 75% 怎么办**（① 接受 ② 改 prompt ③ 换模型） | 147 期已提 · 先生未回 · 挂起（不追问） |
+| 3 | **UX P-144-1 选项可点区**：高 36→44 / gap 4→8 / 加按下态或淡分隔线 | ⬆️ **148 期已提（与 #6 打包）** |
+| 4 | **UX P-143-1 长叙事等待**：跳过是隐形手势 + 打字机 15ms/字 | 143 期提过未采纳 |
+| 5 | **清 4 条事故遗留 pending**（带备份） | 待提（无害，等先生一句话） |
+| 6 | **UX P-148-1b 属性详情 5px 不可读**：字号 5→8 / 行距 5→6，或改弹临时面板 | ⬆️ **148 期已提（与 #3 打包）** |
+| 7 | **saveLife / narrate_history 入库失败接进 error 落库**（防进度静默回滚，`index.js:672` / `496`） | 待提（低概率但同类隐患） |
+| 8 | **清 death.js 死代码**：`drawSwipeHint:1431` / `drawSwipeHintSimple:1442` 从未调用 + 后者残留调试红底 | 待提（低优先级） |
+| ~~9~~ | ~~修复 `pending_old10m` 假阴性~~ | ✅ 已结案（ad3ac13，147 期真实验证） |
+
+> **📌 本期（148 期）待 commit 清单**
+> - `M minigame/scenes/game.js` —— P-148-1a 命格点击区 86→58 修复 + 注释（唯一代码改动）
+> - `M PROJECT.md` —— 148 期简报快照
+
+---
+
 ## 状态快照（最新一次巡检 · 2026-09-12 20:09 · 第 147 次）
 
 > **🔥 147 期 · 先生 14:24 回归真机，一脚踩中 09-11 埋的 jsonMode 雷 → 4 条 narrate 全卡 pending（40min 无产出）→ 先生自己定位并修复（6541cec，15:27 已部署）** —— 143 期加的 `response_format:json_object` 在 **~40K token 长 prompt 下返回 HTTP 200 但 content 全空白**（短 prompt 78 token 正常，本地 `scripts/tmp_repro_ai1.js` 两次复现）→ `parseAIOutput` 报 Unexpected end of JSON input → catch 写 error 时**另起随机 request_id** → `writeLlmIo` 走 update 分支**匹配 0 条** → **错误行根本没落库**，llm_io 只剩 pending、前端没有任何报错。

@@ -573,7 +573,11 @@ function initLayout() {
     optionH: optH,
     optionGap: optGap,
     itemBarY: windowHeight - itemBarH - _safeBottomCalc - 4,
-    fateArea: { x: 14, y: windowHeight - itemBarH - _safeBottomCalc - 4, w: (24 + 6) * 2 + 26, h: itemBarH },
+    // PMO 148 期修复：命格点击区宽度原为 (24+6)*2+26=86，是 D088 缩小物品栏前的旧值；
+    // drawItemBar 现在按 radarR=15 / radarLabelOff=4 画 → fateW=(15+4)*2+20=58（dividerX=72）。
+    // 86 > 58 导致点击区右探到 x=100，盖住第一个物品格（gridStartX≈78，slotW=44 → 78~122），
+    // 而本判定(game.js:4246)排在物品格判定(4811)之前 → 点第 1 个物品会变成"切换属性详情"。
+    fateArea: { x: 14, y: windowHeight - itemBarH - _safeBottomCalc - 4, w: (15 + 4) * 2 + 20, h: itemBarH },
   }
 }
 

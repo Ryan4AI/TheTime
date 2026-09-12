@@ -1511,11 +1511,23 @@ async function callAI(state, input, history, monthEvent, isRetry, compressSummar
       }
       recent = [{ role: 'system', content: compressSummary.text }, ...history.slice(startIdx)]
     }
-    for (const msg of recent) {
-      // D048p（2026-06-28 20:24 拍板·先生"状态变化 message role 直接 system"）：
-      // D048e 当时把 history system 改成 user 喂（避免 MiniMax 2013）—— D048p 实测 MiniMax 3 system + 1 user → 200 OK
-      // MiniMax 2013 限制已过效（v0.1.86 教训过时），history 里 system 角色直接 push system
-      if (msg.role === 'ai') messages.push({ role: 'assistant', content: msg.content })
+    // 2026-09-12 先生批准：历史里最后 8 条 assistant 按 JSON 形式喂（真实的 content+options）
+    //   真因：narrate_history 只存正文，模型看了一百多条"纯文本示范"就跟着写纯文本
+    //   → 一旦有真实玩家输入，模型顺着写故事、无视末尾格式提醒 → 实测 0/8 一次成型（兜底 100%）
+    //   改成 JSON 示范后：8/8 一次成型，兜底 0（scripts/tmp_options_probe.js 对照实验）
+    //   只改喂给 AI 的形态，不动 prompt 正文、不动存档；8 条是成本与效果的平衡点（约 +600 token）
+    const JSON_DEMO_TAIL = 8
+    const aiIdxs = []
+    recent.forEach((m, i) => { if (m.role === 'ai') aiIdxs.push(i) })
+    const jsonDemoSet = new Set(aiIdxs.slice(-JSON_DEMO_TAIL))
+    for (let _i = 0; _i < recent.length; _i++) {
+      const msg = recent[_i]
+      if (msg.role === 'ai') {
+        const asJson = jsonDemoSet.has(_i) && Array.isArray(msg.options) && msg.options.length
+          ? JSON.stringify({ content: msg.content, options: msg.options })
+          : msg.content
+        messages.push({ role: 'assistant', content: asJson })
+      }
       // 2026-08-03 02:00 先生拍板：system 消息不截 500 字（原截断纯防御，实际 system 内容少；截断反而丢信息）
       else if (msg.role === 'system') messages.push({ role: 'system', content: msg.content || '' })
       else messages.push({ role: 'user', content: msg.content })

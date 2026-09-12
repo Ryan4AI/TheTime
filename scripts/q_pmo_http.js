@@ -49,8 +49,9 @@ async function dbQuery(query, isCount=false) {
       query = `db.collection('${table}').where({status:'pending'}).count()`;
       isCount = true;
     } else if (type === 'pending_old10m') {
-      const cutoff = new Date(Date.now() - 10*60*1000).toISOString();
-      query = `db.collection('${table}').where({status:'pending',created_at:db.command.lt('${cutoff}')}).count()`;
+      // created_at 存的是 number(epoch ms)，传 ISO 字符串会永远匹配不到（假阴性）→ 必须用数字
+      const cutoff = Date.now() - 10*60*1000;
+      query = `db.collection('${table}').where({status:'pending',created_at:db.command.lt(${cutoff})}).count()`;
       isCount = true;
     } else if (type === 'dirty') {
       query = `db.collection('${table}').where({content:db.command.neq(db.command.type('string'))}).count()`;

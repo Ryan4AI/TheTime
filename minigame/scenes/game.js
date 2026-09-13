@@ -1619,9 +1619,11 @@ function render(ctx) {
 
   // v0.6.95: 死亡确认覆盖层（两阶段死亡流）
   // 玩家第一次点屏幕触发死亡 → 显示"你死了"+ 确认按钮（不淡出，让玩家看临终叙事）
-  if (deathConfirmPending && !fadeOut) {
-    drawDeathConfirm(ctx)
-  }
+  // ⚠️ P-150-1（2026-09-13 巡检修复）：覆盖层必须画在内容之后！
+  //   原代码把 drawDeathConfirm 放在这里（render 开头）→ 紧接着的 drawBackground 是
+  //   全屏不透明渐变填充，把覆盖层 100% 盖掉 → 玩家看不到"你死了"和"封笔"按钮，
+  //   只能盲点 h*0.7 中央那个隐形按钮。像素级 A/B 实测：现状 false/true 两帧仅差 13px
+  //   （纯动画噪声），挪到末尾后差异 = 全屏 329160px。已挪到榜单浮窗之前绘制。
 
   // 淡出处理（死亡时）
   if (fadeOut) {
@@ -1703,6 +1705,13 @@ function render(ctx) {
   // 11.5 物品列表浮窗（2026-08-03 先生拍板 A：物品 >10 个时点「+N」格弹出）
   if (itemListOpen) {
     drawItemListOverlay(ctx)
+  }
+
+  // 12.9 P-150-1：死亡确认覆盖层（两阶段死亡流）
+  // 必须画在内容之后（原画在 render 开头被 drawBackground 盖掉 → 覆盖层不可见）。
+  // 放在榜单/DBG 浮窗之前：死亡态下这两个浮窗仍是最高层级。
+  if (deathConfirmPending && !fadeOut) {
+    drawDeathConfirm(ctx)
   }
 
   // 13. v2 新增：榜单浮窗（最高层级）

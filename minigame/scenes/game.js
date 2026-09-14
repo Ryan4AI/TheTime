@@ -1625,27 +1625,6 @@ function render(ctx) {
   //   只能盲点 h*0.7 中央那个隐形按钮。像素级 A/B 实测：现状 false/true 两帧仅差 13px
   //   （纯动画噪声），挪到末尾后差异 = 全屏 329160px。已挪到榜单浮窗之前绘制。
 
-  // 淡出处理（死亡时）
-  if (fadeOut) {
-    const elapsed = Date.now() - fadeOut.start
-    const p = Math.min(1, elapsed / fadeOut.duration)
-    ctx.fillStyle = 'rgba(0,0,0,' + p + ')'
-    ctx.fillRect(0, 0, layout.windowW, layout.windowH)
-    if (p >= 1) {
-      // v0.6.97: 传 deathCause + epRecord + epitaph + deathType + highestAchievement 给 death scene
-      module.exports.autoNext = {
-        scene: 'death',
-        identity: state,
-        deathCause: state.deathCause || '',
-        epRecord: state.epRecord || '',
-        epitaph: state.epitaph || '',
-        deathType: state.deathType || '意外',
-        highestAchievement: computeHighestAchievement(state),
-      }
-      return
-    }
-  }
-
   // 1. 暗色古风背景
   drawBackground(ctx, layout.windowW, layout.windowH)
 
@@ -1719,6 +1698,30 @@ function render(ctx) {
 
   // 14. AI 调试浮窗（v0.1.61）—— 最高层级，最右上的小图标或全屏覆盖
   drawDebugPanel(ctx)
+
+  // 15. P-151-1（2026-09-14 巡检修复）：死亡淡出遮罩
+  //   ⚠️ 原画在 render 开头 → 紧接着的 drawBackground 是全屏不透明渐变填充，
+  //   把遮罩 100% 盖掉 → 1.5s 淡出动画全程不可见，玩家只见叙事突然消失跳死亡页。
+  //   与 P-150-1（死亡确认覆盖层）同一根因：凡画在 drawBackground 之前的都会被盖掉。
+  //   修法：挪到 render 最末尾，盖在所有内容（含榜单/DBG 浮窗）之上。
+  if (fadeOut) {
+    const p = Math.min(1, (Date.now() - fadeOut.start) / fadeOut.duration)
+    ctx.fillStyle = 'rgba(0,0,0,' + p + ')'
+    ctx.fillRect(0, 0, layout.windowW, layout.windowH)
+    if (p >= 1) {
+      // v0.6.97: 传 deathCause + epRecord + epitaph + deathType + highestAchievement 给 death scene
+      module.exports.autoNext = {
+        scene: 'death',
+        identity: state,
+        deathCause: state.deathCause || '',
+        epRecord: state.epRecord || '',
+        epitaph: state.epitaph || '',
+        deathType: state.deathType || '意外',
+        highestAchievement: computeHighestAchievement(state),
+      }
+      return
+    }
+  }
 }
 
 // ─────── 流式布局 v0.1.68 ───────

@@ -45,8 +45,9 @@ const PAGE = 20;
   const rows = [];
   let offset = 0;
   while (true) {
-    const RANGE = process.env.TO ? `,seq:db.command.lte(${parseInt(process.env.TO,10)})` : '';
-    const q = `db.collection('narrate_history').where({seq:db.command.gte(${FROM})${RANGE}}).orderBy('seq','asc').skip(${offset}).limit(${PAGE}).get()`;
+    // ⚠️ 不能写 where({seq:gte, seq:lte}) —— 同一 key 重复，后面的覆盖前面的（实测 TO 失效）
+    // → 只下推 gte，TO 在内存里过滤
+    const q = `db.collection('narrate_history').where({seq:db.command.gte(${FROM})}).orderBy('seq','asc').skip(${offset}).limit(${PAGE}).get()`;
     const r = await dbQuery(token, q);
     if (r.errcode) { console.error('ERR', r.errcode, r.errmsg); process.exit(1); }
     // 微信 databasequery 返回的 data 是「JSON 字符串数组」，必须逐项 parse（2026-09-16 踩坑）
@@ -56,6 +57,9 @@ const PAGE = 20;
     offset += PAGE;
     if (offset > 2000) break;
   }
+  let _rows = rows;
+  if (process.env.TO) { const to = parseInt(process.env.TO, 10); _rows = _rows.filter(m => m.seq <= to); }
+  rows.length = 0; rows.push(..._rows);
   rows.sort((a, b) => a.seq - b.seq);
   const byRole = {};
   let total = 0;

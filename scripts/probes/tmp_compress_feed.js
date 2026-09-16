@@ -45,7 +45,8 @@ const PAGE = 20;
   const rows = [];
   let offset = 0;
   while (true) {
-    const q = `db.collection('narrate_history').where({seq:db.command.gte(${FROM})}).orderBy('seq','asc').skip(${offset}).limit(${PAGE}).get()`;
+    const RANGE = process.env.TO ? `,seq:db.command.lte(${parseInt(process.env.TO,10)})` : '';
+    const q = `db.collection('narrate_history').where({seq:db.command.gte(${FROM})${RANGE}}).orderBy('seq','asc').skip(${offset}).limit(${PAGE}).get()`;
     const r = await dbQuery(token, q);
     if (r.errcode) { console.error('ERR', r.errcode, r.errmsg); process.exit(1); }
     // 微信 databasequery 返回的 data 是「JSON 字符串数组」，必须逐项 parse（2026-09-16 踩坑）
@@ -71,4 +72,7 @@ const PAGE = 20;
   console.log(`  估算 token ≈ ${t(total)}`);
   const dl = new Date(Math.max(...rows.map(r => r.created_at))).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
   console.log('  最新一条时间 =', dl);
+  if (process.env.VERBOSE) {
+    rows.forEach(m => console.log(`    seq=${m.seq} ${m.role} len=${(m.content||'').length}`));
+  }
 })().catch(e => { console.error('FAIL', e.message); process.exit(1); });

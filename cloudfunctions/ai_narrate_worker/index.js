@@ -1388,9 +1388,29 @@ async function compressHistoryIfNeeded(history, openid, lifeNumber) {
     console.warn('[COMPRESS] 最新记录无 seq（存量旧数据），跳过压缩，等新写入带 seq 后生效')
     return { history, summary: lastRecord, lastId: lastRecord ? lastRecord.last_id : null, lastSeq }
   }
-  const targetSeq = newestSeq - 100  // 本次压缩目标点（保留 targetSeq+1 ~ newestSeq 共 100 条）
-  if (newestSeq % 100 !== 0 || targetSeq <= (lastSeq || 0)) {
-    // 非整百 或 目标点已压过 → 不触发
+  // 2026-09-16 PMO 修复「压缩错过整百就长期失效」（P-156，方案 = 先生 compress-fix-draft 批限量 + PMO 阈值 200）：
+  //   旧条件 `newestSeq % 100 === 0` 要求「那一轮结束时的最新 seq」恰好是整百才压，实测两种失效都发生过：
+  //   ① 结构性不可达：seq=500 是轮内的 user 消息（轮末最新 seq=501）→ 该整百永远不可能被命中；
+  //   ② 命中但没压成：seq=600 是轮末 ai 消息（条件可达），却没写进 history_compress
+  //      → 摘要失败（summarizeHistory 返 null）或撞 5 分钟防并发，且失败后永不补。
+  //   实证：history_compress 只到 last_seq=400，而 seq 已 699（500、600 两连失）
+  //   → 每轮把 400 之后的 299 条原文全喂（34.7K token），叠加 prompt 共 40K+，踩 json_object 空白坑。
+  //   新条件 = 「按间隔」：自上次压缩点起累计新增 ≥200 条才压。
+  //   ⚠️ 阈值必须是 200 不是 100（先生草稿原写 100，模拟实测会退化）：
+  //      若阈值 100，压完瞬间「已新增」=100，下一轮 +3 就又 ≥100 →
+  //      **每轮压 3 条 + 每轮一次摘要调用**（targetSeq=base+100 时同理，base 一追平就退化）。
+  //      阈值 200 ⇒ 每 ~100 条触发一次，保留窗口 100~200 条，与 08-03 拍板的
+  //      「最多 200 条、保证 ≥100 条完整对话」语义完全一致，只是不再要求恰好落在整百。
+  //   首次（无 lastSeq）同样 200：seq=200 首次压，压到 100（保留 101-200），与原设计一致。
+  const baseSeq = (typeof lastSeq === 'number' && lastSeq > 0) ? lastSeq : 0
+  const triggerGap = 200
+  if (newestSeq - baseSeq < triggerGap) {
+    return { history, summary: lastRecord, lastId: lastRecord ? lastRecord.last_id : null, lastSeq }
+  }
+  // 每批只前进 100 条（采纳先生草稿的批限量），避免补压时一次性吞 199 条导致摘要输入翻倍；
+  // 追平后自然回到稳态：每 ~100 条压一次、每次压 100 条、保留最近 100 条原文
+  const targetSeq = Math.min(baseSeq + 100, newestSeq - 100)
+  if (targetSeq <= baseSeq) {
     return { history, summary: lastRecord, lastId: lastRecord ? lastRecord.last_id : null, lastSeq }
   }
 

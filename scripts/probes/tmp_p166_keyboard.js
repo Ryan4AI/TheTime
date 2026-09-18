@@ -80,3 +80,39 @@ for (const [w, h] of SCREENS) {
     if (shift === 0) console.log(`    ⚠️ 上移量=0 → 条件 keyboardHeight>0 && optionFadeIn>0 未命中（optionFadeIn=${base.fade}）`);
   }
 }
+
+// ── 修法模拟：kbdShift 封顶 + 超出部分改压缩 textH（P-151-2 同款思路）──
+// 封顶后还要保证 inputY 仍贴键盘顶 → 必须同步压 textH，否则输入框会被键盘吞。
+//   shiftCap = min(shiftRaw, textY0 - 顶栏底)
+//   textH_new = textH - (shiftRaw - shiftCap)
+// 想知道的：压完之后 textH 还剩多少？小屏会不会压成负数/不可用？
+console.log('\n═══ 修法模拟：封顶 + 压缩 textH（gap 实测恒 = 16）═══');
+for (const [w, h] of SCREENS) {
+  const T = load(w, h);
+  T.initLayout();
+  const cv = createCanvas(w, h); global.__ctx = cv.getContext('2d');
+  T.setState({ dynasty: '五代十国', eraDisplay: '显德五年', year: 960, month: 5, items: [], round: 5,
+    name: '李昌', age: 39, city: '永安镇', occupation: '义军指挥使', social_class: '庶民' });
+  T.setNarrative(NARR);
+  T.setKbd(0); T.render();
+  const L0 = T.getLayout();
+  const textY0 = L0._textY0 != null ? L0._textY0 : L0.textY;
+  const topBarBottom = (L0.statusBarH || 44) + (L0.topBarH || 0) || 96;
+  const capRoom = Math.max(0, textY0 - topBarBottom);   // 顶栏底之上还能上移多少
+  const out = [];
+  for (const kbd of KBDS) {
+    const kbdTop = h - kbd - (L0.safeBottom || 0);
+    const inputY_normal = L0.textY + L0.textH + 16;
+    const shiftRaw = inputY_normal - (kbdTop - 56);
+    const shiftCap = Math.min(shiftRaw, capRoom);
+    const textH_new = L0.textH - (shiftRaw - shiftCap);
+    const textY_new = textY0 - shiftCap;
+    const inputY_new = textY_new + textH_new + 16;
+    const okText = textY_new >= topBarBottom - 0.5;
+    const okInput = inputY_new <= kbdTop - 56 + 0.5;
+    const usable = textH_new >= 100 ? '✅' : (textH_new >= 60 ? '🟠 窄(约' + Math.floor(textH_new / 30) + '行)' : '❌ 不可用');
+    out.push(`键盘${kbd}: textH ${L0.textH}→${textH_new.toFixed(0)} ${usable} | textY=${textY_new.toFixed(0)}${okText ? '✅' : '❌'} inputY=${inputY_new.toFixed(0)}(kbdTop-56=${kbdTop - 56})${okInput ? '✅' : '❌'}`);
+  }
+  console.log(`── ${w}x${h}（textH=${L0.textH} 可上移余量=${capRoom}px）──`);
+  out.forEach(o => console.log('   ' + o));
+}

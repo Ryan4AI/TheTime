@@ -21,16 +21,17 @@ const invoke = (name, event, token) => new Promise((resolve) => {
 (async () => {
   const TOKEN = await getToken();
   const cases = [
-    ['player_load', { openid: 'oPj9J3SlVB' }],                 // 已知部署的只读函数
-    ['ai_write_death', {}],                                     // step2：传空 → 入口即 return，不碰 LLM
-    ['ai_write_death_bogus_name_test', {}],                     // 对照：一个肯定不存在的名字
-    ['ai_write_death', { state: { name: '测试', gender: '男', age: 39, occupation: '商贾', socialClass: '庶民',
-        dynasty: '五代十国', city: '汴京', year: 960, life_number: 1 },
-      narrativeHistory: [{ role: 'ai', content: '你在北伐途中中伏，突围南奔。' }], deathType: '意外' }],  // 合成数据·不含先生真数据
+    ['ai_write_poem', {}],
+    ['narrate_get_result', {}],
+    ['ai_narrate_submit', {}],
+    ['leaderboard_query', {}],
+    ['diag_query', {}],
   ];
   for (const [name, ev] of cases) {
     const r = await invoke(name, ev, TOKEN);
-    console.log(`── ${name} ──`);
-    console.log('   ', JSON.stringify(r).slice(0, 400));
+    const ok = r.errcode === 0;
+    const deployed = ok ? '✅ 已部署（返回自己的入参错误）' : (r.errcode === -501000 ? '❌ 未部署 (FUNCTION_NOT_FOUND)' : '⚠️ 其它错误');
+    console.log(`── ${name.padEnd(20)} ${deployed}`);
+    console.log('   ', JSON.stringify(r).slice(0, 260));
   }
 })();

@@ -38,6 +38,7 @@ module.exports.__t = {
   setTyping: (n, chars, start) => { narrative = n; displayedChars = chars; displayStartTime = start },
   setLoading: v => { loading = v },
   setAlive: v => { alive = v },
+  setError: v => { errorMsg = v },
   touch: (x, y, t) => handleTouch(x, y, t || 'end'),
   getLayout: () => layout,
   getOptions: () => options,
@@ -87,6 +88,7 @@ for (const [w, h] of [[375, 812], [320, 568]]) {
     ['B 已有叙事时半路失败', '你在汴京城里睁开眼，四周是陌生的街巷。', 9999, Date.now() - 60000, [{ label: '重试', key: '__retry__' }]],
   ];
   for (const [label, narr, chars, start, opts] of cases) {
+    T.setError('史官落笔卡壳了——网络不稳，点此重试。');
     T.setTyping(narr, chars, start);
     T.setOptsSeq(opts, Date.now() - 5000);
     T.render();                     // 让一遍内部状态 settle
@@ -121,6 +123,7 @@ console.log('\n=== 附加：命中区与点击路径 ===');
     name: '李昌', age: 20, city: '汴京', occupation: '庶民', social_class: '庶人', items: ITEMS1,
     声望: 0, 财富: 0, 学识: 0, 颜值: 0, 医术: 0, 战功: 0, 文采: 0, 政绩: 0, 义行: 0 });
   T.setItems(ITEMS1); T.setAlive(true); T.setLoading(false);
+  T.setError('史官落笔卡壳了——网络不稳，点此重试。');
   T.setTyping('', 0, Date.now());                       // 开局第一轮、叙事空
   T.setOptsSeq([{ label: '重试', key: '__retry__' }], Date.now() - 5000);
   T.render(); T.render();

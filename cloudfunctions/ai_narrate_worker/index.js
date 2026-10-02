@@ -1504,11 +1504,22 @@ async function summarizeHistory(oldPart, prevSummaryText) {
 // ─────────────────────────────────────────────────────────────
 function extractPartialContent(jsonSoFar) {
   // narrate 输出形如 [{"p":1,"content":"...","options":[...]}]；从"尚未写完的 JSON"里 best-effort 抽 content
+  // 2026-10-03 修：流式中途 content 字符串还没闭合 → 旧正则（要求结尾有引号）一直抽不出，直到快写完才成功。
+  //   改为「定位 "content":" 之后，取到第一个未被转义的引号（没有就取到末尾）」→ 边生成边出字。
   if (!jsonSoFar) return ''
-  const m = String(jsonSoFar).match(/"content"\s*:\s*"((?:[^"\\]|\\.)*)"/)
+  const s = String(jsonSoFar)
+  const m = s.match(/"content"\s*:\s*"/)
   if (!m) return ''
-  const raw = m[1]
-  try { return JSON.parse('"' + raw + '"') } catch (e) { return raw.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\') }
+  const rest = s.slice(m.index + m[0].length)
+  let end = -1
+  for (let i = 0; i < rest.length; i++) {
+    if (rest[i] === '\\') { i++; continue }
+    if (rest[i] === '"') { end = i; break }
+  }
+  const raw = end >= 0 ? rest.slice(0, end) : rest
+  try { return JSON.parse('"' + raw + '"') } catch (e) {
+    return raw.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"').replace(/\\\\/g, '\\')
+  }
 }
 let __lastProgressWrite = 0
 async function writeNarrateProgress(requestId, partialText) {

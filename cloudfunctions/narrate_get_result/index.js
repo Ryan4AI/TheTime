@@ -30,7 +30,13 @@ exports.main = async (event) => {
 
     // 按 status 字段分发
     if (record.status === 'pending') {
-      return { status: 'pending' }
+      // 2026-10-03 PMO：附带流式进度（worker 边写 narrate_result.result_str，前端轮询逐段显示）
+      let partial = ''
+      try {
+        const pr = await db.collection('narrate_result').doc(request_id).get()
+        partial = (pr.data && pr.data.result_str) || ''
+      } catch (e) { /* 进度记录可能还没建，忽略 */ }
+      return { status: 'pending', partial }
     }
 
     if (record.status === 'success') {

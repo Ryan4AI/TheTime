@@ -203,7 +203,9 @@ exports.main = async (event) => {
   // 2026-09-12 14:45：request_id 在 try 外生成，catch 复用同一个
   //   原代码 catch 里另起一个随机 request_id 写 error → writeLlmIo 走 update 分支匹配 0 条
   //   → 错误记录根本不落库，llm_io 只剩 pending（09-12 排查时完全看不到报错原因）
-  const sharedRequestId = `${phase === 'ai1' ? 'narrate' : phase === 'scene' ? 'scene' : 'score'}_${t0}_${Math.random().toString(36).slice(2, 8)}`
+  // 2026-10-03 PMO：ai1 用前端传的 request_id（前端要拿它轮询流式进度）；未带则照常自生成
+  const sharedRequestId = (phase === 'ai1' && event && event.request_id) ? event.request_id
+    : `${phase === 'ai1' ? 'narrate' : phase === 'scene' ? 'scene' : 'score'}_${t0}_${Math.random().toString(36).slice(2, 8)}`
 
   try {
     if (phase === 'ai1') {
@@ -443,7 +445,7 @@ async function runPhase1({ openid, input, is_retry, narrateRequestId }) {
   console.log('[PERF] queryMonthEvent_ms=', t1 - t0)
 
   globalThis.__PERF_LOGS__ = perfLogs
-  const aiResult = await callAI(preUpdate, realInput, history, monthEvent, is_retry, compressSummary, compressLastId, compressLastSeq, openid)
+  const aiResult = await callAI(preUpdate, realInput, history, monthEvent, is_retry, compressSummary, compressLastId, compressLastSeq, openid, narrateRequestId)
   branches = aiResult.branches
   systemPrompt = aiResult.systemPrompt
   userPrompt = aiResult.userPrompt
@@ -1495,7 +1497,31 @@ async function summarizeHistory(oldPart, prevSummaryText) {
   }
 }
 
-async function callAI(state, input, history, monthEvent, isRetry, compressSummary, compressLastId, compressLastSeq, openid) {
+// ─────────────────────────────────────────────────────────────
+// 2026-10-03 PMO：流式进度（点选项后不再干等）
+//   worker 边收 DeepSeek 流边把"已生成的叙事正文"写进 narrate_result.result_str（复用现有表，不新增 schema）
+//   前端经现有 narrate_get_result 轮询读取 → 逐段显示。正式结果仍走原链路，进度只用于显示（互不干扰）
+// ─────────────────────────────────────────────────────────────
+function extractPartialContent(jsonSoFar) {
+  // narrate 输出形如 [{"p":1,"content":"...","options":[...]}]；从"尚未写完的 JSON"里 best-effort 抽 content
+  if (!jsonSoFar) return ''
+  const m = String(jsonSoFar).match(/"content"\s*:\s*"((?:[^"\\]|\\.)*)"/)
+  if (!m) return ''
+  const raw = m[1]
+  try { return JSON.parse('"' + raw + '"') } catch (e) { return raw.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\') }
+}
+let __lastProgressWrite = 0
+async function writeNarrateProgress(requestId, partialText) {
+  if (!requestId || !partialText) return
+  const now = Date.now()
+  if (now - __lastProgressWrite < 150) return  // 节流：不每 token 写库
+  __lastProgressWrite = now
+  try {
+    await db.collection('narrate_result').doc(requestId).set({ data: { result_str: partialText, created_at: now } })
+  } catch (e) { console.error('[narrate-progress] 写失败:', e.message) }
+}
+
+async function callAI(state, input, history, monthEvent, isRetry, compressSummary, compressLastId, compressLastSeq, openid, narrateRequestId) {
   const systemPrompt = buildSystemPrompt(state, monthEvent)
   const userPrompt = buildUserPrompt(input, history)
   const messages = [{ role: 'system', content: systemPrompt }]
@@ -2440,7 +2466,7 @@ function callLLM(messages, modelOverride, callOpts) {
       // 2026-09-11 切 DeepSeek：thinking 显式关闭（官方默认开启，不传就会带思考链）
       //   注意：原 thinkOff 分支语义在 DeepSeek 下是反的（不传=开启思考），故统一无条件关闭
       thinking: { type: 'disabled' },
-      stream: false,
+      stream: !!(callOpts && callOpts.stream),  // 2026-10-03 PMO：流式开关（默认关）
       // 2026-09-12 14:40 停用 response_format（原 2026-09-11 09:40 加的 jsonMode）：
       //   实测（scripts/tmp_repro_ai1.js，真实 state + 297 条真实 history，prompt ≈40K token）：
       //   jsonMode ON → HTTP 200 但 content 全是空格（trimmed.length=0，两次复现一致）
@@ -2467,6 +2493,31 @@ function callLLM(messages, modelOverride, callOpts) {
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DS_API_KEY },
       timeout: timeoutMs,
     }, res => {
+      // 流式分支（2026-10-03 PMO）：边收边回调 onChunk（节流 ~150ms）；结束时包成与非流式同形的对象
+      if (callOpts && callOpts.stream) {
+        let sseBuf = '', full = '', lastFlush = 0
+        res.on('data', chunk => {
+          sseBuf += chunk.toString('utf8')
+          let i
+          while ((i = sseBuf.indexOf('\n')) >= 0) {
+            const line = sseBuf.slice(0, i).trim(); sseBuf = sseBuf.slice(i + 1)
+            if (!line.startsWith('data:')) continue
+            const p = line.slice(5).trim()
+            if (p === '[DONE]') continue
+            try { const j = JSON.parse(p); const d = j.choices && j.choices[0] && j.choices[0].delta
+              if (d && d.content) full += d.content } catch (e) {}
+          }
+          const now = Date.now()
+          if (callOpts.onChunk && now - lastFlush >= 150) { lastFlush = now; try { callOpts.onChunk(full) } catch (e) {} }
+        })
+        res.on('end', () => {
+          if (settled) return; settled = true; clearTimeout(hardTimeout)
+          if (res.statusCode !== 200) { const err = new Error(`AI服务暂不可用 (${res.statusCode})`); err.statusCode = res.statusCode; reject(err); return }
+          if (callOpts.onChunk) { try { callOpts.onChunk(full) } catch (e) {} }
+          resolve({ choices: [{ message: { content: full } }] })
+        })
+        return
+      }
       let body = ''
       res.on('data', chunk => body += chunk)
       res.on('end', () => {

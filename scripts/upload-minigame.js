@@ -23,7 +23,7 @@ async function main() {
       type: 'miniGame',
       projectPath: path.join(__dirname, '../minigame'),
       privateKeyPath: keyFile,
-      ignores: ['node_modules/**'],
+      ignores: ['node_modules/**', '**/*.bak*'],  // 2026-10-03: 排除 .bak 备份（原占整包 ~42%）
     })
 
     console.log('开始上传...')

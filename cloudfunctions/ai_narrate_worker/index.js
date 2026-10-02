@@ -1631,13 +1631,15 @@ async function callAI(state, input, history, monthEvent, isRetry, compressSummar
   const t_llm_start = Date.now()
   // D048c（2026-06-28 09:42 拍板）：改非流式 callLLM（凌晨 9 版本真因：流式根本做不好）
   // 前端拿完整 content 后用前端假打字机（streamedText + TYPEWRITE_SPEED）
+  // 2026-10-03 PMO：流式 + 进度回调（前端轮询 narrate_result 逐段显示）
+  const __onChunk = (full) => { writeNarrateProgress(narrateRequestId, extractPartialContent(full)) }
   try {
-    response = await callLLM(messages, DS_MODEL, { jsonMode: true })
+    response = await callLLM(messages, DS_MODEL, { jsonMode: true, stream: true, onChunk: __onChunk })
   } catch (e) {
     const status = e.statusCode || 0
     if (status === 400 || status === 429 || (status >= 500 && status < 600)) {
       console.error('[ai_narrate_worker] 主模型失败，回退:', status, e.message)
-      response = await callLLM(messages, DS_FALLBACK_MODEL, { jsonMode: true })
+      response = await callLLM(messages, DS_FALLBACK_MODEL, { jsonMode: true, stream: true, onChunk: __onChunk })
     } else {
       throw e
     }

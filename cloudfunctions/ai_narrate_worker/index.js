@@ -2509,8 +2509,12 @@ function callLLM(messages, modelOverride, callOpts) {
       // 流式分支（2026-10-03 PMO）：边收边回调 onChunk（节流 ~150ms）；结束时包成与非流式同形的对象
       if (callOpts && callOpts.stream) {
         let sseBuf = '', full = '', lastFlush = 0
+        // 2026-10-03 巡检修复：原先每个 chunk 直接 toString('utf8')，多字节字符跨 chunk 拆分时
+        //   拆出的半个字符会变成 U+FFFD（中文 3 字节拆 1+2 → 3 个乱码），先生 10-02 试玩 seq=706 中招。
+        //   改用 StringDecoder 增量解码（缓存不完整字节，下个 chunk 补齐）。
+        const sseDecoder = new StringDecoder('utf8')
         res.on('data', chunk => {
-          sseBuf += chunk.toString('utf8')
+          sseBuf += sseDecoder.write(chunk)
           let i
           while ((i = sseBuf.indexOf('\n')) >= 0) {
             const line = sseBuf.slice(0, i).trim(); sseBuf = sseBuf.slice(i + 1)
@@ -2531,12 +2535,15 @@ function callLLM(messages, modelOverride, callOpts) {
         })
         return
       }
-      let body = ''
-      res.on('data', chunk => body += chunk)
+      // 2026-10-03 巡检修复：原 `body += chunk`（字符串 += Buffer）等价于逐 chunk toString('utf8')，
+      //   同样会在多字节字符跨 chunk 拆分时产生 U+FFFD（seq=689/698 中招）。改为收 Buffer 后一次解码。
+      let bodyChunks = []
+      res.on('data', chunk => bodyChunks.push(chunk))
       res.on('end', () => {
         if (settled) return
         settled = true
         clearTimeout(hardTimeout)
+        const body = Buffer.concat(bodyChunks).toString('utf8')
         if (res.statusCode !== 200) {
           console.error('[ai_narrate_worker] AI 非 200 响应，model=' + useModel + ', status=' + res.statusCode + ', body:', body)
           const err = new Error(`AI服务暂不可用 (${res.statusCode})`)

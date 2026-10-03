@@ -50,6 +50,9 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 const _ = db.command
 const https = require('https')
+// 2026-10-03 巡检修复：流式分支（94737ab）用了 StringDecoder 但漏了 require → 部署后首个 chunk 必抛
+//   ReferenceError: StringDecoder is not defined → 流式链路直接崩。此处补上导入。
+const { StringDecoder } = require('string_decoder')
 // 2026-08-02：AI 输出解析链路独立成模块（配单测 parse-ai-output.test.js）
 // 规则：每遇解析失败加测试 case；改解析函数必须保证历史 case 全过
 const { parseAIOutput } = require('./parse-ai-output')

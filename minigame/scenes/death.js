@@ -348,6 +348,16 @@ var touchStartX = 0
 var touchStartY = 0
 var didSwipe = false
 
+// P-188: 划动阈值随屏宽缩放（原硬编码 100px → 320 宽小屏要划 31% 屏宽）
+// 14% 屏宽，夹在 [45, 72]：320→45 / 375→52 / 414→58
+function swipeMin() {
+  var w = (layout && layout.w) ? layout.w : 375
+  var v = Math.round(w * 0.14)
+  if (v < 45) v = 45
+  if (v > 72) v = 72
+  return v
+}
+
 function onTouch(x, y, type) {
   if (type === 'start') {
     touchStartX = x; touchStartY = y
@@ -370,10 +380,11 @@ function onTouch(x, y, type) {
     lastTouchX = x; lastTouchY = y; lastTouchTime = now
 
     // v3.0.19: 先生 01:19 拍板上划返回·didSwipe 触发条件扩到横向/纵向任一方向
-    if (Math.abs(dx) > 100 || Math.abs(dy) > 100) {
+    var swipeTh = swipeMin()
+    if (Math.abs(dx) > swipeTh || Math.abs(dy) > swipeTh) {
       didSwipe = true
       isUserSwiping = true
-      if (Math.abs(dx) > 100) {
+      if (Math.abs(dx) > swipeTh) {
         // 横向划动·更新相机
         var deltaX = dx / 900
         if (deltaX > 0.08) deltaX = 0.08
@@ -388,12 +399,13 @@ function onTouch(x, y, type) {
     isUserSwiping = false
     if (!ready) return null
     // v3.0.19: 先生 01:19 反馈——上划返回主页·删除按钮·文案优化
-    // 先检测上划手势（|dy| > 100 且 |dy| > |dx|）→ 跳主页
+    // 先检测上划手势（|dy| > 阈值 且 |dy| > |dx|）→ 跳主页
     if (didSwipe) {
       var dx2 = x - touchStartX
       var dy2 = y - touchStartY
-      // 上划判定：垂直距离 > 100 且 垂直 > 水平
-      if (Math.abs(dy2) > 100 && Math.abs(dy2) > Math.abs(dx2) * 1.3) {
+      var swipeTh2 = swipeMin()
+      // 上划判定：垂直距离 > 阈值 且 垂直 > 水平
+      if (Math.abs(dy2) > swipeTh2 && Math.abs(dy2) > Math.abs(dx2) * 1.3) {
         // 上划：dy2 < 0（手指从下往上）
         if (dy2 < 0) {
           clearTestPoemData()
@@ -403,8 +415,8 @@ function onTouch(x, y, type) {
           return { scene: 'entry' }
         }
       }
-      // 左右划：|dx| > 100
-      if (Math.abs(dx2) > 100) {
+      // 左右划：|dx| > 阈值
+      if (Math.abs(dx2) > swipeTh2) {
         var direction = dx2 > 0 ? -1 : +1
         var mainIdxX = Math.round(cameraX)
         targetCameraX = mainIdxX + direction

@@ -31,6 +31,18 @@ function calcLayout() {
   }
 }
 
+// P-189: tab 尺寸唯一来源（原来 render 与 onTouch 各写一份 tabW=60 → 320 宽出屏 16px 且两份常量易漂移）
+function tabMetrics() {
+  var tabH = 28
+  var tabGap = 6
+  var pad = layout.padding
+  var avail = layout.w - pad * 2 - tabGap * 4  // 5 列 → 4 个间隙
+  var tabW = Math.floor(avail / 5)
+  if (tabW > 60) tabW = 60
+  if (tabW < 44) tabW = 44
+  return { tabW: tabW, tabH: tabH, tabGap: tabGap, startX: pad }
+}
+
 function init() {
   calcLayout()
   ready = false
@@ -91,10 +103,11 @@ function onTouch(x, y, type) {
   if (type !== 'end' || !ready) return null
 
   // Tab切换
-  var tabW = 60
-  var tabH = 28
-  var tabGap = 6
-  var tabStartX = layout.padding
+  var tm = tabMetrics()
+  var tabW = tm.tabW
+  var tabH = tm.tabH
+  var tabGap = tm.tabGap
+  var tabStartX = tm.startX
   for (var i = 0; i < BOARD_LIST.length; i++) {
     var row = Math.floor(i / 5)
     var col = i % 5
@@ -138,10 +151,11 @@ function render(ctx) {
   // Tab栏（2行5列）
   var tabOp = anims.tabs.update(now)
   if (tabOp > 0) {
-    var tabW = 60
-    var tabH = 28
-    var tabGap = 6
-    var tabStartX = layout.padding
+    var tm = tabMetrics()
+    var tabW = tm.tabW
+    var tabH = tm.tabH
+    var tabGap = tm.tabGap
+    var tabStartX = tm.startX
     ctx.save()
     ctx.globalAlpha = tabOp
     for (var i = 0; i < BOARD_LIST.length; i++) {
@@ -278,4 +292,4 @@ function render(ctx) {
   }
 }
 
-module.exports = { init: init, render: render, onTouch: onTouch, autoNext: null }
+module.exports = { init: init, render: render, onTouch: onTouch, _tabMetrics: tabMetrics, autoNext: null }

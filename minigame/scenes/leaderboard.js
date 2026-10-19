@@ -43,6 +43,24 @@ function tabMetrics() {
   return { tabW: tabW, tabH: tabH, tabGap: tabGap, startX: pad }
 }
 
+// P-190: 行数计算抽出（原只给底部提示留 20px → 短屏末行与「显示前 N 人」重叠 1~4px）
+function contentMetrics(charsLen) {
+  var rowH = 36
+  var top = layout.contentY
+  var bottom = layout.btnY
+  var hintY = bottom - 30
+  var hintTop = hintY - 5  // 10px 字半高 + 1px 余量
+  var maxRows = Math.floor((hintTop - top - 6) / rowH)  // 预留提示区
+  if (charsLen <= maxRows) {
+    maxRows = Math.floor((bottom - top - 20) / rowH)    // 不显示提示时用满
+  }
+  return {
+    rowH: rowH, maxRows: maxRows, top: top,
+    hintY: hintY, hintTop: hintTop,
+    lastRowBottom: top + maxRows * rowH,
+  }
+}
+
 function init() {
   calcLayout()
   ready = false
@@ -205,9 +223,10 @@ function render(ctx) {
       })
     } else {
       var chars = leaderboardData[BOARD_LIST[currentBoardIndex]]
-      var rowH = 36
-      var maxRows = Math.floor((layout.btnY - layout.contentY - 20) / rowH)
-      var startY = layout.contentY
+      var cm = contentMetrics(chars.length)
+      var rowH = cm.rowH
+      var maxRows = cm.maxRows
+      var startY = cm.top
 
       for (var i = 0; i < Math.min(chars.length, maxRows); i++) {
         var char = chars[i]
@@ -259,7 +278,7 @@ function render(ctx) {
       }
 
       if (chars.length > maxRows) {
-        drawText(ctx, '显示前 ' + maxRows + ' 人，共 ' + chars.length + ' 人', cx, layout.btnY - 30, {
+        drawText(ctx, '显示前 ' + maxRows + ' 人，共 ' + chars.length + ' 人', cx, cm.hintY, {
           fontSize: 10,
           color: 'rgba(200,168,124,0.5)',
           align: 'center', baseline: 'middle',
@@ -292,4 +311,4 @@ function render(ctx) {
   }
 }
 
-module.exports = { init: init, render: render, onTouch: onTouch, _tabMetrics: tabMetrics, autoNext: null }
+module.exports = { init: init, render: render, onTouch: onTouch, _tabMetrics: tabMetrics, _contentMetrics: contentMetrics, autoNext: null }

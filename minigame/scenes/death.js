@@ -158,6 +158,7 @@ function calcLayout() {
     },
     // v3.0.19: 删 backBtn 字段（不再用按钮·改上划返回）
   }
+  return layout
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -855,31 +856,43 @@ function drawStone3D(ctx, sx, sy, sw, sh, stone, op, baseHRef, capHRef) {
   ctx.restore()
 }
 
-function drawMainStone(ctx, l, op) {
-  // v3.0.14: 主碑 = 前排 drow=0 中央·3D 渲染（和远景墓碑一致设计）
-  if (!otherStones || otherStones.length < ROWS || !otherStones[0] || otherStones[0].length < COLS) return
+// P-191: 主碑盒子单独成函数（drawMainStone 与探针共用同一份算式·避免复制常量漂移）
+function mainStoneBox(l) {
   var mainIdxX = Math.round(cameraX)
   var mainRealCol = ((mainIdxX % COLS) + COLS) % COLS  // v3.0.9: mod wrap 避免负索引
-  var stone = otherStones[0] && otherStones[0][mainRealCol]
-  if (!stone || !stone.name) return
-
+  var stone = (otherStones[0] && otherStones[0][mainRealCol]) || null
   // v3.0.43: 先生 21:56 反馈——主碑跑右下角
   // 真因：drawMainStone 用 slotW=0.90·drawFarStones 用 slotW=1.20·不一致
   // 修法：用和 drawFarStones 一致的 slotW = mainW × 1.20
   var slotW = l.mainW * 1.20
   var floatX = cameraX - mainIdxX
-  var pX_base = l.cx - floatX * slotW
-  var pY_base = l.h * 0.95
-
   var sw = l.mainW
   var sh = l.mainH
-  var sx = pX_base - sw / 2
-  var sy = pY_base - sh
+  return {
+    stone: stone,
+    sx: l.cx - floatX * slotW - sw / 2,
+    sy: l.h * 0.95 - sh,
+    sw: sw,
+    sh: sh,
+    op: Math.max(0.5, 1 - Math.abs(floatX) * 0.4),
+  }
+}
 
-  var mainOp = op * Math.max(0.5, 1 - Math.abs(floatX) * 0.4)
+function drawMainStone(ctx, l, op) {
+  // v3.0.14: 主碑 = 前排 drow=0 中央·3D 渲染（和远景墓碑一致设计）
+  if (!otherStones || otherStones.length < ROWS || !otherStones[0] || otherStones[0].length < COLS) return
+  var box = mainStoneBox(l)
+  var stone = box.stone
+  if (!stone || !stone.name) return
+  var sx = box.sx
+  var sy = box.sy
+  var sw = box.sw
+  var sh = box.sh
+  var mainOp = box.op * op
   drawStone3D(ctx, sx, sy, sw, sh, stone, mainOp, l.baseH, l.capH)
   // v3.0.56: 主碑碑文用 drawFarStoneText(scale=1.0) 渲染——和第一排其它碑石完全一致
-  drawFarStoneText(ctx, stone, sx, sy, sw, sh, 1.0, mainOp)
+  // P-191: 主碑底部有「左右划切换 · 上划返回」提示（sy+sh-50）→ 碑文预留 40px 别压提示
+  drawFarStoneText(ctx, stone, sx, sy, sw, sh, 1.0, mainOp, 40)
   // v3.0.34: 提示画在主碑底部·确保在铭之后·距香炉至少 25px 间隙
   // 香炉顶 y = l.h*0.955 - 18·墓身底 sy+sh = l.h*0.95
   // 提示 y = sy + sh - 50·保证 50px 间隙（包含 11pt 字高 14px + 36px 间隙）
@@ -1337,7 +1350,67 @@ function drawAltarPorcelainVase(ctx, vx, altarTopY, op, isLeft) {
   // v3.0.7: 循环 mainIdx
 
 // v3.0.40: 先生 21:43 要求——所有远景碑都完整 6 段（不分级）·字号按 scale 缩放可以很小
-function drawFarStoneText(ctx, stone, pX, pY, pW, pH, scale, op) {
+// P-191: 碑文排版求解（志 + 铭）
+//   原实现从 bodyStartY 一路往下画、无纵向约束 → 满 100 字在 h≤667 写出碑外 17px。
+//   先按原字号排；越界则逐步缩字号（至 0.70）；最小字号仍越界才截断末行补省略号。
+//   返回 { items:[{text,size,bold,color}|{gap}], lineH, truncated }
+function stoneTextPlan(stone, tabW, bodySize, mingSize, availH) {
+  var zhiText = (stone && (stone.epRecord || stone.epitaph)) || ''
+  var mingText = (stone && stone.epRecord && stone.epitaph) ? stone.epitaph : ''
+  var wrapW = tabW - 2
+  var best = null
+  var k, i
+  for (k = 1; k >= 0.7 - 1e-6; k -= 0.06) {
+    var bS = Math.max(2, Math.floor(bodySize * k))
+    var mS = Math.max(2, Math.floor(mingSize * k))
+    // 行距 = 字号 + 33%（原写死 +6px，14pt 时差 1px，小字号时更紧、能多放一行）
+    var lineH = bS + Math.max(2, Math.round(bS * 0.33))
+    var zhiLines = []
+    if (zhiText) zhiLines = splitText(zhiText, wrapW, bS)
+    var mingLines = []
+    if (mingText) mingLines = splitText(mingText, wrapW, mS)
+    var gapN = (zhiLines.length && mingLines.length) ? 1 : 0
+    best = { zhiLines: zhiLines, mingLines: mingLines, gapN: gapN, bS: bS, mS: mS, lineH: lineH, wrapW: wrapW, truncated: false }
+    if ((zhiLines.length + mingLines.length + gapN) * lineH <= availH) return finishPlan(best)
+  }
+  // 兜底：最小字号仍放不下 → 砍「志」的行数，优先保住「铭」（结尾韵语，砍掉最可惜）
+  var room = Math.max(1, Math.floor(availH / best.lineH))
+  var total = best.zhiLines.length + best.mingLines.length + best.gapN
+  if (total > room) {
+    var keepMing = Math.min(best.mingLines.length, Math.max(1, Math.floor(room / 3)))
+    if (keepMing > room) keepMing = room
+    var keepGap = (keepMing && best.zhiLines.length) ? 1 : 0
+    var keepZhi = Math.max(0, room - keepMing - keepGap)
+    if (!keepZhi && best.zhiLines.length) keepGap = 0
+    var cutZhi = keepZhi < best.zhiLines.length
+    best.zhiLines = best.zhiLines.slice(0, keepZhi)
+    best.mingLines = best.mingLines.slice(0, keepMing)
+    best.gapN = keepGap
+    if (cutZhi && keepZhi) {
+      var lastZhi = best.zhiLines[keepZhi - 1]
+      var maxChars = Math.max(1, Math.floor(best.wrapW / best.bS))
+      best.zhiLines[keepZhi - 1] = lastZhi.substring(0, Math.max(0, maxChars - 1)) + '…'
+    }
+    best.truncated = true
+  }
+  return finishPlan(best)
+}
+
+// 排版结果 → 逐行渲染项（志：正文色不粗；铭：浅金加粗）
+function finishPlan(b) {
+  var items = []
+  var i
+  for (i = 0; i < b.zhiLines.length; i++) {
+    items.push({ text: b.zhiLines[i], size: b.bS, bold: false, color: 'rgba(70,65,60,0.92)' })
+  }
+  if (b.gapN && items.length) items.push({ gap: true })
+  for (i = 0; i < b.mingLines.length; i++) {
+    items.push({ text: b.mingLines[i], size: b.mS, bold: true, color: 'rgba(140,110,60,0.95)' })
+  }
+  return { items: items, lineH: b.lineH, truncated: !!b.truncated }
+}
+
+function drawFarStoneText(ctx, stone, pX, pY, pW, pH, scale, op, bottomReserve) {
   if (!stone || !stone.name) return
   ctx.save()
   ctx.globalAlpha = op
@@ -1372,37 +1445,36 @@ function drawFarStoneText(ctx, stone, pX, pY, pW, pH, scale, op) {
     })
   }
 
-  // 3. 志（epRecord 小传·主碑多少行·远景也多少行·字号缩小）
-  // v3.0.28: 起始 0.27·合理间距
+  // 3+4. 志（epRecord 小传）+ 铭（epitaph 韵语结句）
+  // P-191: 统一交给 stoneTextPlan 求解——碑面放不下就先缩字号、再截断，绝不写出碑外
+  //   faceBottomY = 碑面底部留 8%；bottomReserve = 主碑底部提示区预留（远景碑不传）
   var bodyStartY = pY + pH * 0.27
-  var bodyLineH = bodySize + 6  // 17px 行距 (11pt 字号)
+  var faceBottomY = pY + pH * 0.92 - (bottomReserve || 0)
+  var plan = stoneTextPlan(stone, tabW, bodySize, mingSize, faceBottomY - bodyStartY)
   var currentY = bodyStartY
-  var zhiText = stone.epRecord || ''
-  if (!zhiText && stone.epitaph) zhiText = stone.epitaph
-  if (zhiText) {
-    // 远景碑字号小·tabW 小·每行字数少·自动换行多·但保留完整内容
-    var zhiLines = splitText(zhiText, tabW - 2, bodySize)
-    for (var zli = 0; zli < zhiLines.length; zli++) {
-      drawCarvedText(ctx, zhiLines[zli], cx, currentY, bodySize, op, {
-        color: 'rgba(70,65,60,0.92)', letterSpacing: 0,
+  for (var pi = 0; pi < plan.items.length; pi++) {
+    var item = plan.items[pi]
+    if (!item.gap) {
+      drawCarvedText(ctx, item.text, cx, currentY, item.size, op, {
+        bold: item.bold,
+        color: item.color,
+        letterSpacing: item.bold ? 2 : 0,
       })
-      currentY += bodyLineH
     }
+    currentY += plan.lineH
   }
-
-  // 4. 铭（epitaph 韵语结句·接志末尾·先生要求视觉区分）
-  // v3.0.28: 空行隔开 + 居中偏移 0 + 加粗 + 浅金色（和志明显不同）
-  if (stone.epRecord && stone.epitaph) {
-    currentY += bodyLineH * 1.0  // 空一行隔开
-    var mingLines = splitText(stone.epitaph, tabW - 2, mingSize)
-    for (var mli = 0; mli < mingLines.length; mli++) {
-      drawCarvedText(ctx, mingLines[mli], cx, currentY, mingSize, op, {
-        bold: true,
-        color: 'rgba(140,110,60,0.95)',  // 浅金·和碑额呼应
-        letterSpacing: 2,
-      })
-      currentY += bodyLineH
-    }
+  _lastTextMetrics = {
+    lines: plan.items.length,
+    lineH: plan.lineH,
+    truncated: !!plan.truncated,
+    bottomY: currentY,
+    stoneBottomY: pY + pH,
+    hintTopY: pY + pH - 50 - 5,
+    bottomReserve: bottomReserve || 0,
+    sizes: plan.items.map(function (it) { return it.size || 0 }),
+  }
+  if (plan.truncated && typeof console !== 'undefined') {
+    console.warn('[death] 碑文超出碑面已截断: ' + (stone && stone.name))
   }
 
   // v3.0.58: 先生 01:19 反馈——印章很丑·全部去掉
@@ -1593,4 +1665,12 @@ function triggerTestPoemCloud() {
   }
 }
 
-module.exports = { init: init, render: render, onTouch: onTouch, autoNext: null }
+module.exports = {
+  init: init, render: render, onTouch: onTouch, autoNext: null,
+  // P-191 探针钩子（真实算式，探针不复制常量）
+  _calcLayout: calcLayout,
+  _mainStoneBox: mainStoneBox,
+  _drawFarStoneText: drawFarStoneText,
+  _stoneTextPlan: stoneTextPlan,
+  _lastTextMetrics: function () { return _lastTextMetrics },
+}

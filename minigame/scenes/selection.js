@@ -38,32 +38,47 @@ function calcLayout() {
   // Cards
   var gap = Math.max(12, Math.floor(w * 0.030))
   var cardW = Math.floor((w - gap * 3) / 2)
-  var cardH = Math.min(78, Math.max(68, Math.floor(w * 0.19)))
   var vGap = 12
-  var gridTop = Math.floor(titleY + titleS + 22 + subS + 12)
 
-  // Confirm button
+  // Confirm button / gender row (geometry fixed, y computed below)
   var btnW = Math.min(140, Math.floor(w * 0.37))
   var btnH = 36
-  var cardBottom = gridTop + (cardH + vGap) * 5 - vGap
-  var btnY = cardBottom + 24
   // Gender selector — three self-explanatory buttons
   var genderPillW = 64
   var genderPillGap = 12
   var genderRowH = 32
   var genderTotalW = genderPillW * 3 + genderPillGap * 2
   var genderBarX = gap
-  var genderOptY = btnY - genderRowH - 20 // more breathing room above button
+  var genderGapTop = 16 // 网格 → 性别条
+  var genderGapBtn = 24 // 性别条 → 按钮
+  // 2026-10-22 P-192: 短屏自适应。旧实现 cardH 固定 68~78 → 320x480 五排卡片撑到 494，
+  // 后面的两级 fallback 只能硬塞 → 性别条跑出屏(510)、按钮压进网格(444)。改为自下而上分配可用高。
+  var bottomReserve = h >= 560 ? 36 : 22 // 按钮下方：已选计数(+14)、彩蛋提示(+30)
+  var cardMinH = 50
+  var cardMaxH = 78
 
-  // Prevent overflow on small screens
-  if (btnY + btnH + 12 > h) {
-    btnY = h - btnH - 36
-    genderOptY = btnY - genderRowH - 20
+  function fitCardH(topY, gapV) {
+    var avail = h - bottomReserve - btnH - genderGapBtn - genderRowH - genderGapTop - topY
+    return Math.floor((avail - gapV * 4) / 5)
   }
-  if (genderOptY < cardBottom + 10) {
-    genderOptY = cardBottom + 16
-    btnY = genderOptY + genderRowH + 24
-    if (btnY + btnH + 10 > h) btnY = h - btnH - 36
+
+  var gridTop = Math.floor(titleY + titleS + 22 + subS + 12)
+  var cardH = fitCardH(gridTop, vGap)
+  if (cardH < cardMinH) {
+    // 极短屏（h<560）：压缩标题区（22→12、12→8）并收紧卡片行距，把位置让给卡片
+    titleY = Math.max(12, Math.floor(h * 0.05))
+    gridTop = Math.floor(titleY + titleS + 12 + subS + 8)
+    vGap = 8
+    cardH = fitCardH(gridTop, vGap)
+  }
+  cardH = Math.max(cardMinH, Math.min(cardMaxH, cardH))
+
+  var cardBottom = gridTop + (cardH + vGap) * 5 - vGap
+  var genderOptY = cardBottom + genderGapTop
+  var btnY = genderOptY + genderRowH + genderGapBtn
+  if (btnY + btnH + bottomReserve > h) { // 兜底：卡片已到最小高仍溢出（超短屏）
+    btnY = h - bottomReserve - btnH
+    genderOptY = Math.max(cardBottom + 8, btnY - genderGapBtn - genderRowH)
   }
 
   layout = {
@@ -76,6 +91,7 @@ function calcLayout() {
     btnW: btnW, btnH: btnH, btnY: btnY,
     genderOptY: genderOptY, genderRowH: genderRowH,
     genderPillW: genderPillW, genderPillGap: genderPillGap,
+    showHint: h >= 560,
   }
 
   layout.cards = []
@@ -311,15 +327,18 @@ function render(ctx) {
       align: 'center', baseline: 'middle',
     })
 
-    // 名人彩蛋提示
-    drawText(ctx, CELEB_HINT, l.cx, l.btnY + l.btnH + 30, {
-      fontSize: Math.min(9, l.w * 0.023),
-      color: 'rgba(200,168,124,0.35)',
-      align: 'center', baseline: 'middle',
-    })
+    // 名人彩蛋提示（短屏 h<560 不画：底部只留 22px，画了会出屏）
+    if (l.showHint) {
+      drawText(ctx, CELEB_HINT, l.cx, l.btnY + l.btnH + 30, {
+        fontSize: Math.min(9, l.w * 0.023),
+        color: 'rgba(200,168,124,0.35)',
+        align: 'center', baseline: 'middle',
+      })
+    }
 
     ctx.restore()
   }
 }
 
-module.exports = { init, render, onTouch }
+module.exports = { init, render, onTouch, _calcLayout: calcLayout, _getLayout: function () { return layout } }
+

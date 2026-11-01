@@ -90,6 +90,14 @@ exports.main = async (event) => {
       // 如果没记录就 add（add 时 created_at 用 player_life 原值）
       const exists = await db.collection('player_life').where({ openid, life_number: player_life.life_number }).count()
       if (exists.total === 0) {
+        // 2026-10-07 护栏（先生）：同一 openid 已有"存活世"时，禁止再新增存活世。
+        // 根因：前端缓存复用旧身份 / 世数错乱 → 每次重开多留一条"空壳世"（属性全 0），
+        //       且后端 worker 取"最新世"当当前世 → 数据错乱。这里从根上堵死。
+        const aliveCnt = await db.collection('player_life').where({ openid, alive: true }).count()
+        if (player_life.alive !== false && aliveCnt.total > 0) {
+          console.warn('[player_save] 拒绝新增存活世：已有存活世', aliveCnt.total, '条, 目标 life_number=', player_life.life_number)
+          return { success: true, skipped: 'duplicate_alive_life', openid }
+        }
         await db.collection('player_life').add({ data: { ...player_life, openid } })
       }
     }

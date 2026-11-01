@@ -32,6 +32,7 @@ var partialRendered = false  // D089 两阶段：标记 partial 阶段已渲染�
 var awaitingFinalize = false // D089：上一轮 finalize 未到达时为 true，玩家点击先缓存等结算完
 var pendingSelection = null  // D089：awaitingFinalize 期间缓存的玩家输入，finalize 到后自动发出
 var finalizeFailed = false  // Y1-B（2026-07-20）：finalize 崩但 partial 已出选项，标记本轮属性未结算，玩家用旧 state 继续
+var streamRendered = false   // 2026-10-03：本轮流式轮询是否已把正文铺到屏幕（防 showPartialNarrative 从头重打 → 叙事刷两次）
 var errorMsg = ''
 var narrativeHistory = []    // {role, content}
 var lastRawAiResp = null    // v0.6.85: 最后AI原始JSON，history送AI时代替普通content
@@ -168,6 +169,8 @@ function mapDbToWorkerState(rec) {
     epitaph: rec.epitaph || '',
     alive: rec.alive !== false,
     items: rec.current_items || [],
+    // 层2（2026-10-07）：故事主线卡透传
+    story: rec.story || null,
   }
 }
 
@@ -360,6 +363,8 @@ module.exports = {
                 currentItems = playerLife.current_items.slice()
               }
               if (typeof playerLife.alive === 'boolean') state.alive = playerLife.alive
+              // 层2（2026-10-07）：恢复故事主线卡
+              if (playerLife.story && typeof playerLife.story === 'object') state.story = playerLife.story
               if (playerLife.era_display) state.eraDisplay = playerLife.era_display
               if (playerLife.dynasty) state.dynasty = playerLife.dynasty
               if (playerLife.city) state.city = playerLife.city
@@ -567,6 +572,11 @@ function initLayout() {
     _sceneY0: 0,
     statusBarH: statusBarH,
     textH: finalTextH,
+    // P-151-2：叙事区高度原始锚点（adjustFluidLayout 每帧先恢复再按需压缩）
+    //   原代码在选项区溢出时直接 layout.textH -= overflow 且无恢复 → 只减不增：
+    //   一旦某轮出现长选项（>23 字变 2 行）叙事区就被永久砍掉几十 px，
+    //   之后即使选项变短也回不来，多轮累积可一路缩到下限 60px（一屏只剩 2 行字）。
+    _textH0: finalTextH,
     // C 方案：输入框常驻区紧贴叙事区下方
     inputY: 0,  // adjustFluidLayout 算
     optionY: 0,  // adjustFluidLayout 算（输入框下方）
@@ -596,6 +606,7 @@ function callAI(userInput) {
   partialRendered = false
   awaitingFinalize = false
   pendingSelection = null
+  streamRendered = false  // 2026-10-03：新一轮发起时复位流式渲染标记
   // v3.0.14h-fix: 死亡后禁止再调 LLM（先生 18:48 反馈"死了继续有选项继续走剧情"）
   // 之前 alive=false 后选项还在 → 玩家点选项又调 callAI → 死循环
   // 修复：alive=false 时设 deathConfirmPending=true（不调 LLM，让玩家点屏幕走流程）
@@ -678,10 +689,31 @@ function callAI(userInput) {
     // 修法：前端两次同步调 worker（先生 D089 partial 体验保留）
     //   第一次 phase=ai1 → 1-3 秒拿到 content/options → 立即显示叙事
     //   第二次 phase=ai2 → 20-30 秒拿到 attrPatch/newState → 显示属性飘字 + 顶栏月份
+    // 2026-10-03 PMO：流式进度轮询（点选项后不再干等）——worker 边生成、前端并行读 narrate_result 逐段显示
+    const streamReqId = 'narrate_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)
+    let streamPollTimer = setInterval(() => {
+      if (typeof wx === 'undefined' || !wx.cloud || !wx.cloud.callFunction) return
+      wx.cloud.callFunction({
+        name: 'narrate_get_result',
+        data: { request_id: streamReqId },
+        success: (res) => {
+          const r2 = (res && res.result) || {}
+          if (r2.status === 'pending' && typeof r2.partial === 'string' && r2.partial.length > narrative.length) {
+            narrative = r2.partial
+            displayedChars = narrative.length
+            displayStartTime = Date.now() - narrative.length * TYPEWRITE_SPEED
+            streamRendered = true  // 2026-10-03：标记本轮正文已由流式铺屏
+          }
+        },
+      })
+    }, 200)
+    function stopStreamPoll() { if (streamPollTimer) { clearInterval(streamPollTimer); streamPollTimer = null } }
+
     wx.cloud.callFunction({
       name: 'ai_narrate_worker',
-      data: { phase: 'ai1', openid, input: realInput, is_retry: isRetry },
+      data: { phase: 'ai1', openid, input: realInput, is_retry: isRetry, request_id: streamReqId },
       success: (res) => {
+        stopStreamPoll()
         const r = (res && res.result) || {}
         if (!r.success) {
           loading = false
@@ -752,13 +784,17 @@ function callAI(userInput) {
               success: (dbRes) => {
                 const dbState = (dbRes.data && dbRes.data[0]) || {}
                 // 用 DB 返回的完整 state 替代 r2.newState
+                // 2026-10-08 修复：worker 返回字段是 newState（不是 state）——原来兜底写 r2.state 永远是
+                //   undefined → 只要 DB 直读拿不到可用记录，整轮 state 不更新（顶栏年月岁冻住）
+                const _mappedState = mapDbToWorkerState(dbState)
+                if (!_mappedState) console.warn('[state] DB 直读不可用 → 降级用 worker newState；dbState keys=', Object.keys(dbState || {}).join(','))
                 const fullResult = {
                   success: true,
                   partial: false,
                   branch: r.picked,
                   branches: r.branches,
                   // 2026-09-11：DB 记录字段映射成 worker 风格（否则 eraDisplay/属性全丢）
-                  state: mapDbToWorkerState(dbState) || r2.state,
+                  state: _mappedState || r2.newState,
                   month_changed: (r2.month_changed !== undefined ? r2.month_changed : r2.monthChanged),
                   new_month: (r2.new_month !== undefined ? r2.new_month : r2.newMonth),
                   new_year: (r2.new_year !== undefined ? r2.new_year : r2.newYear),
@@ -829,6 +865,7 @@ function callAI(userInput) {
         })
       },
       fail: (err) => {
+        stopStreamPoll()
         if (debugLog.length > 0) {
           const last = debugLog[debugLog.length - 1]
           last.resultError = `[AI1_NETWORK_FAIL] ${(err && (err.errMsg || err.message)) || String(err)}, ts=${Date.now()}`
@@ -1045,9 +1082,19 @@ function showPartialNarrative(result) {
   // 选项来自 callAI（第一次调用），与属性评分无关，立即可点
   // finalize 完整版到达时走 skipRerender 分支 → 不重置 displayedChars → 若已打完则停在完整文字，不重打
   const finalContent = branch.content || ''
+  // 2026-10-03 PMO 修「叙事刷两次」：流式轮询已把正文逐段铺到屏幕上，
+  //   此处若仍旧 displayedChars=0 重打 → 用户看到「刷到一半突然从头重刷」。
+  //   修法：本轮流式已显示过 → 从已显示位置续打；否则维持原「从 0 逐字打」。
+  const alreadyShown = streamRendered ? Math.min(narrative.length, finalContent.length) : 0
   narrative = finalContent
-  displayedChars = 0  // Y2：从 0 开始逐字打（原 D089 为 finalContent.length 整段出）
-  displayStartTime = Date.now()
+  if (alreadyShown > 0) {
+    displayedChars = alreadyShown
+    displayStartTime = Date.now() - alreadyShown * TYPEWRITE_SPEED
+  } else {
+    displayedChars = 0  // Y2：从 0 开始逐字打（原 D089 为 finalContent.length 整段出）
+    displayStartTime = Date.now()
+  }
+  streamRendered = false
   streamedText = ''
   systemLineCount = 0
   userScrolledAway = false
@@ -1550,6 +1597,8 @@ function stateToPlayerLife(s) {
     righteous: s['义行'] || 0,
     epitaph: s.epitaph || '',
     current_items: currentItems || [],
+    // 层2（2026-10-07）：故事主线卡随存档写回
+    story: (s.story && typeof s.story === 'object') ? s.story : null,
     // D079：created_at undefined 时输出 null，云端保留原值
     created_at: s.created_at || null,
     updated_at: Date.now(),
@@ -1731,6 +1780,10 @@ function render(ctx) {
 // 3. 物品栏钉在底部 64px（不参与流式布局）
 function adjustFluidLayout() {
   if (!layout) return
+
+  // P-151-2：每帧先恢复叙事区原始高度，再由下面的溢出兜底按需压缩
+  // （与 textY / _textY0 同款做法；原来只压缩不恢复 → textH 单调递减，见 _textH0 注释）
+  if (layout._textH0 != null) layout.textH = layout._textH0
 
   const topBarH = layout.topBarH
   const itemBarH = layout.itemBarH       // 钉死底部
@@ -2078,6 +2131,65 @@ const BOARD_FORMULAS = {
 }
 
 // v0.2.2 — 叙事区（去白底卡片 + 文字直渲染 + 卷首小印 + 楷体）
+// v-next（2026-10-02 PMO）：loading「期待感」升级
+//   把「一个呼吸小红点 + 一句静态文案」升级为「卷轴正在书写」：
+//   ① 分阶段文案（研墨→提笔→落笔→成篇）② 墨团晕开 ③ 暗金流动光带 + 底部进度线
+function drawWaitingBar(ctx, x, y, w, h, elapsed) {
+  const cy = y + h / 2
+  // 底条 + 金边
+  ctx.save()
+  ctx.fillStyle = 'rgba(35, 28, 22, 0.85)'
+  roundRect(ctx, x, y, w, h, 4); ctx.fill()
+  ctx.strokeStyle = 'rgba(232, 200, 130, 0.45)'; ctx.lineWidth = 0.8
+  roundRect(ctx, x, y, w, h, 4); ctx.stroke()
+  ctx.restore()
+
+  // ② 暗金流动光带（indeterminate：表示"在忙、但不知多久"）
+  const bandW = Math.min(60, w * 0.3)
+  const bandX = x + 6 + ((elapsed % 2000) / 2000) * Math.max(1, w - 12 - bandW)
+  const lg = ctx.createLinearGradient(bandX - bandW, 0, bandX + bandW, 0)
+  lg.addColorStop(0, 'rgba(232, 200, 130, 0)')
+  lg.addColorStop(0.5, 'rgba(232, 200, 130, 0.22)')
+  lg.addColorStop(1, 'rgba(232, 200, 130, 0)')
+  ctx.save(); roundRect(ctx, x, y, w, h, 4); ctx.clip()
+  ctx.fillStyle = lg; ctx.fillRect(x, y, w, h)
+  ctx.restore()
+
+  // ③ 底部细进度线（0→100% 缓慢循环，给"有进度"的心理暗示）
+  const prog = (elapsed % 6000) / 6000
+  ctx.save(); ctx.fillStyle = 'rgba(232, 200, 130, 0.5)'
+  ctx.fillRect(x + 6, y + h - 4, (w - 12) * prog, 1.4); ctx.restore()
+
+  // ① 左侧墨团晕开（替代原"呼吸小红点"）
+  const cycle = (elapsed % 1800) / 1800
+  const grow = 0.45 + 0.55 * Math.sin(cycle * Math.PI)
+  const mx = x + 22, mr = 3 + grow * 8
+  const rg = ctx.createRadialGradient(mx, cy, 0.5, mx, cy, mr)
+  rg.addColorStop(0, 'rgba(20, 12, 8, 0.95)')
+  rg.addColorStop(0.55, 'rgba(70, 45, 28, 0.5)')
+  rg.addColorStop(1, 'rgba(70, 45, 28, 0)')
+  ctx.save(); ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(mx, cy, mr, 0, Math.PI * 2); ctx.fill(); ctx.restore()
+
+  // ① 分阶段文案（去"书写者"：不出现史官/AI 这类虚构角色，只表现时间与际遇在流动）
+  const s = elapsed / 1000
+  const txt = s < 1.2 ? '时光流转…'
+    : s < 2.4 ? '前路未卜…'
+    : s < 3.6 ? '风起云涌…'
+    : '且待分晓…'
+  ctx.save()
+  ctx.fillStyle = 'rgba(245, 239, 224, 0.92)'
+  ctx.font = '13px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle'
+  ctx.fillText(txt, x + 40, cy)
+  // 秒数（右下小字，保留"等了多久"的诚实感）
+  ctx.textAlign = 'right'
+  ctx.fillStyle = 'rgba(232, 200, 130, 0.7)'
+  ctx.font = '10px ' + ui.fontFamily
+  ctx.fillText(Math.floor(s) + 's', x + w - 8, cy)
+  ctx.restore()
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'
+}
+
 function drawNarrative(ctx) {
   // D048c（2026-06-28 09:42 拍板）：改回非流式（仅用 narrative）
   const displaySrc = narrative  // D048c: 删流式分支
@@ -2089,49 +2201,11 @@ function drawNarrative(ctx) {
   if (!displaySrc) {
     if (loading) {
       const tx = layout.padding
-      const ty = layout.textY
       const tw = layout.windowW - layout.padding * 2
       const barH = 40
-      const barY = ty + 30  // 叙事区偏上位置
+      const barY = layout.textY + 30  // 叙事区偏上位置
       const elapsed = Date.now() - loadingStart
-
-      // 1. 半透暖色底
-      ctx.save()
-      ctx.fillStyle = 'rgba(35, 28, 22, 0.6)'
-      roundRect(ctx, tx, barY, tw, barH, 4)
-      ctx.fill()
-      ctx.strokeStyle = 'rgba(232, 200, 130, 0.4)'
-      ctx.lineWidth = 0.8
-      roundRect(ctx, tx, barY, tw, barH, 4)
-      ctx.stroke()
-      ctx.restore()
-
-      // 2. 左侧毛笔蘸墨动画（朱砂色随周期变化）
-      const cycle = (elapsed % 1600) / 1600
-      const penX = tx + 18
-      const penY = barY + barH / 2
-      ctx.save()
-      ctx.strokeStyle = 'rgba(80, 50, 30, 0.7)'
-      ctx.lineWidth = 2
-      ctx.lineCap = 'round'
-      ctx.beginPath()
-      ctx.moveTo(penX, penY)
-      ctx.lineTo(penX + 14, penY - 6)
-      ctx.stroke()
-      ctx.fillStyle = 'rgba(192, 48, 48, ' + (0.5 + cycle * 0.5) + ')'
-      ctx.beginPath()
-      ctx.arc(penX + 16, penY - 7, 2.5, 0, Math.PI * 2)
-      ctx.fill()
-      ctx.restore()
-
-      // 3. 文字（楷体 + 暖色）
-      ctx.fillStyle = 'rgba(245, 239, 224, 0.9)'
-      ctx.font = '13px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-      ctx.textAlign = 'left'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(loadingText, penX + 28, penY)
-      ctx.textAlign = 'left'
-      ctx.textBaseline = 'alphabetic'
+      drawWaitingBar(ctx, tx, barY, tw, barH, elapsed)
     }
     return
   }
@@ -2526,9 +2600,12 @@ function drawItemBar(ctx) {
   // 左侧命格区
   const radarR = 15                      // C 方案（D088）：物品栏 80→56，雷达图缩小适配
   const radarLabelOff = 4               // v0.6.83: 匹配 identity.js，labelDist=R+8
-  const fateW = (radarR + radarLabelOff) * 2 + 20  // 78px（C 方案：略缩腾物品区）
+  const fateW = (radarR + radarLabelOff) * 2 + 20  // = 58px（注释原写 78px，是 D088 缩小前的旧值，已更正）
   const dividerX = layout.padding + fateW
   const fateCX = dividerX - fateW / 2
+  // P-153-1：把雷达图中心 x 存进 layout，供 spawnFloater 直接取用
+  //   （原 spawnFloater 自己再抄一遍 fateW 算式 → 第三份硬编码，D088 后与这里不同步，见 P-152-1）
+  layout._fateCX = fateCX
 
   // 1. 底板暗木色
   ctx.save()
@@ -2695,7 +2772,18 @@ function drawItemBar(ctx) {
     // 2026-08-03 先生拍板 A：物品 > 10 个时，最后一个可见格显示「+N 件」，点击弹完整物品列表浮窗
     // 2026-08-03 02:11 先生拍板：倒序显示——越近得到的物品越靠前（渲染层反转，不动数据层）
     const visibleCount = cols * rows
-    const overflowN = items.length - visibleCount
+    // P-152-2（2026-09-14 巡检修复）：物品 >10 时「+N 件」格点了弹出的是最旧物品详情，
+    //   完整物品列表浮窗永远打不开（真机已达成：李昌 current_items=11）。
+    //   真因：_bounds / _overflowBounds 写在持久的物品对象上，但只有"这一帧被画出来"的
+    //   物品才会被刷新；物品数从 10 涨到 11 时，最旧那件掉出可见区（r>=rows 直接 return）
+    //   → 它上一帧残留的 _bounds 仍指向最后一格，而「+N」格恰好也在最后一格。
+    //   onTouch 按原数组顺序遍历 → 先撞上最旧物品的残留 _bounds → 弹它的详情，
+    //   「+N」的 _overflowBounds 永远轮不到。且详情弹窗打开后下一击只做关闭 → 死循环，
+    //   物品一旦超过 10 件，后面的物品再也无法查看/使用。
+    //   修法：每帧绘制前清空所有物品的命中区，再按需重设（与绘制严格同步）。
+    items.forEach(it => { it._bounds = null; it._overflowBounds = null })
+    // 溢出格本身也占掉一格 → 真正看不见的件数 = items.length - (visibleCount - 1)
+    const overflowN = items.length > visibleCount ? items.length - visibleCount + 1 : 0
     items.slice().reverse().forEach((item, i) => {
       const r = Math.floor(i / cols)
       const c = i % cols
@@ -2763,7 +2851,14 @@ function spawnFloater(text, color) {
   // 真因：先生「每次就冒出一个不行吗」——多属性同时变化少见，错开位置反而乱
   // 修法：全部同一位置，时间间隔 250ms 依次出场（前一个飘走下一个才出现）
   const cur = floaters.length
-  const fateCX = layout.padding + 45  // 雷达图中心 x
+  // P-152-1（2026-09-14 巡检修复）：原本硬编码 `layout.padding + 45`，是 D088 缩小雷达图
+  //   之前的旧值（旧 fateW=(24+6)*2+26=86 → 中心 padding+43）。D088 后 drawItemBar 改用
+  //   radarR=15 / radarLabelOff=4 → fateW=58 → 真实中心 = padding + 29 = 43，
+  //   而这里仍按 45 算 → 飘字从 x=59 冒出，比雷达图中心右偏 16px，
+  //   飘字横穿 x=72 的红色分隔线、压在木匣外框上（实测 59 vs 43 = +16px）。
+  //   修法：改用与 drawItemBar 完全同一条公式（fateCX = dividerX - fateW/2 = padding + fateW/2）。
+  // P-153-1：直接取 drawItemBar 算好的中心（唯一真源），不再本地重抄一份算式
+  const fateCX = layout._fateCX != null ? layout._fateCX : layout.padding + 29
   const baseY = layout.itemBarY + layout.itemBarH / 2
   floaters.push({
     text: text,
@@ -3144,46 +3239,7 @@ function drawLoading(ctx) {
   const barH = 40
   const barY = (layout.inputY || layout.optionY) - barH - 8  // 输入框上方 8px 间隔
   const elapsed = Date.now() - loadingStart
-
-  // 1. 半透暖色底（v0.2.2 改：去掉黑底）
-  ctx.save()
-  ctx.fillStyle = 'rgba(35, 28, 22, 0.85)'  // 暖木色
-  roundRect(ctx, layout.padding, barY, layout.windowW - layout.padding * 2, barH, 4)
-  ctx.fill()
-  // 暖金细描边
-  ctx.strokeStyle = 'rgba(232, 200, 130, 0.5)'
-  ctx.lineWidth = 0.8
-  roundRect(ctx, layout.padding, barY, layout.windowW - layout.padding * 2, barH, 4)
-  ctx.stroke()
-  ctx.restore()
-
-  // 2. 左侧毛笔蘸墨动画（朱砂色随周期变化）
-  const cycle = (elapsed % 1600) / 1600
-  const penX = layout.padding + 18
-  const penY = barY + barH / 2
-  ctx.save()
-  ctx.strokeStyle = 'rgba(80, 50, 30, 0.7)'
-  ctx.lineWidth = 2
-  ctx.lineCap = 'round'
-  ctx.beginPath()
-  ctx.moveTo(penX, penY)
-  ctx.lineTo(penX + 14, penY - 6)
-  ctx.stroke()
-  ctx.fillStyle = 'rgba(192, 48, 48, ' + (0.5 + cycle * 0.5) + ')'
-  ctx.beginPath()
-  ctx.arc(penX + 16, penY - 7, 2.5, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.restore()
-
-  // 3. 文字（楷体 + 暖色）
-  ctx.fillStyle = 'rgba(245, 239, 224, 0.9)'
-  ctx.font = '13px "STKaiti", "KaiTi", "楷体", ' + ui.fontFamily
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'middle'
-  ctx.fillText(loadingText, penX + 28, penY)
-
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'alphabetic'
+  drawWaitingBar(ctx, layout.padding, barY, layout.windowW - layout.padding * 2, barH, elapsed)
 }
 
 // ─────── 错误提示 ───────
@@ -3229,6 +3285,23 @@ function dbgTrunc(s) {
 // 过滤掉非换行/制表的控制字符再给 wx
 // D048l（2026-06-28 16:16 拍板·先生反馈对话流 tab 也复制失败）：
 //  还需过滤 0x7F (DEL) + 0xC2 0xA0 (NBSP 不间断空格，UTF-8 二字节) iOS wx 也拒
+// 246 期（2026-10-31）：DBG ▲▼ 按钮的滚动上限。此前 ▲▼ 只改 debugScroll，
+// 而「数据」「压缩」两个 tab 读的是 dbgDataScroll / dbgCompressScroll →
+// 这两个 tab 上 ▲▼ 画着但按了不动（压缩 tab 的状态栏还写着"▲▼ 可滚"，承诺了没兑现）。
+// 上限算法与 onTouch 的 move 滑动保持一致（同一套 totalH）。
+function dbgListScrollMax() {
+  const bottomBarY = layout.windowH - 84 - (layout.safeBottom || 34)
+  const listY6 = (layout.safeTop || 0) + 30 + 40 + 72 + 4
+  const listH6 = bottomBarY - 30 - listY6
+  const listY78 = (layout.safeTop || 0) + 30 + 40 + 40 + 4
+  const listH78 = bottomBarY - listY78 - 4
+  return {
+    data: Math.max(0, dbgDataList.length * 40 - listH6),
+    llmIo: Math.max(0, (layout._dbgLlmIoTotalH || dbgLlmIoList.length * 62) - listH78),
+    compress: Math.max(0, (layout._dbgCompressTotalH || dbgCompressList.length * 64) - listH78),
+  }
+}
+
 function dbgSafeForClipboard(s) {
   if (typeof s !== 'string') return String(s || '')
   // eslint-disable-next-line no-control-regex
@@ -4071,6 +4144,11 @@ function drawItemListOverlay(ctx) {
   ctx.clip()
 
   // 行：图标 + 名称 + 简述（点击 → 详情）；2026-08-03 02:11 先生拍板：倒序（最新在前，与物品栏一致）
+  // P-152-2 同族（2026-09-24 巡检修复 #36）：_listBounds 写在持久物品对象上，视口外行直接
+  //   return 不刷新 → 保留上一帧旧坐标。onTouch 按原数组（旧→新）顺序命中，与倒序渲染不一致，
+  //   「先下滑再上滑」时残留低序号物品的旧坐标与当前有效行重叠 → 点错行打开错误物品详情。
+  //   修法同 P-152-2：每帧绘制前清空全部命中区，再按需重设。
+  items.forEach(it => { it._listBounds = null })
   items.slice().reverse().forEach((item, i) => {
     const ry = listTop + i * rowH + itemListScroll
     if (ry + rowH < listTop || ry > listBottom) return  // 视口外跳过
@@ -4596,6 +4674,12 @@ function handleTouch(x, y, type) {
         if (dbgActiveTab === 7) {
           // llm_io tab 自己的列表滚动（itemH=62，行内 dy=20)
           dbgLlmIoScroll = Math.max(0, dbgLlmIoScroll - 20)
+        } else if (dbgActiveTab === 6) {
+          // 246 期修：数据 tab 读 dbgDataScroll（原来错改 debugScroll → 按了不动）
+          dbgDataScroll = Math.max(0, dbgDataScroll - 40)
+        } else if (dbgActiveTab === 8) {
+          // 246 期修：压缩 tab 读 dbgCompressScroll
+          dbgCompressScroll = Math.max(0, dbgCompressScroll - 30)
         } else {
           debugScroll = Math.max(0, debugScroll - 80)
           dbgUserScrolled = true  // Y3：用户手动滑动，锁住位置不再自动贴底
@@ -4604,9 +4688,14 @@ function handleTouch(x, y, type) {
       }
       // ▼ 向下箭头（控制行最右 _bottomBarY+62）
       if (type === 'end' && y >= _bottomBarY + 62 && x >= _w - _ARROW_SZ - 8) {
+        const _max = dbgListScrollMax()
         if (dbgActiveTab === 7) {
-          // llm_io tab 自己的列表滚动
-          dbgLlmIoScroll = dbgLlmIoScroll + 20
+          // llm_io tab 自己的列表滚动（246 期：加下限，原来能一直往下滚出空白）
+          dbgLlmIoScroll = Math.min(_max.llmIo, dbgLlmIoScroll + 20)
+        } else if (dbgActiveTab === 6) {
+          dbgDataScroll = Math.min(_max.data, dbgDataScroll + 40)
+        } else if (dbgActiveTab === 8) {
+          dbgCompressScroll = Math.min(_max.compress, dbgCompressScroll + 30)
         } else {
           debugScroll = debugScroll + 80
           dbgUserScrolled = true  // Y3：用户手动滑动，锁住位置不再自动贴底
@@ -5098,7 +5187,12 @@ function drawDbgDataTab(ctx) {
 
   // 列表区（在操作栏和底部条之间）
   const listY = opBarY + opBarH + 4
-  const listH = bottomBarY - listY - 4
+  // 246 期修（2026-10-31）：列表裁剪区扣掉底部 30px 的「已选 N 条 / 删除选中」footer。
+  // 原 listH = bottomBarY - listY - 4 → 行会画到 footer 底下（被不透明 footer 盖住），
+  // 但 layout._dbgDataItems 仍登记这些看不见的行 → 点 footer 左侧空白会误勾选隐形行。
+  // 触摸侧（onTouch D071）早就算的 bottomBarY - 30 - listY，本次让渲染与它对齐。
+  const DBG_FOOTER_H = 30
+  const listH = bottomBarY - DBG_FOOTER_H - listY
 
   if (dbgDataList.length === 0 && !dbgDataLoading) {
     ctx.fillStyle = '#666'

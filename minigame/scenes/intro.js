@@ -103,35 +103,74 @@ function init(items, identity, gender) {
   module.exports.autoNext = null
 
   // 异步生成身份（动画播放期间在后台跑）
-  var params = {}
-  if (state.genderPref) params.gender = state.genderPref
-  // D090（2026-07-20）：generate_identity 需 openid 才能写首世 player_life（后端自治 state）
-  // 不传 openid → 后端不写 player_life → 进 game 后 worker 拉不到 state 直接崩
-  if (typeof wx !== 'undefined' && wx.getStorageSync) {
-    const _oid = wx.getStorageSync('openid')
-    if (_oid) params.openid = _oid
-  }
-  wx.cloud.callFunction({
-    name: 'generate_identity',
-    data: params,
-    success: function(res) {
-      if (res.result && res.result.success && state) {
-        state.identity = res.result.identity
-        state.cloudDone = true
-        // 准备定格显示的目的地文字
-        settledFate = (res.result.identity.dynasty || '') + '·' + (res.result.identity.city || '')
-      }
-    },
-    fail: function(err) {
-      // v0.1.65 修复：失败时**不要**把 cloudDone 设成 true
-      // 之前这行导致云函数失败时动画直接卡在静止状态，但 identity 没生成
-      // 现在：失败时记录 error，动画继续转，玩家可以离开或重试
-      if (state) {
-        state.identityError = (err && (err.errMsg || err.message)) || '云函数调用失败'
-        console.error('[intro] generate_identity 失败:', state.identityError)
-      }
+  var startGenerate = function () {
+    var params = {}
+    if (state.genderPref) params.gender = state.genderPref
+    // D090（2026-07-20）：generate_identity 需 openid 才能写首世 player_life（后端自治 state）
+    // 不传 openid → 后端不写 player_life → 进 game 后 worker 拉不到 state 直接崩
+    if (typeof wx !== 'undefined' && wx.getStorageSync) {
+      const _oid = wx.getStorageSync('openid')
+      if (_oid) params.openid = _oid
     }
-  })
+    wx.cloud.callFunction({
+      name: 'generate_identity',
+      data: params,
+      success: function(res) {
+        if (res.result && res.result.success && state) {
+          state.identity = res.result.identity
+          // 2026-10-07 修复：接住云端分配的 life_number（前端此前写死 1 → 多出空壳世）
+          if (res.result.life_number && res.result.identity) {
+            state.identity.life_number = res.result.life_number
+          }
+          state.cloudDone = true
+          // 准备定格显示的目的地文字
+          settledFate = (res.result.identity.dynasty || '') + '·' + (res.result.identity.city || '')
+        }
+      },
+      fail: function(err) {
+        // v0.1.65 修复：失败时**不要**把 cloudDone 设成 true
+        if (state) {
+          state.identityError = (err && (err.errMsg || err.message)) || '云函数调用失败'
+          console.error('[intro] generate_identity 失败:', state.identityError)
+        }
+      }
+    })
+  }
+
+  // 2026-10-07 护栏（先生）：进"穿越生成"前先查云端——只要有存活存档，
+  // 就【只读档、绝不生成、绝不回存】，直接进 game（避免"重开又生成一世"）。
+  if (typeof wx !== 'undefined' && wx.cloud && wx.cloud.callFunction) {
+    wx.cloud.callFunction({
+      name: 'player_load',
+      data: {},
+      success: function (res) {
+        var r = (res && res.result) || {}
+        if (r.success && r.player_life && r.player_life.alive) {
+          var life = r.player_life
+          if (r.openid && typeof wx.setStorageSync === 'function') { try { wx.setStorageSync('openid', r.openid) } catch (e) {} }
+          state.cloudDone = true
+          module.exports.autoNext = {
+            scene: 'game',
+            items: life.current_items || [],
+            identity: {
+              life_number: life.life_number, name: life.name, gender: life.gender, age: life.age,
+              occupation: life.occupation, social_class: life.social_class, dynasty: life.dynasty,
+              eraDisplay: life.era_display, city: life.city, year: life.year, month: life.month,
+              lifespan: life.lifespan, coin: life.wealth, created_at: life.created_at,
+              '声望': life.reputation, '财富': life.wealth, '学识': life.knowledge, '颜值': life.appearance,
+              '医术': life.medical, '战功': life.military, '文采': life.literary, '政绩': life.political, '义行': life.righteous,
+              fromCloud: true, cloudPlayer: r.player, cloudNarrateHistory: r.narrate_history_list || [],
+            },
+          }
+        } else {
+          startGenerate()
+        }
+      },
+      fail: function () { startGenerate() }
+    })
+  } else {
+    startGenerate()
+  }
 }
 
 function onTouch() {

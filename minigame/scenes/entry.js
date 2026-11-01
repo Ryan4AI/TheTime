@@ -124,6 +124,12 @@ function init() {
   calcLayout()
   var now = Date.now()
 
+  // 2026-10-07 修复（先生实测"删档后老角色复活"）：
+  // 入口页原有的 player_load 是异步的，若玩家点"踏入长河"快过网络返回（或请求失败），
+  // onTouch 会直接读本地 cloud_save_data 旧缓存 → 用老存档进游戏，根本不等云端。
+  // 修法：进入口页先**同步清掉**本地存档缓存，之后一律以云端 player_load 的真值为准。
+  try { if (typeof wx !== 'undefined' && wx.removeStorageSync) wx.removeStorageSync('cloud_save_data') } catch (e) {}
+
   anims = {
     moon: new FadeAnim(200, 1500),
     mountains: new FadeAnim(400, 1200),
@@ -393,8 +399,10 @@ function render(ctx) {
   var b1 = anims.btnStart.update(now)
   var b2 = anims.btnLeaderboard.update(now)
   if (b1.opacity > 0) {
-    drawPrimaryButton(ctx, l.btnX, l.btnY1, l.btnW, l.btnH, BTN_START,
-      { fontSize: l.btnS, opacity: b1.opacity })
+    // 加载存档中：同一个按钮原地换成提示文案（不新增布局元素，避免压到下面的按钮）
+    var btn1Label = (l.loading && l.loadingText) ? l.loadingText : BTN_START
+    drawPrimaryButton(ctx, l.btnX, l.btnY1, l.btnW, l.btnH, btn1Label,
+      { fontSize: l.btnS, opacity: l.loading ? b1.opacity * 0.6 : b1.opacity })
   }
   if (b2.opacity > 0) {
     drawButton(ctx, l.btnX, l.btnY2, l.btnW, l.btnH, BTN_LEADERBOARD,
@@ -408,20 +416,14 @@ function render(ctx) {
       { fontSize: l.btnS - 2, opacity: b3.opacity * 0.7 })
   }
 
-  // D049 修复 v9（2026-06-30 01:12 拍板）：loading 提示
-  // 画在"踏入长河"按钮下方，让玩家知道要等 1-2 秒再点
-  if (layout.loading && layout.loadingText) {
-    ctx.save()
-    ctx.fillStyle = 'rgba(232,200,130,0.85)'  // 暖金提示色
-    ctx.font = '14px ' + (ui.fontFamily || 'sans-serif')
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(layout.loadingText, l.cx, l.btnY1 + l.btnH + 28)
-    ctx.restore()
-  }
+  // 9.6 加载存档提示（2026-11-01 巡检补回）
+  // 10-07 的 WIP 把渲染整段删了，但 onTouch 仍在设 layout.loading/loadingText
+  // → 点"踏入长河"后 1~2 秒屏幕毫无反馈，玩家会以为没点上而连点。
+  // 不能画在按钮下方：btnY1+btnH+28 在任何屏宽都正好落在"金榜题名"按钮里（320×480 @370 / 375×667 @491）。
+  // 改为直接把主按钮文案换成 loadingText（原位、不新增布局、不会被别的东西压住）。
+  // 同时 onTouch 顶部加了 6 秒连点护栏。
 
   // 9.7 v0.7.11: 测试按钮不再画蒙层（已删除蒙层逻辑）
-  // （先生拍板 05:38：直接跳转到 death scene，由 death.js 内部画骨架屏）
 
   // 10. Footer
   var f = anims.footer.update(now)
@@ -438,6 +440,11 @@ function render(ctx) {
 function onTouch(x, y, type) {
   if (type === 'end') {
     var l = layout
+
+    // 2026-11-01：加载中拦住重复点击（否则每次点击都发一次 player_load，
+    // 多个回调同时 setStorageSync/autoNext，容易被后到的"未找到存档"覆盖成 selection）
+    // 但只拦 6 秒：万一 player_load 悬住不回调，6 秒后允许再点，避免把玩家锁死在入口页
+    if (l.loading && Date.now() - (l.loadingSince || 0) < 6000) return null
 
     // v0.7.11: 测试墓志铭按钮（btnY3）— 1 次点击 → 直接切到 death scene
     // （不再蒙层、不再弹窗，先生拍板 05:38：先跳转后生成）
@@ -476,6 +483,7 @@ function onTouch(x, y, type) {
         // 显示 loading 提示（在 render 里靠 layout.loading 标志位）
         if (typeof layout === 'object') {
           layout.loading = true
+          layout.loadingSince = Date.now()
           layout.loadingText = '正在加载存档...'
         }
         wx.cloud.callFunction({

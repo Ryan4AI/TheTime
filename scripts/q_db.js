@@ -39,7 +39,7 @@ async function dbQuery(query, isCount) {
   });
 }
 
-(async () => {
+if (require.main === module) (async () => {
   const table = process.argv[2];
   const type = process.argv[3] || 'count';
   let query, isCount;
@@ -47,6 +47,11 @@ async function dbQuery(query, isCount) {
   if (type === 'count') {
     query = `db.collection('${table}').count()`;
     isCount = true;
+  } else if (type.startsWith('dump')) {
+    // dump  —— 分页导出用：node scripts/q_db.js <table> dump:<skip>
+    const skip = parseInt(type.split(':')[1] || '0', 10);
+    query = `db.collection('${table}').skip(${skip}).limit(1000).get()`;
+    isCount = false;
   } else if (type === 'recent3') {
     query = `db.collection('${table}').orderBy('createdAt','desc').limit(3).get()`;
     isCount = false;
@@ -65,3 +70,6 @@ async function dbQuery(query, isCount) {
   const result = await dbQuery(query, isCount);
   console.log(JSON.stringify(result, null, 2).slice(0, 3000));
 })().catch(e => console.error('ERR:', e.message));
+
+module.exports = { dbQuery };
+
